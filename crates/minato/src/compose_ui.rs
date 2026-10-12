@@ -54,7 +54,12 @@ fn compose(ui: &mut Ui, app: &mut App) {
     let p = ui.painter().clone();
     p.rect_filled(panel, CornerRadius::same(8), colors.panel);
     p.rect_stroke(panel, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
-    let head = item.as_ref().map(|i| format!("{}  {} #{}  {}", app.tr("compose.title"), i.repo, i.number, i.title)).unwrap_or_default();
+    let new_repo = c.id.strip_prefix("new:").map(str::to_string);
+    let head = match (&new_repo, &item) {
+        (Some(repo), _) => format!("{}  {}", app.tr("compose.new"), repo),
+        (_, Some(i)) => format!("{}  {} #{}  {}", app.tr("compose.title"), i.repo, i.number, i.title),
+        _ => String::new(),
+    };
     p.with_clip_rect(panel.shrink2(vec2(14.0, 0.0))).text(pos2(panel.left() + 14.0, panel.top() + 18.0), Align2::LEFT_CENTER, head, FontId::proportional(13.0), colors.fg);
     if c.preview {
         p.text(pos2(panel.right() - 14.0, panel.top() + 18.0), Align2::RIGHT_CENTER, app.tr("compose.preview"), FontId::proportional(11.5), ACCENT);
@@ -106,13 +111,14 @@ fn compose(ui: &mut Ui, app: &mut App) {
             )
         });
         // A field the settings hide does nothing but say so.
+        let fresh = new_repo.is_none();
         let (labels, people, status, priority, mile, review) = (
-            labels && app.field_shown(0),
-            people && app.field_shown(1),
-            status && app.field_shown(2),
-            priority && app.field_shown(4),
-            mile && app.field_shown(3),
-            review && app.field_shown(5),
+            fresh && labels && app.field_shown(0),
+            fresh && people && app.field_shown(1),
+            fresh && status && app.field_shown(2),
+            fresh && priority && app.field_shown(4),
+            fresh && mile && app.field_shown(3),
+            fresh && review && app.field_shown(5),
         );
         if send_close || send {
             act = Act::Send(send_close);

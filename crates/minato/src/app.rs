@@ -74,6 +74,7 @@ impl View {
                 ("j k", "key.next"),
                 ("Space", "key.details"),
                 ("r", "key.write"),
+                ("N", "key.new"),
                 ("d", "key.done"),
                 ("s", "key.later"),
                 ("u", "key.undo"),
@@ -87,6 +88,7 @@ impl View {
                 ("j k", "key.next"),
                 ("h l", "key.columns"),
                 ("r", "key.write"),
+                ("N", "key.new"),
                 ("a", "key.assign"),
                 ("m", "key.merge"),
                 ("x", "key.close"),
@@ -348,6 +350,7 @@ impl App {
             (Mode::Main, '?') => self.mode = Mode::Help,
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
+            (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
@@ -759,9 +762,29 @@ impl App {
         self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
     }
 
+    /// `N`: open the writing box for a new issue in the selected item's
+    /// repository (the first one listed when nothing is selected).
+    fn new_issue(&mut self) {
+        let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
+        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
+    }
+
     /// Send the comment; `close` also closes the item.
     pub fn send_comment(&mut self, close: bool) {
         let Some(c) = self.compose.take() else { return };
+        if let Some(repo) = c.id.strip_prefix("new:") {
+            match write::create_issue(repo, &c.text) {
+                Some(call) => {
+                    let n = self.outbox.len();
+                    self.queue(&format!("write:{n}:new"), call, Some("write.created"));
+                }
+                None => {
+                    self.compose = Some(c);
+                    self.say_key("write.no_title");
+                }
+            }
+            return;
+        }
         let Some(item) = self.item(&c.id) else { return };
         let n = self.outbox.len();
         if !c.text.trim().is_empty() {

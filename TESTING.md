@@ -217,3 +217,11 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 18.3 | Have a repository of yours whose main CI is red | A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast |
 | 18.4 | In the "minato" page press ▲ on a rule, then look at an item two rules fit | The reason is the upper rule; the order is kept after a restart |
 | 18.5 | Start minato with the inbox view | Cards are listed at the left (title, repository, reason) and the detail at the right; the list is not blank |
+
+## 19. New issue
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 19.1 | In the inbox or the list press `N` | The writing box opens titled "New issue" with the repository of the selected item |
+| 19.2 | Type a title, a new line and a body, then `Ctrl+Enter` | A toast says the issue was created; it is on GitHub with that title and body and appears in the list soon |
+| 19.3 | Press `N`, leave it empty, `Ctrl+Enter` | A toast says the title is empty and the box stays open |

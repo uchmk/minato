@@ -22,6 +22,17 @@ pub fn comment(item: &Item, body: &str) -> Call {
     }
 }
 
+/// A new issue; the first line of `text` is the title, the rest the body.
+pub fn create_issue(repo: &str, text: &str) -> Option<Call> {
+    let text = text.trim_start();
+    let (title, body) = text.split_once('\n').unwrap_or((text, ""));
+    let title = title.trim();
+    if title.is_empty() {
+        return None;
+    }
+    Some(send(Method::Post, format!("/repos/{repo}/issues"), json!({ "title": title, "body": body.trim() })))
+}
+
 /// Merge a PR with a merge commit.
 pub fn merge(item: &Item) -> Call {
     send(Method::Put, format!("/repos/{}/pulls/{}/merge", item.repo, item.number), json!({ "merge_method": "merge" }))
@@ -125,6 +136,21 @@ mod tests {
             mentioned: false,
             ci: None,
         }
+    }
+
+    #[test]
+    fn a_new_issue_takes_its_title_from_the_first_line() {
+        let (m, path, body) = parts(create_issue("uchmk/kura", "
+ Title here 
+Body
+more
+").unwrap());
+        assert!(matches!(m, Method::Post));
+        assert_eq!(path, "/repos/uchmk/kura/issues");
+        assert_eq!(body, json!({ "title": "Title here", "body": "Body
+more" }));
+        assert!(create_issue("uchmk/kura", " 
+ ").is_none());
     }
 
     fn parts(c: Call) -> (Method, String, Value) {
