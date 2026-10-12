@@ -350,8 +350,8 @@ impl Net {
                     self.found[1].clear();
                 } else {
                     let q = format!("user:{me} is:open mentions:{me} -author:{me} sort:updated-desc");
-                    let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
-                    worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
+                    let mvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
+                    worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: mvars } });
                     worker.send(Job { key: "mainci".into(), call: Call::Graphql { query: mainci::query(), variables: "{}".into() } });
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 }

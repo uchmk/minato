@@ -48,7 +48,7 @@ fn left(ui: &mut Ui, app: &App, r: Rect) {
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));
     let chips = Rect::from_min_max(pos2(r.left(), r.bottom() - CHIPS_H), r.max);
     chips_row(ui, app, chips);
-    let body = Rect::from_min_max(head.left_bottom(), chips.left_top());
+    let body = Rect::from_min_max(head.left_bottom(), chips.right_top());
     if shown.is_empty() {
         p.text(body.center(), Align2::CENTER_CENTER, app.tr(if app.viewer.is_none() { "list.loading" } else { "inbox.empty" }), FontId::proportional(13.0), c.dim);
         return;

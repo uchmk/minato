@@ -35,7 +35,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     ui.painter().rect_filled(rect, 0.0, c.bg);
     let title = Rect::from_min_size(rect.min, vec2(rect.width(), TITLE_H));
     let keybar = Rect::from_min_max(pos2(rect.left(), rect.bottom() - KEYBAR_H), rect.max);
-    let body = Rect::from_min_max(title.left_bottom(), keybar.left_top());
+    let body = Rect::from_min_max(title.left_bottom(), pos2(rect.right(), keybar.top()));
     title_bar(ui, app, title, &mut out);
     match app.mode {
         Mode::Help => help(ui, app, body),
