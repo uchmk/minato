@@ -69,12 +69,14 @@ fn compose(ui: &mut Ui, app: &mut App) {
             Some(Pick::Labels) => app.tr("pick.labels"),
             Some(Pick::Assignees) => app.tr("pick.assignees"),
             Some(Pick::Status) => app.tr("pick.status"),
+            Some(Pick::Milestone) => app.tr("pick.milestone"),
+            Some(Pick::Reviewers) => app.tr("pick.reviewers"),
             _ => app.tr("pick.priority"),
         };
         picker(&ctx, &p, &mut c, field, &mut act, [app.tr("pick.loading"), title]);
     } else {
         // The shortcuts go first, so the field never sees them.
-        let (send_close, send, preview, bold, italic, key_link, labels, people, status, priority, esc) = ctx.input_mut(|i| {
+        let (send_close, send, preview, bold, italic, key_link, labels, people, status, priority, mile, review, esc) = ctx.input_mut(|i| {
             (
                 i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Enter),
                 i.consume_key(Modifiers::COMMAND, Key::Enter),
@@ -86,6 +88,8 @@ fn compose(ui: &mut Ui, app: &mut App) {
                 i.consume_key(Modifiers::ALT, Key::A),
                 i.consume_key(Modifiers::ALT, Key::S),
                 i.consume_key(Modifiers::ALT, Key::P),
+                i.consume_key(Modifiers::ALT, Key::M),
+                i.consume_key(Modifiers::ALT, Key::R),
                 i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
@@ -102,6 +106,10 @@ fn compose(ui: &mut Ui, app: &mut App) {
         } else if status || priority {
             app.compose = Some(c);
             app.open_field_picker(priority);
+            c = app.compose.take().expect("the box is still open");
+        } else if mile || review {
+            app.compose = Some(c);
+            app.open_extra_picker(review);
             c = app.compose.take().expect("the box is still open");
         } else if labels || people {
             let (kind, options, chosen) = if labels {

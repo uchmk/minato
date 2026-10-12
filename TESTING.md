@@ -161,3 +161,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 12.8 | Press `Esc` in the form | It closes and nothing starts |
 | 12.9 | Press `L` on a failed run | A panel shows the failed job's log from a few lines before the first error, errors in red |
 | 12.10 | `j`/`k`/`Space`/`PageUp`/`g`/`G` in the log, then `Esc` | The log scrolls with no scrollbar; `Esc` closes it |
+
+## 13. Milestone, reviewers and saved marks
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 13.1 | In the list, press `r`, then `Alt+M`, pick a milestone, `Esc` | A toast says the milestone was updated; the issue or PR shows it on GitHub |
+| 13.2 | On a PR press `Alt+R`, tick a person, `Esc` | A toast says the review was requested; GitHub lists the person under Reviewers |
+| 13.3 | On an issue press `Alt+R` | A toast says reviewers can only be asked on a PR; no picker opens |
+| 13.4 | In the inbox press `d` on a card and `s` on another, quit minato and start it again | Both cards are still hidden; `minato-marks.json` sits beside common.toml |
+| 13.5 | Press `d`, then `u`, quit and start again | The card is back (the undo was saved too) |

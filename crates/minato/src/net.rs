@@ -155,6 +155,19 @@ impl Net {
                                 _ => {}
                             }
                         }
+                        k if k.starts_with("miles:") => {
+                            let repo = &k[6..];
+                            let open = app.compose.as_ref().and_then(|c| app.items.iter().find(|i| i.id == c.id)).is_some_and(|i| i.repo == repo);
+                            match (minato_core::github::write::parse_milestones(&f.body), open) {
+                                (Ok(v), true) => {
+                                    if let Some(c) = app.compose.as_mut() {
+                                        c.milestones = v;
+                                    }
+                                }
+                                (Err(e), true) => app.say(e),
+                                _ => {}
+                            }
+                        }
                         "notes" => match notes::parse(&f.body) {
                             Ok(v) => {
                                 app.unread = v.len() as u32;

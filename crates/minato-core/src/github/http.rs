@@ -24,6 +24,7 @@ pub enum Method {
     Post,
     Put,
     Patch,
+    Delete,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,6 +79,7 @@ impl Transport for UreqTransport {
                     Method::Post => self.agent.post(url),
                     Method::Put => self.agent.put(url),
                     Method::Patch => self.agent.patch(url),
+                    Method::Delete => self.agent.delete(url).force_send_body(),
                 })
             }
             Request::Graphql { body } => self

@@ -212,7 +212,12 @@ fn main() -> eframe::Result {
             // The scale is common.toml's, so egui's own Ctrl+= / Ctrl+- stay out of it.
             cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());
-            Ok(Box::new(Minato { app: App::new(prefs), net: net::Net::start(&cc.egui_ctx) }))
+            let marks_file = prefs.base.as_ref().map(|b| b.join("minato-marks.json"));
+            let mut app = App::new(prefs);
+            if let Some(f) = marks_file {
+                app.keep_marks(f);
+            }
+            Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx) }))
         }),
     )
 }

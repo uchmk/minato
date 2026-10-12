@@ -160,6 +160,8 @@ pub struct App {
     pub inbox: InboxState,
     /// The local marks (done, later) of the inbox; they never reach GitHub.
     pub marks: HashMap<String, Mark>,
+    /// Where changed marks go to be written (see `keep_marks`).
+    marks_tx: Option<std::sync::mpsc::Sender<String>>,
     /// Which inbox rules are on.
     pub rules: Rules,
     /// The list view's selection.
@@ -230,6 +232,8 @@ pub enum Pick {
     /// The Project's Status or Priority of the item (one choice).
     Status,
     Priority,
+    Milestone,
+    Reviewers,
 }
 
 /// The writing box: a comment on one item, with the labels and the
@@ -242,6 +246,8 @@ pub struct Compose {
     /// The repository's labels and assignable people, once GitHub has said.
     pub labels: Vec<String>,
     pub people: Vec<String>,
+    /// The repository's open milestones, `(number, title)`.
+    pub milestones: Vec<(u64, String)>,
 }
 
 impl App {
@@ -262,6 +268,7 @@ impl App {
             items: Vec::new(),
             inbox: InboxState::default(),
             marks: HashMap::new(),
+            marks_tx: None,
             rules: Rules::default(),
             list: ListState::default(),
             detail: None,
@@ -635,6 +642,7 @@ impl App {
                 let id = self.items[card.at].id.clone();
                 let mark = if c == 'd' { Mark::Done(now_epoch()) } else { Mark::Later(tomorrow_nine()) };
                 self.inbox.mark(&mut self.marks, &id, mark);
+                self.save_marks();
                 let all = self.inbox_all();
                 self.inbox.clamp(&all, &self.items);
                 let words = self.tr(if c == 'd' { "inbox.marked_done" } else { "inbox.marked_later" });
@@ -642,6 +650,7 @@ impl App {
             }
             'u' => {
                 if self.inbox.undo_last(&mut self.marks).is_some() {
+                    self.save_marks();
                     let words = self.tr("inbox.undone");
                     self.say(words);
                 }
@@ -649,6 +658,30 @@ impl App {
             _ => return self.inbox.key(c, &all, &self.items),
         }
         true
+    }
+
+    /// Keep the marks in `path`: read them now (at start-up), and write
+    /// every change on a thread of its own.
+    pub fn keep_marks(&mut self, path: std::path::PathBuf) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            self.marks = minato_core::inbox::marks_parse(&text);
+        }
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            while let Ok(mut text) = rx.recv() {
+                while let Ok(newer) = rx.try_recv() {
+                    text = newer;
+                }
+                let _ = ito_common::write_atomic(&path, text);
+            }
+        });
+        self.marks_tx = Some(tx);
+    }
+
+    fn save_marks(&self) {
+        if let Some(tx) = &self.marks_tx {
+            let _ = tx.send(minato_core::inbox::marks_json(&self.marks));
+        }
     }
 
     fn queue(&mut self, key: &str, call: Call, done: Option<&'static str>) {
@@ -665,7 +698,8 @@ impl App {
         let Some(item) = self.selected().cloned() else { return };
         self.queue(&format!("labels:{}", item.repo), Call::Get(write::labels_path(&item.repo)), None);
         self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
-        self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new() });
+        self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
+        self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
     }
 
     /// Send the comment; `close` also closes the item.
@@ -692,6 +726,11 @@ impl App {
         match kind {
             Pick::Labels => self.queue(&format!("write:{n}:labels"), write::set_labels(&item, &picker.chosen), Some("write.labels")),
             Pick::Assignees => self.queue(&format!("write:{n}:people"), write::set_assignees(&item, &picker.chosen), Some("write.assignees")),
+            Pick::Milestone => {
+                let number = picker.chosen.first().and_then(|t| self.compose.as_ref()?.milestones.iter().find(|(_, m)| m == t).map(|(n, _)| *n));
+                self.queue(&format!("write:{n}:milestone"), write::set_milestone(&item, number), Some("write.milestone"));
+            }
+            Pick::Reviewers => self.queue(&format!("write:{n}:reviewers"), write::request_reviewers(&item, &picker.chosen), Some("write.reviewers")),
             Pick::Status | Pick::Priority => {
                 let priority = kind == Pick::Priority;
                 let (Some(name), Some(p)) = (picker.chosen.first(), self.board.as_mut()) else { return };
@@ -702,6 +741,22 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Alt+M (milestone, one choice) or Alt+R (reviewers, PRs only).
+    pub fn open_extra_picker(&mut self, reviewers: bool) {
+        let Some(c) = self.compose.as_ref() else { return };
+        let is_pr = self.item(&c.id).is_some_and(|i| i.kind == Kind::Pr);
+        if reviewers && !is_pr {
+            self.say_key("write.not_pr");
+            return;
+        }
+        let Some(c) = self.compose.as_mut() else { return };
+        c.picker = Some(if reviewers {
+            (Pick::Reviewers, Picker::new(c.people.clone(), Vec::new()))
+        } else {
+            (Pick::Milestone, Picker::single(c.milestones.iter().map(|(_, t)| t.clone()).collect(), Vec::new()))
+        });
     }
 
     /// Alt+S / Alt+P in the writing box: the picker for the item's Project
@@ -1018,6 +1073,62 @@ mod tests {
     }
 
     #[test]
+    fn milestone_and_reviewers_are_written_from_their_pickers() {
+        let mut a = with_pr();
+        a.feed('r');
+        let c = a.compose.as_mut().unwrap();
+        c.milestones = vec![(4, "v1".into()), (5, "v2".into())];
+        c.people = vec!["amy".into(), "bob".into()];
+        a.outbox.clear();
+        a.open_extra_picker(false);
+        let (kind, pk) = a.compose.as_mut().unwrap().picker.as_mut().unwrap();
+        assert_eq!(*kind, Pick::Milestone);
+        pk.step(true);
+        pk.toggle();
+        a.apply_pick();
+        let Call::Send { path, body, .. } = &a.outbox[0].call else { panic!() };
+        assert!(path.ends_with("/issues/3") && body.contains("\"milestone\":5"), "{path} {body}");
+        a.open_extra_picker(true);
+        let (kind, pk) = a.compose.as_mut().unwrap().picker.as_mut().unwrap();
+        assert_eq!(*kind, Pick::Reviewers);
+        pk.toggle();
+        a.apply_pick();
+        let Call::Send { path, body, .. } = &a.outbox[1].call else { panic!() };
+        assert!(path.ends_with("/pulls/3/requested_reviewers") && body.contains("amy"), "{path} {body}");
+    }
+
+    #[test]
+    fn reviewers_are_for_prs_only() {
+        let mut a = with_pr();
+        a.items[0].kind = Kind::Issue;
+        a.feed('r');
+        a.open_extra_picker(true);
+        assert!(a.compose.as_ref().unwrap().picker.is_none() && a.toast.is_some());
+    }
+
+    #[test]
+    fn marks_are_read_back_after_a_restart() {
+        let dir = std::env::temp_dir().join(format!("minato-marks-{}", std::process::id()));
+        let file = dir.join("m.json");
+        let mut a = with_pr();
+        a.view = View::Inbox;
+        a.keep_marks(file.clone());
+        a.feed('d');
+        let want = a.marks.clone();
+        assert_eq!(want.len(), 1);
+        for _ in 0..100 {
+            if file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let mut b = app();
+        b.keep_marks(file);
+        assert_eq!(b.marks, want);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn digits_open_the_views() {
         let mut a = app();
         assert_eq!(a.view, View::Inbox);
@@ -1116,7 +1227,7 @@ mod tests {
         assert!(a.feed('r'));
         assert!(a.compose.is_some());
         let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
-        assert_eq!(keys, ["labels:uchmk/kura", "people:uchmk/kura"]);
+        assert_eq!(keys, ["labels:uchmk/kura", "people:uchmk/kura", "miles:uchmk/kura"]);
         // Typed characters do not reach the views while the box is open.
         assert!(a.feed('2'));
         assert_eq!(a.view, View::List);

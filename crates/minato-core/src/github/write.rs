@@ -56,6 +56,33 @@ pub fn project_field(project: &str, item: &str, field: &str, option: &str) -> Ca
     }
 }
 
+/// Set the milestone by its number (`None` clears it).
+pub fn set_milestone(item: &Item, number: Option<u64>) -> Call {
+    send(Method::Patch, format!("/repos/{}/issues/{}", item.repo, item.number), json!({ "milestone": number }))
+}
+
+/// Ask `logins` to review a PR.
+pub fn request_reviewers(item: &Item, logins: &[String]) -> Call {
+    send(Method::Post, format!("/repos/{}/pulls/{}/requested_reviewers", item.repo, item.number), json!({ "reviewers": logins }))
+}
+
+/// Take `logins` off the review requests of a PR.
+pub fn remove_reviewers(item: &Item, logins: &[String]) -> Call {
+    send(Method::Delete, format!("/repos/{}/pulls/{}/requested_reviewers", item.repo, item.number), json!({ "reviewers": logins }))
+}
+
+/// The path of the repository's open milestones.
+pub fn milestones_path(repo: &str) -> String {
+    format!("/repos/{repo}/milestones?per_page=100")
+}
+
+/// The milestones as `(number, title)`, in the order sent.
+pub fn parse_milestones(body: &str) -> Result<Vec<(u64, String)>, String> {
+    let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let list = v.as_array().ok_or("not a list")?;
+    Ok(list.iter().filter_map(|x| Some((x.get("number")?.as_u64()?, x.get("title")?.as_str()?.to_string()))).collect())
+}
+
 /// The names in a REST list (`key` is `name` for labels, `login` for
 /// assignees), in the order sent.
 pub fn parse_names(body: &str, key: &str) -> Result<Vec<String>, String> {
@@ -101,6 +128,17 @@ mod tests {
     fn parts(c: Call) -> (Method, String, Value) {
         let Call::Send { method, path, body } = c else { panic!("not a REST write") };
         (method, path, serde_json::from_str(&body).unwrap())
+    }
+
+    #[test]
+    fn milestone_and_reviewers_use_their_endpoints() {
+        let (m, p, b) = parts(set_milestone(&item(Kind::Issue), Some(3)));
+        assert_eq!((m, p.as_str(), b["milestone"].as_u64()), (Method::Patch, "/repos/uchmk/kura/issues/7", Some(3)));
+        assert!(parts(set_milestone(&item(Kind::Issue), None)).2["milestone"].is_null());
+        let (m, p, b) = parts(request_reviewers(&item(Kind::Pr), &["a".into()]));
+        assert_eq!((m, p.as_str(), b["reviewers"][0].as_str()), (Method::Post, "/repos/uchmk/kura/pulls/7/requested_reviewers", Some("a")));
+        assert_eq!(parts(remove_reviewers(&item(Kind::Pr), &["a".into()])).0, Method::Delete);
+        assert_eq!(parse_milestones(r#"[{"number":2,"title":"v1"},{"x":1}]"#).unwrap(), [(2, "v1".to_string())]);
     }
 
     #[test]

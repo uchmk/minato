@@ -108,6 +108,34 @@ pub enum Mark {
     Later(i64),
 }
 
+/// The marks as JSON, for the file (`{"id":["done",t]}`).
+pub fn marks_json(marks: &HashMap<String, Mark>) -> String {
+    let mut m = serde_json::Map::new();
+    for (id, mark) in marks {
+        let (word, t) = match mark {
+            Mark::Done(t) => ("done", t),
+            Mark::Later(t) => ("later", t),
+        };
+        m.insert(id.clone(), serde_json::json!([word, t]));
+    }
+    serde_json::Value::Object(m).to_string()
+}
+
+/// The marks in `text`; what cannot be read is left out.
+pub fn marks_parse(text: &str) -> HashMap<String, Mark> {
+    let Ok(serde_json::Value::Object(m)) = serde_json::from_str(text) else { return HashMap::new() };
+    m.iter()
+        .filter_map(|(id, v)| {
+            let t = v.get(1)?.as_i64()?;
+            match v.get(0)?.as_str()? {
+                "done" => Some((id.clone(), Mark::Done(t))),
+                "later" => Some((id.clone(), Mark::Later(t))),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
 /// One card of the inbox.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Card {
@@ -294,6 +322,16 @@ impl InboxState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marks_survive_a_round_trip() {
+        let mut m = HashMap::new();
+        m.insert("a".to_string(), Mark::Done(5));
+        m.insert("b".to_string(), Mark::Later(9));
+        assert_eq!(marks_parse(&marks_json(&m)), m);
+        assert!(marks_parse("garbage").is_empty());
+        assert_eq!(marks_parse(r#"{"a":["x",1],"b":["done",2]}"#).len(), 1);
+    }
     use crate::list::Label;
 
     fn item(id: &str, kind: Kind, author: &str) -> Item {
