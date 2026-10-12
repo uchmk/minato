@@ -6,7 +6,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Stroke, Ui, pos2, 
 use minato_core::fold::{Show, fold};
 use minato_core::list::{Ci, Col, Item, Kind, Pick, Saved, age, epoch, options};
 
-use crate::app::App;
+use crate::app::{App, now_epoch};
 use crate::ui::ACCENT;
 
 const FILTER_W: f32 = 210.0;
@@ -14,7 +14,7 @@ const ROW_FULL: f32 = 64.0;
 const ROW_FOLDED: f32 = 24.0;
 const MORE_H: f32 = 22.0;
 const HEAD_H: f32 = 30.0;
-const LINE: f32 = 18.0;
+pub const LINE: f32 = 18.0;
 
 const OK: Color32 = Color32::from_rgb(0x3F, 0xA4, 0x6A);
 const BAD: Color32 = Color32::from_rgb(0xD1, 0x49, 0x5B);
@@ -64,7 +64,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect) {
     let items = Rect::from_min_max(filters.right_top(), detail.left_bottom());
     filter_col(ui, app, filters);
     items_col(ui, app, items);
-    detail_col(ui, app, detail);
+    detail_col(ui, app, detail, app.list.scroll, None);
     let p = ui.painter();
     for x in [filters.right(), detail.left()] {
         p.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], Stroke::new(1.0, c.border));
@@ -221,7 +221,9 @@ fn item_row(p: &egui::Painter, app: &App, item: &Item, row: Rect, full: bool, se
     p.text(pos2(x, row.top() + 50.0), Align2::LEFT_CENTER, line, FontId::proportional(11.5), c.dim);
 }
 
-fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
+/// The detail column. `lead` is a line over the title (the inbox reason
+/// and next step).
+pub fn detail_col(ui: &mut Ui, app: &App, r: Rect, scroll: f32, lead: Option<(String, Color32)>) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
     let Some(item) = app.selected() else {
@@ -229,8 +231,14 @@ fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
         return;
     };
     let w = r.width() - 28.0;
-    let mut y = r.top() + 14.0 - app.list.scroll * LINE;
+    let mut y = r.top() + 14.0 - scroll * LINE;
     let x = r.left() + 14.0;
+    if let Some((text, color)) = lead {
+        let g = ui.fonts_mut(|f| f.layout(text, FontId::proportional(12.5), color, w));
+        let h = g.size().y;
+        p.galley(pos2(x, y), g, color);
+        y += h + 10.0;
+    }
     // Title and state.
     let title = ui.fonts_mut(|f| f.layout(item.title.clone(), FontId::proportional(16.0), c.fg, w));
     let h = title.size().y;
@@ -273,10 +281,6 @@ fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
             y += 10.0;
         }
     }
-}
-
-fn now_epoch() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
 fn parse_hex(s: &str) -> Option<Color32> {

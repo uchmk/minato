@@ -9,6 +9,7 @@ mod app;
 mod fonts;
 mod i18n;
 mod icon;
+mod inbox_ui;
 mod list_ui;
 mod net;
 mod prefs;

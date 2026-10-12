@@ -3,6 +3,9 @@
 
 use std::time::{Duration, Instant};
 
+use std::collections::HashMap;
+
+use minato_core::inbox::{Card, InboxState, Mark, Rules};
 use minato_core::list::{Detail, Item, ListState};
 
 use crate::prefs::Prefs;
@@ -63,6 +66,7 @@ impl View {
                 ("r", "key.write"),
                 ("d", "key.done"),
                 ("s", "key.later"),
+                ("u", "key.undo"),
                 ("m", "key.merge"),
                 ("o", "key.browser"),
                 ("f F t", "key.filter"),
@@ -123,6 +127,12 @@ pub struct App {
     pub viewer: Option<String>,
     /// The open issues, PRs and discussions of the last search.
     pub items: Vec<Item>,
+    /// The inbox's selection and filters.
+    pub inbox: InboxState,
+    /// The local marks (done, later) of the inbox; they never reach GitHub.
+    pub marks: HashMap<String, Mark>,
+    /// Which inbox rules are on.
+    pub rules: Rules,
     /// The list view's selection.
     pub list: ListState,
     /// The detail of one item (its node id), once fetched.
@@ -145,6 +155,9 @@ impl App {
             toast: None,
             viewer: None,
             items: Vec::new(),
+            inbox: InboxState::default(),
+            marks: HashMap::new(),
+            rules: Rules::default(),
             list: ListState::default(),
             detail: None,
             open_url: None,
@@ -189,6 +202,7 @@ impl App {
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
+                None if self.view == View::Inbox => return self.inbox_key(c),
                 None => return false,
             },
         }
@@ -212,8 +226,50 @@ impl App {
         self.mode == Mode::Main && self.view == View::List && self.list_key(' ')
     }
 
-    /// The item selected in the list, if any.
+    /// Every card of the inbox now, before its filters.
+    pub fn inbox_all(&self) -> Vec<Card> {
+        let me = self.viewer.as_deref().unwrap_or("");
+        minato_core::inbox::cards(&self.items, me, &self.rules, &self.marks, now_epoch())
+    }
+
+    /// A key in the inbox: `d` done, `s` later (tomorrow 9:00), `u` undo,
+    /// `o` the browser, and the filters and the cursor.
+    fn inbox_key(&mut self, c: char) -> bool {
+        let all = self.inbox_all();
+        let card = self.inbox.selected(&all, &self.items);
+        match c {
+            'o' => {
+                if let Some(card) = card {
+                    self.open_url = Some(self.items[card.at].url.clone());
+                }
+            }
+            'd' | 's' => {
+                let Some(card) = card else { return true };
+                let id = self.items[card.at].id.clone();
+                let mark = if c == 'd' { Mark::Done(now_epoch()) } else { Mark::Later(tomorrow_nine()) };
+                self.inbox.mark(&mut self.marks, &id, mark);
+                let all = self.inbox_all();
+                self.inbox.clamp(&all, &self.items);
+                let words = self.tr(if c == 'd' { "inbox.marked_done" } else { "inbox.marked_later" });
+                self.say(words);
+            }
+            'u' => {
+                if self.inbox.undo_last(&mut self.marks).is_some() {
+                    let words = self.tr("inbox.undone");
+                    self.say(words);
+                }
+            }
+            _ => return self.inbox.key(c, &all, &self.items),
+        }
+        true
+    }
+
+    /// The item shown in the detail: the list's or the inbox's selection.
     pub fn selected(&self) -> Option<&Item> {
+        if self.view == View::Inbox {
+            let all = self.inbox_all();
+            return self.inbox.selected(&all, &self.items).map(|c| &self.items[c.at]);
+        }
         self.list.selected(&self.items, self.viewer.as_deref().unwrap_or(""))
     }
 
@@ -233,6 +289,19 @@ impl App {
     pub fn since_sync(&self) -> Option<u64> {
         self.synced.map(|t| t.elapsed().as_secs())
     }
+}
+
+/// Seconds since the Unix epoch.
+pub fn now_epoch() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+}
+
+/// Tomorrow 9:00 local time, as seconds since the epoch.
+fn tomorrow_nine() -> i64 {
+    use chrono::{Duration, Local, TimeZone};
+    let day = Local::now().date_naive() + Duration::days(1);
+    let at = day.and_hms_opt(9, 0, 0).unwrap_or_default();
+    Local.from_local_datetime(&at).earliest().map_or_else(|| now_epoch() + 12 * 3600, |t| t.timestamp())
 }
 
 #[cfg(test)]

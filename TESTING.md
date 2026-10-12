@@ -66,3 +66,15 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
 | 6.7 | Press `o` | The item opens in the browser |
 | 6.8 | Look at a PR with checks | The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation |
+
+## 7. Inbox view
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 7.1 | Press `1` after the connection is up | Cards of your turn (red or ready PRs, `question` / `needs-owner` / `lane-stalled` items, unassigned findings) stand under "Your turn"; each shows its reason in colour |
+| 7.2 | Select a card with `j` / `k` | The detail at the right follows; its top line shows the reason and the next key |
+| 7.3 | Press `d`, then `u` | The card moves to "Done today" with a toast, and `u` brings it back |
+| 7.4 | Press `s` | The card disappears (back tomorrow 9:00) with a toast; `u` brings it back |
+| 7.5 | Press `f`, `F`, `t` | The chips at the lower left change and the cards narrow; after the last choice they return to All |
+| 7.6 | Shrink the window height | Far cards fold to their title, then hide with "⋯" lines; no scrollbar |
+| 7.7 | Press `o` | The item opens in the browser |
