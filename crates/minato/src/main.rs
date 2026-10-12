@@ -222,12 +222,16 @@ fn main() -> eframe::Result {
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());
             let marks_file = prefs.base.as_ref().map(|b| b.join("minato-marks.json"));
             let settings_file = prefs.base.as_ref().map(|b| b.join("minato-settings.json"));
+            let searches_file = prefs.base.as_ref().map(|b| b.join("minato-searches.txt"));
             let mut app = App::new(prefs);
             if let Some(f) = marks_file {
                 app.keep_marks(f);
             }
             if let Some(f) = settings_file {
                 app.keep_settings(f);
+            }
+            if let Some(f) = searches_file {
+                app.keep_searches(f);
             }
             Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx) }))
         }),

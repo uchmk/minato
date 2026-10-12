@@ -37,6 +37,8 @@ pub struct Net {
     searched_closed: bool,
     /// The last answers of the two searches, merged into `app.items`.
     found: [Vec<Item>; 2],
+    /// The saved search the items were last searched with (the list view's).
+    searched_custom: Option<String>,
     /// Ids the `mentions:` search found, and the repositories whose main CI is red.
     mentioned: std::collections::HashSet<String>,
     stubs: Vec<Item>,
@@ -94,7 +96,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -344,8 +346,10 @@ impl Net {
             self.next_poll = now + wait;
         }
         if let Some(me) = app.viewer.clone() {
-            if app.show_closed != self.searched_closed {
+            let custom = if app.view == crate::app::View::List { app.list.active_search().map(|t| minato_core::list::search_query(t, &me)) } else { None };
+            if app.show_closed != self.searched_closed || custom != self.searched_custom {
                 self.searched_closed = app.show_closed;
+                self.searched_custom = custom.clone();
                 self.next_search = now;
             }
             if now >= self.next_search {
@@ -353,7 +357,13 @@ impl Net {
                 let q = format!("user:{me} {state} sort:updated-desc");
                 let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
-                if app.show_closed {
+                if let Some(q) = custom {
+                    let cvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
+                    worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: cvars } });
+                    self.found[1].clear();
+                    self.mentioned.clear();
+                    self.stubs.clear();
+                } else if app.show_closed {
                     self.found[1].clear();
                 } else {
                     let q = format!("user:{me} is:open mentions:{me} -author:{me} sort:updated-desc");

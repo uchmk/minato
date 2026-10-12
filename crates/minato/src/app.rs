@@ -172,6 +172,9 @@ pub struct App {
     /// minato's own settings: the inbox rules and the writing box's fields.
     pub settings: Settings,
     settings_tx: Option<std::sync::mpsc::Sender<String>>,
+    /// The text box of the saved searches in the settings (one per line).
+    pub searches_text: String,
+    searches_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The list shows closed issues and PRs (`C`), so `x` opens them again.
     pub show_closed: bool,
     /// The list view's selection.
@@ -295,6 +298,8 @@ impl App {
             marks_tx: None,
             settings: Settings::default(),
             settings_tx: None,
+            searches_text: String::new(),
+            searches_tx: None,
             show_closed: false,
             list: ListState::default(),
             detail: None,
@@ -713,6 +718,31 @@ impl App {
             self.settings = Settings::parse(&text);
         }
         self.settings_tx = Some(writer(path));
+    }
+
+    /// Keep the saved searches (one per line) in `path`, the same way.
+    pub fn keep_searches(&mut self, path: std::path::PathBuf) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            self.searches_text = text;
+            self.sync_searches();
+        }
+        self.searches_tx = Some(writer(path));
+    }
+
+    /// Take the saved searches from the text box; a search that is gone
+    /// stops being the list's filter.
+    pub fn sync_searches(&mut self) {
+        self.list.searches = self.searches_text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+        if self.list.filter.search.is_some_and(|i| i >= self.list.searches.len()) {
+            self.list.filter.search = None;
+        }
+    }
+
+    /// Write the saved searches after the screen changed them.
+    pub fn save_searches(&self) {
+        if let Some(tx) = &self.searches_tx {
+            let _ = tx.send(self.searches_text.clone());
+        }
     }
 
     /// Write the settings after the screen changed them.

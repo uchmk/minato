@@ -55,6 +55,7 @@ fn pick_label(app: &App, p: &Pick) -> String {
         Pick::Saved(Saved::Red) => app.tr("saved.red").into(),
         Pick::Saved(Saved::Mentioned) => app.tr("saved.mentioned").into(),
         Pick::Saved(Saved::Finding) => app.tr("saved.finding").into(),
+        Pick::Search(i) => app.list.searches.get(*i).cloned().unwrap_or_default(),
     }
 }
 
@@ -83,7 +84,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect) {
 fn filter_col(ui: &mut Ui, app: &App, r: Rect) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
-    let groups = options(&app.items);
+    let groups = options(&app.items, &app.list.searches);
     let focus = app.list.col == Col::Filters;
     let mut y = r.top() + 10.0;
     let mut flat = 0;
@@ -137,7 +138,7 @@ fn items_col(ui: &mut Ui, app: &App, r: Rect) {
     let shown = app.list.shown(&app.items, me);
     let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));
     let p = ui.painter().with_clip_rect(r);
-    p.text(pos2(head.left() + 12.0, head.center().y), Align2::LEFT_CENTER, app.list.filter.query(me), FontId::monospace(11.5), c.dim);
+    p.text(pos2(head.left() + 12.0, head.center().y), Align2::LEFT_CENTER, app.list.active_search().map_or_else(|| app.list.filter.query(me), |t| minato_core::list::search_query(t, me)), FontId::monospace(11.5), c.dim);
     p.text(pos2(head.right() - 12.0, head.center().y), Align2::RIGHT_CENTER, shown.len().to_string(), FontId::monospace(11.5), c.fg);
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));
     let body = Rect::from_min_max(head.left_bottom(), r.max);

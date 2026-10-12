@@ -246,3 +246,11 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 22.1 | Select a discussion in the list that has a comment from someone other than its author, wait for the detail, press `M` | A toast says it was marked; on GitHub that comment shows as the answer |
 | 22.2 | Press `M` on an issue or a PR | A toast says only a discussion can have an answer |
+
+## 23. Saved searches
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 23.1 | In the settings (`,`), minato page, type `is:open label:bug` in "Saved searches" | It stays after closing and reopening the settings and the app (`minato-searches.txt`) |
+| 23.2 | In the list move to the filter column and choose that search under saved | The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds |
+| 23.3 | Choose "All" under saved, or switch to the inbox | The ordinary list comes back |

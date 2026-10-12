@@ -115,11 +115,14 @@ pub struct Filter {
     pub kind: Option<Kind>,
     pub author: Option<String>,
     pub saved: Saved,
+    /// A search the owner wrote (index into the saved searches); the items
+    /// are then what GitHub answered to it, so `saved` is not applied.
+    pub search: Option<usize>,
 }
 
 impl Default for Filter {
     fn default() -> Self {
-        Filter { repo: None, kind: None, author: None, saved: Saved::None }
+        Filter { repo: None, kind: None, author: None, saved: Saved::None, search: None }
     }
 }
 
@@ -130,6 +133,7 @@ impl Filter {
             && self.kind.is_none_or(|k| k == item.kind)
             && self.author.as_ref().is_none_or(|a| *a == item.author)
             && match self.saved {
+                _ if self.search.is_some() => true,
                 Saved::None => true,
                 Saved::Assigned => item.assignees.iter().any(|a| a == me),
                 Saved::Red => item.kind == Kind::Pr && item.ci == Some(Ci::Bad),
@@ -172,10 +176,26 @@ pub enum Pick {
     Kind(Option<Kind>),
     Author(Option<String>),
     Saved(Saved),
+    /// One of the owner's own saved searches.
+    Search(usize),
 }
 
 /// The options in the column's order, grouped; `None`/"all" first in each.
-pub fn options(items: &[Item]) -> Vec<(&'static str, Vec<Pick>)> {
+/// The GitHub search for a saved search `text`: scoped to the owner when it
+/// names no `user:`, `org:` or `repo:`, newest first when it names no sort.
+pub fn search_query(text: &str, owner: &str) -> String {
+    let has = |p: &str| text.split_whitespace().any(|w| w.trim_start_matches('-').starts_with(p));
+    let mut q = text.trim().to_string();
+    if !(has("user:") || has("org:") || has("repo:")) {
+        q = format!("user:{owner} {q}");
+    }
+    if !has("sort:") {
+        q.push_str(" sort:updated-desc");
+    }
+    q
+}
+
+pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pick>)> {
     let distinct = |f: &dyn Fn(&Item) -> String| {
         let mut v: Vec<String> = items.iter().map(f).collect();
         v.sort();
@@ -190,7 +210,7 @@ pub fn options(items: &[Item]) -> Vec<(&'static str, Vec<Pick>)> {
         ("repo", repos),
         ("kind", vec![Pick::Kind(None), Pick::Kind(Some(Kind::Issue)), Pick::Kind(Some(Kind::Pr)), Pick::Kind(Some(Kind::Discussion))]),
         ("author", authors),
-        ("saved", vec![Pick::Saved(Saved::None), Pick::Saved(Saved::Assigned), Pick::Saved(Saved::Red), Pick::Saved(Saved::Mentioned), Pick::Saved(Saved::Finding)]),
+        ("saved", vec![Pick::Saved(Saved::None), Pick::Saved(Saved::Assigned), Pick::Saved(Saved::Red), Pick::Saved(Saved::Mentioned), Pick::Saved(Saved::Finding)].into_iter().chain((0..searches.len()).map(Pick::Search)).collect()),
     ]
 }
 
@@ -213,15 +233,22 @@ pub struct ListState {
     pub sel: usize,
     /// Lines the detail is scrolled by.
     pub scroll: f32,
+    /// The owner's saved searches (one query each).
+    pub searches: Vec<String>,
 }
 
 impl Default for ListState {
     fn default() -> Self {
-        ListState { col: Col::Items, filter: Filter::default(), cursor: 0, sel: 0, scroll: 0.0 }
+        ListState { col: Col::Items, filter: Filter::default(), cursor: 0, sel: 0, scroll: 0.0, searches: Vec::new() }
     }
 }
 
 impl ListState {
+    /// The text of the saved search in force, if one is.
+    pub fn active_search(&self) -> Option<&str> {
+        self.filter.search.and_then(|i| self.searches.get(i)).map(String::as_str)
+    }
+
     /// The items that pass the filter, in the order given.
     pub fn shown<'a>(&self, items: &'a [Item], me: &str) -> Vec<&'a Item> {
         items.iter().filter(|i| self.filter.matches(i, me)).collect()
@@ -236,7 +263,7 @@ impl ListState {
     /// flattened options. Returns whether it was used.
     pub fn key(&mut self, c: char, items: &[Item], me: &str) -> bool {
         let n = self.shown(items, me).len();
-        let flat: Vec<Pick> = options(items).into_iter().flat_map(|(_, v)| v).collect();
+        let flat: Vec<Pick> = options(items, &self.searches).into_iter().flat_map(|(_, v)| v).collect();
         match (self.col, c) {
             (Col::Filters, 'j') => self.cursor = (self.cursor + 1).min(flat.len().saturating_sub(1)),
             (Col::Filters, 'k') => self.cursor = self.cursor.saturating_sub(1),
@@ -275,7 +302,11 @@ impl ListState {
             Pick::Repo(r) => self.filter.repo = r,
             Pick::Kind(k) => self.filter.kind = k,
             Pick::Author(a) => self.filter.author = a,
-            Pick::Saved(s) => self.filter.saved = s,
+            Pick::Saved(s) => {
+                self.filter.saved = s;
+                self.filter.search = None;
+            }
+            Pick::Search(i) => self.filter.search = Some(i),
         }
         self.sel = 0;
         self.scroll = 0.0;
@@ -287,7 +318,8 @@ impl ListState {
             Pick::Repo(r) => self.filter.repo == *r,
             Pick::Kind(k) => self.filter.kind == *k,
             Pick::Author(a) => self.filter.author == *a,
-            Pick::Saved(s) => self.filter.saved == *s,
+            Pick::Saved(s) => self.filter.search.is_none() && self.filter.saved == *s,
+            Pick::Search(i) => self.filter.search == Some(*i),
         }
     }
 
@@ -365,6 +397,20 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_search_is_scoped_and_sorted_unless_it_says_otherwise() {
+        assert_eq!(search_query("is:open label:bug", "me"), "user:me is:open label:bug sort:updated-desc");
+        assert_eq!(search_query("repo:u/k is:pr sort:created-asc", "me"), "repo:u/k is:pr sort:created-asc");
+        assert_eq!(search_query("-org:x is:open", "me"), "-org:x is:open sort:updated-desc");
+        let mut s = ListState { searches: vec!["is:open label:bug".into()], ..Default::default() };
+        assert_eq!(s.active_search(), None);
+        s.apply(Pick::Search(0));
+        assert_eq!(s.active_search(), Some("is:open label:bug"));
+        assert!(s.is_chosen(&Pick::Search(0)) && !s.is_chosen(&Pick::Saved(Saved::None)));
+        s.apply(Pick::Saved(Saved::None));
+        assert_eq!(s.active_search(), None);
+    }
+
+    #[test]
     fn the_filter_matches_and_writes_its_query() {
         let it = items();
         let mut f = Filter::default();
@@ -373,7 +419,7 @@ mod tests {
         f.saved = Saved::Red;
         assert_eq!(it.iter().filter(|i| f.matches(i, "me")).count(), 1);
         assert_eq!(f.query("uchmk"), "is:open user:uchmk is:pr status:failure");
-        let f = Filter { repo: Some("uchmk/kura".into()), kind: Some(Kind::Pr), author: Some("uchmk".into()), saved: Saved::Assigned };
+        let f = Filter { repo: Some("uchmk/kura".into()), kind: Some(Kind::Pr), author: Some("uchmk".into()), saved: Saved::Assigned, search: None };
         assert_eq!(f.query("uchmk"), "is:open repo:uchmk/kura is:pr author:uchmk assignee:@me");
         assert!(!f.matches(&it[1], "me"));
     }

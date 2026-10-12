@@ -51,6 +51,8 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let prefs = &mut app.prefs;
     let before = app.settings;
     let st = &mut app.settings;
+    let searches_text = &mut app.searches_text;
+    let mut searches_changed = false;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
         GENERAL => {
@@ -94,6 +96,11 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                     st.rules.shift(at, step);
                 }
             });
+            section(ui, l, tr("settings.searches"), |ui| {
+                ui.label(egui::RichText::new(tr("settings.searches_note")).color(ito_theme::colors().dim).size(12.0));
+                let edit = egui::TextEdit::multiline(searches_text).desired_rows(4).desired_width(f32::INFINITY).font(FontId::monospace(12.5));
+                searches_changed |= ui.add(edit).changed();
+            });
             section(ui, l, tr("settings.fields"), |ui| {
                 let names = ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"];
                 let mut shift = None;
@@ -121,6 +128,10 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         }
         _ => {}
     });
+    if searches_changed {
+        app.sync_searches();
+        app.save_searches();
+    }
     if app.settings != before {
         app.save_settings();
     }
