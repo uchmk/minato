@@ -6,6 +6,7 @@
 pub mod client;
 pub mod http;
 pub mod rate;
+pub mod search;
 pub mod token;
 pub mod types;
 pub mod worker;

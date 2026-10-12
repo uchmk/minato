@@ -3,6 +3,8 @@
 
 use std::time::{Duration, Instant};
 
+use minato_core::list::{Detail, Item, ListState};
+
 use crate::prefs::Prefs;
 
 /// The four views, opened by `1` to `4` (docs/design.md).
@@ -119,6 +121,14 @@ pub struct App {
     pub toast: Option<(String, Instant)>,
     /// The login the token belongs to, once GitHub has said.
     pub viewer: Option<String>,
+    /// The open issues, PRs and discussions of the last search.
+    pub items: Vec<Item>,
+    /// The list view's selection.
+    pub list: ListState,
+    /// The detail of one item (its node id), once fetched.
+    pub detail: Option<(String, Detail)>,
+    /// A URL to open in the browser, taken by the window.
+    pub open_url: Option<String>,
     pub quit: bool,
 }
 
@@ -134,6 +144,10 @@ impl App {
             api: None,
             toast: None,
             viewer: None,
+            items: Vec::new(),
+            list: ListState::default(),
+            detail: None,
+            open_url: None,
             quit: false,
         };
         app.set_language();
@@ -174,10 +188,33 @@ impl App {
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
+                None if self.view == View::List => return self.list_key(c),
                 None => return false,
             },
         }
         true
+    }
+
+    /// A key in the list view: the columns' own, and `o` for the browser.
+    fn list_key(&mut self, c: char) -> bool {
+        let me = self.viewer.clone().unwrap_or_default();
+        if c == 'o' {
+            if let Some(i) = self.list.selected(&self.items, &me) {
+                self.open_url = Some(i.url.clone());
+            }
+            return true;
+        }
+        self.list.key(c, &self.items, &me)
+    }
+
+    /// Enter: the same as Space (choose a filter).
+    pub fn enter(&mut self) -> bool {
+        self.mode == Mode::Main && self.view == View::List && self.list_key(' ')
+    }
+
+    /// The item selected in the list, if any.
+    pub fn selected(&self) -> Option<&Item> {
+        self.list.selected(&self.items, self.viewer.as_deref().unwrap_or(""))
     }
 
     /// Escape: close the help or the settings.
@@ -234,6 +271,18 @@ mod tests {
         assert!(!a.feed('3'), "the help swallows the views' digits");
         assert!(a.feed('?'));
         assert_eq!(a.mode, Mode::Main);
+    }
+
+    #[test]
+    fn list_keys_work_only_in_the_list_view() {
+        let mut a = app();
+        assert!(!a.feed('h'), "no list keys in the inbox");
+        a.feed('2');
+        assert!(a.feed('h'));
+        assert_eq!(a.list.col, minato_core::list::Col::Filters);
+        assert!(a.feed('l'));
+        assert!(a.feed('o'), "o with nothing selected is used and does nothing");
+        assert!(a.open_url.is_none());
     }
 
     #[test]

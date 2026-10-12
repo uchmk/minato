@@ -1,0 +1,54 @@
+{
+  "data": {
+    "search": {
+      "nodes": [
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOA1",
+          "number": 66,
+          "title": "Take the UI font from ito-common",
+          "url": "https://github.com/uchmk/tsumugi/pull/66",
+          "createdAt": "2026-10-12T05:40:00Z",
+          "updatedAt": "2026-10-12T08:55:12Z",
+          "author": { "login": "uchmk" },
+          "repository": { "nameWithOwner": "uchmk/tsumugi" },
+          "labels": { "nodes": [ { "name": "lane:win", "color": "1D76DB" } ] },
+          "comments": { "totalCount": 2 },
+          "state": "OPEN",
+          "isDraft": false,
+          "assignees": { "nodes": [ { "login": "uchmk" } ] },
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "FAILURE" } } } ] }
+        },
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOB2",
+          "number": 361,
+          "title": "Bump ito rev",
+          "url": "https://github.com/uchmk/kura/issues/361",
+          "createdAt": "2026-10-11T22:00:00Z",
+          "updatedAt": "2026-10-12T01:00:00Z",
+          "author": null,
+          "repository": { "nameWithOwner": "uchmk/kura" },
+          "labels": { "nodes": [] },
+          "comments": { "totalCount": 0 },
+          "state": "OPEN",
+          "assignees": { "nodes": [] }
+        },
+        {
+          "__typename": "Discussion",
+          "id": "D_kwDOC3",
+          "number": 12,
+          "title": "Q: spacing tokens?",
+          "url": "https://github.com/uchmk/ito/discussions/12",
+          "createdAt": "2026-10-10T09:00:00Z",
+          "updatedAt": "2026-10-12T07:00:00Z",
+          "author": { "login": "uchmk" },
+          "repository": { "nameWithOwner": "uchmk/ito" },
+          "labels": { "nodes": [] },
+          "comments": { "totalCount": 3 }
+        },
+        { "__typename": "Repository" }
+      ]
+    }
+  }
+}

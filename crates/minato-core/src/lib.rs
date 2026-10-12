@@ -3,4 +3,5 @@
 
 pub mod fold;
 pub mod github;
+pub mod list;
 pub mod status;

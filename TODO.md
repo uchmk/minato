@@ -7,7 +7,7 @@
 - [x] 2. GitHub client in `minato-core` (v0.2.0)
 - [ ] 2b. Token entry in the settings screen and the OS credential store (今は `GITHUB_TOKEN` と `gh auth token` だけ）（要確認: #3）
 - [ ] 3. Inbox view
-- [ ] 4. List view (three columns)
+- [x] 4. List view (three columns) (v0.3.0; read only)
 - [ ] 5. Actions view
 - [ ] 6. Board view, palette (Ctrl+Shift+P)
 - [ ] 7. Writes (comment, close, label, merge) with confirmation

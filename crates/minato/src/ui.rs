@@ -33,6 +33,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     title_bar(ui, app, title, &mut out);
     match app.mode {
         Mode::Help => help(ui, app, body),
+        _ if app.view == View::List => crate::list_ui::draw(ui, app, body),
         _ => empty_view(ui, app, body),
     }
     key_bar(ui, app, keybar);

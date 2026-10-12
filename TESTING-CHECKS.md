@@ -46,3 +46,14 @@
 - [ ] **5.2** Start it with no `gh` login and no `GITHUB_TOKEN` → A toast says there is no token and how to get one; the account mark stays `?`
 - [ ] **5.3** Start it with `GITHUB_TOKEN=bad` → A toast says GitHub refused the token (401); the token text appears nowhere
 - [ ] **5.4** Leave it open for 3 minutes → The `⟳` age counts up and drops back to a few seconds after each poll; the window stays idle otherwise
+
+## 6. List view
+
+- [ ] **6.1** Press `2` after the connection is up → Within a few seconds your open issues, PRs and discussions list in three lines each; the CI mark and the comment count stand at the right
+- [ ] **6.2** Press `j` / `k` → The selected row moves; the detail at the right follows within a second
+- [ ] **6.3** Shrink the window height until the rows do not fit → Far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears
+- [ ] **6.4** Press `h`, then `j` and `Space` on a repository → The list narrows to it and the query line over the list changes; the chosen option is filled
+- [ ] **6.5** Pick "CI is red" → Only PRs with a red mark remain
+- [ ] **6.6** Press `l` twice and `j` → The detail scrolls by lines, with no scrollbar; moving the row resets it
+- [ ] **6.7** Press `o` → The item opens in the browser
+- [ ] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation

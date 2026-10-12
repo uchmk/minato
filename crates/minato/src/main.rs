@@ -9,6 +9,7 @@ mod app;
 mod fonts;
 mod i18n;
 mod icon;
+mod list_ui;
 mod net;
 mod prefs;
 mod settings;
@@ -47,6 +48,9 @@ impl Minato {
                 egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => {
                     self.app.escape();
                 }
+                egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
+                    self.app.enter();
+                }
                 egui::Event::Text(t) => {
                     for c in t.chars() {
                         self.app.feed(c);
@@ -83,6 +87,9 @@ impl eframe::App for Minato {
             if out.settings {
                 self.app.mode = Mode::Settings;
             }
+        }
+        if let Some(url) = self.app.open_url.take() {
+            ctx.open_url(egui::OpenUrl::new_tab(url));
         }
         if self.app.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

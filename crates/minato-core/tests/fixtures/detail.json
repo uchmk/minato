@@ -1,0 +1,31 @@
+{
+  "data": {
+    "node": {
+      "__typename": "PullRequest",
+      "body": "Takes the UI font from ito-common.\n\n- drops the local list\n- keeps the fallback",
+      "comments": {
+        "nodes": [
+          { "author": { "login": "uchmk" }, "createdAt": "2026-10-12T06:00:00Z", "body": "Rebased on main." },
+          { "author": null, "createdAt": "2026-10-12T07:30:00Z", "body": "Looks fine." }
+        ]
+      },
+      "commits": {
+        "nodes": [
+          {
+            "commit": {
+              "statusCheckRollup": {
+                "contexts": {
+                  "nodes": [
+                    { "__typename": "CheckRun", "name": "test (windows)", "conclusion": "FAILURE", "status": "COMPLETED" },
+                    { "__typename": "CheckRun", "name": "lint", "conclusion": "SUCCESS", "status": "COMPLETED" },
+                    { "__typename": "StatusContext", "context": "ci/legacy", "state": "PENDING" }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
