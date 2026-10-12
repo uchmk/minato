@@ -4,7 +4,8 @@
 
 ## Next stages (docs/dev-prompt.md)
 
-- [ ] 2. GitHub client in `minato-core`: token from `gh auth token`, GraphQL/REST on a worker thread, cache, rate limit in the keybar
+- [x] 2. GitHub client in `minato-core` (v0.2.0)
+- [ ] 2b. Token entry in the settings screen and the OS credential store (今は `GITHUB_TOKEN` と `gh auth token` だけ)
 - [ ] 3. Inbox view
 - [ ] 4. List view (three columns)
 - [ ] 5. Actions view

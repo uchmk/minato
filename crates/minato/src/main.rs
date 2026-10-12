@@ -9,6 +9,7 @@ mod app;
 mod fonts;
 mod i18n;
 mod icon;
+mod net;
 mod prefs;
 mod settings;
 mod ui;
@@ -26,6 +27,7 @@ usage: minato [--version | --help]
 
 struct Minato {
     app: App,
+    net: net::Net,
 }
 
 impl Minato {
@@ -63,6 +65,7 @@ impl eframe::App for Minato {
             self.keys(&ctx);
         }
         self.app.prefs.pump();
+        self.net.pump(&mut self.app, &ctx);
         self.app.set_language();
         // common.toml's theme, or the OS's light or dark under `system`.
         self.app.prefs.apply_theme(&ctx);
@@ -142,7 +145,7 @@ fn main() -> eframe::Result {
             // The scale is common.toml's, so egui's own Ctrl+= / Ctrl+- stay out of it.
             cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());
-            Ok(Box::new(Minato { app: App::new(prefs) }))
+            Ok(Box::new(Minato { app: App::new(prefs), net: net::Net::start(&cc.egui_ctx) }))
         }),
     )
 }

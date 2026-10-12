@@ -44,3 +44,12 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 4.2 | Change the scale to 150% | The whole window is drawn larger at once and stays so after a restart |
 | 4.3 | Pick another theme | The window's colours change at once; the sample card follows the theme |
 | 4.4 | Edit `%APPDATA%\uchmk\common.toml` by hand while the app runs | The change shows within a few seconds |
+
+## 5. GitHub connection
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 5.1 | Start `minato` where `gh auth login` is done | Within a few seconds the account mark shows your initial (hover: your login) and the keybar shows `API 4,xxx/5,000` and `⟳ 0s ago` |
+| 5.2 | Start it with no `gh` login and no `GITHUB_TOKEN` | A toast says there is no token and how to get one; the account mark stays `?` |
+| 5.3 | Start it with `GITHUB_TOKEN=bad` | A toast says GitHub refused the token (401); the token text appears nowhere |
+| 5.4 | Leave it open for 3 minutes | The `⟳` age counts up and drops back to a few seconds after each poll; the window stays idle otherwise |

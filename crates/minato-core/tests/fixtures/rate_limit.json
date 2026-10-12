@@ -1,0 +1,7 @@
+{
+  "resources": {
+    "core": { "limit": 5000, "used": 188, "remaining": 4812, "reset": 1760000000 },
+    "graphql": { "limit": 5000, "used": 0, "remaining": 5000, "reset": 1760000000 }
+  },
+  "rate": { "limit": 5000, "used": 188, "remaining": 4812, "reset": 1760000000 }
+}

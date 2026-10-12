@@ -2,6 +2,16 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.2.0] - 2026-10-12
+
+### Added
+
+- GitHub とつなぐ（`minato-core::github`）: トークンは `GITHUB_TOKEN` / `GH_TOKEN`、なければ `gh auth token`（値は `Debug`・`Display` に出さない）。
+- HTTP は `ureq`（rustls）。ワーカースレッドとチャネルで UI から離し、同じキーの古い依頼は捨てる。
+- ETag の `If-None-Match` と 304（手元の写しを返す）、レート制限の読み取り（残りが少ないと間隔を広げる）、GraphQL の送信。
+- 記録した JSON（`tests/fixtures/`）と偽の通信で単体試験。本物の GitHub には通信しない。
+- 窓: アカウントの印にログインの頭文字、keybar に `API 残り/上限` と `⟳` の経過、トークンが無いときの案内。
+
 ## [0.1.0] - 2026-10-12
 
 ### Added

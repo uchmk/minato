@@ -2,4 +2,5 @@
 //! here, apart from egui, so it can be tested on its own.
 
 pub mod fold;
+pub mod github;
 pub mod status;

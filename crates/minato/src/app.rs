@@ -117,6 +117,8 @@ pub struct App {
     pub api: Option<(u32, u32)>,
     /// One line at the foot, until `toast_until`.
     pub toast: Option<(String, Instant)>,
+    /// The login the token belongs to, once GitHub has said.
+    pub viewer: Option<String>,
     pub quit: bool,
 }
 
@@ -131,6 +133,7 @@ impl App {
             synced: None,
             api: None,
             toast: None,
+            viewer: None,
             quit: false,
         };
         app.set_language();
