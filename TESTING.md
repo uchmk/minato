@@ -317,6 +317,11 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 28.7 | Press `Tab` five times from the inbox, then `Shift+Tab` | Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open |
 | 28.8 | Press `4` on a fresh start (no cache), then again after `1` and back | The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once |
 | 28.9 | Select a run in Actions while the network is off for 15 seconds, then turn it on | Its jobs come within about 10 seconds of the network coming back, not after the next refresh |
+| 28.10 | In Actions select a finished run, move away and back; quit minato, start it and select it again | The second time and after the restart its jobs, artifacts and graph show at once, with no "loading" |
+| 28.11 | Select a running run and wait for two refreshes of the runs (about a minute) | Its jobs' marks and durations follow the run; when it finishes the detail shows the final jobs and artifacts |
+| 28.12 | Hold `j` across many runs in Actions, then let go | The detail of the run you stop on comes within a few seconds, not after those of the runs passed |
+| 28.13 | Press `4` on a Project with more than 100 cards | Every card shows (up to 500); the cards appear together, not 100 first and the rest later |
+| 28.14 | Rest the pointer on a board card for the first time, then again | The first time the box with the body's start comes after a moment; the second time at once |
 
 ## 29. The built-in browser
 

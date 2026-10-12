@@ -29,17 +29,68 @@ pub fn pick(body: &str) -> Result<u64, String> {
 }
 
 /// One Project (variable `n`, its number from [`pick`]), its Status field
-/// and the cards. Asking for one, not every Project's items, keeps the
-/// answer small.
+/// and 100 cards from the cursor `after` (null for the first). Asking for
+/// one, not every Project's items, and not the bodies (the hover asks
+/// [`peek_query`]), keeps the answer small.
 pub fn query() -> String {
-    let content = "__typename ... on Issue { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
-... on PullRequest { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
+    let content = "__typename ... on Issue { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
+... on PullRequest { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
     format!(
-        "query($n: Int!) {{ viewer {{ projectV2(number: $n) {{ id title \
+        "query($n: Int!, $after: String) {{ viewer {{ projectV2(number: $n) {{ id title \
 field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} priority: field(name: \"Priority\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
-items(first: 100) {{ nodes {{ id content {{ {content} }} \
+items(first: 100, after: $after) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ id content {{ {content} }} \
 fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }}"
     )
+}
+
+/// The variables of [`query`]: the Project's number and the cursor.
+pub fn vars(n: u64, after: Option<&str>) -> String {
+    match after {
+        Some(a) => format!("{{\"n\":{n},\"after\":{}}}", Value::from(a)),
+        None => format!("{{\"n\":{n},\"after\":null}}"),
+    }
+}
+
+/// The cursor of the next 100 cards, if the answer to [`query`] says there
+/// are more.
+pub fn next_page(body: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    let info = v.pointer("/data/viewer/projectV2/items/pageInfo")?;
+    if info.pointer("/hasNextPage").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    info.pointer("/endCursor").and_then(Value::as_str).map(str::to_string)
+}
+
+/// The answers to [`query`] page by page as one: the first with the cards
+/// of all of them (what is kept and what [`parse`] reads).
+pub fn merge(pages: &[String]) -> Result<String, String> {
+    let mut all: Vec<Value> = Vec::new();
+    let mut first: Option<Value> = None;
+    for body in pages {
+        let mut v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+        if let Some(Value::Array(nodes)) = v.pointer_mut("/data/viewer/projectV2/items/nodes") {
+            all.append(nodes);
+        }
+        first.get_or_insert(v);
+    }
+    let mut v = first.ok_or("no pages")?;
+    if let Some(items) = v.pointer_mut("/data/viewer/projectV2/items") {
+        items["nodes"] = Value::Array(all);
+        items["pageInfo"] = serde_json::json!({ "hasNextPage": false, "endCursor": null });
+    }
+    Ok(v.to_string())
+}
+
+/// The start of an issue's or PR's body (variable `id`), for a card's hover.
+pub fn peek_query() -> &'static str {
+    "query($id: ID!) { node(id: $id) { ... on Issue { bodyText } ... on PullRequest { bodyText } } }"
+}
+
+/// The hover's text from the answer to [`peek_query`].
+pub fn parse_peek(body: &str) -> String {
+    let v: Value = serde_json::from_str(body).unwrap_or_default();
+    crate::list::peek_of(&text(&v, "/data/node/bodyText"))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,8 +109,6 @@ pub struct Card {
     pub option: Option<String>,
     /// The Priority option it stands in, if the Project has that field.
     pub priority: Option<String>,
-    /// The start of its body, for the hover.
-    pub peek: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,7 +188,6 @@ pub fn parse(body: &str) -> Result<Project, String> {
                         .unwrap_or_default(),
                     option: Some(text(i, "/fieldValueByName/optionId")).filter(|s| !s.is_empty()),
                     priority: Some(text(i, "/priority/optionId")).filter(|s| !s.is_empty()),
-                    peek: crate::list::peek_of(&text(i, "/content/bodyText")),
                 })
                 .collect()
         })
@@ -327,12 +375,41 @@ mod tests {
         assert_eq!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":5,"title":"x"}]}}}}"#), Ok(5));
         assert!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
         assert_eq!(pick(r#"{"errors":[{"message":"no scope"}]}"#), Err("no scope".into()));
-        assert!(query().starts_with("query($n: Int!) { viewer { projectV2(number: $n) {"));
+        assert!(query().starts_with("query($n: Int!, $after: String) { viewer { projectV2(number: $n) {"));
         // The one Project, as `query` answers.
         let start = BODY.find(r#"{"id":"P1""#).unwrap();
         let one = format!(r#"{{"data":{{"viewer":{{"projectV2":{}}}}}}}"#, &BODY[start..BODY.len() - "]}}}}".len()]);
         let p = parse(&one).unwrap();
         assert_eq!(p, project());
+    }
+
+    #[test]
+    fn the_pages_are_merged_into_one_answer() {
+        let page = |ids: &[&str], next: Option<&str>| {
+            let nodes: Vec<String> = ids.iter().map(|i| format!(r#"{{"id":"{i}","content":{{"__typename":"Issue","id":"N{i}","title":"t","number":1,"url":"u","repository":{{"nameWithOwner":"o/r"}},"labels":{{"nodes":[]}}}},"fieldValueByName":{{"optionId":"o1"}}}}"#)).collect();
+            let info = match next {
+                Some(c) => format!(r#"{{"hasNextPage":true,"endCursor":"{c}"}}"#),
+                None => r#"{"hasNextPage":false,"endCursor":null}"#.to_string(),
+            };
+            format!(r#"{{"data":{{"viewer":{{"projectV2":{{"id":"P1","title":"uchmk","field":{{"id":"F1","options":[{{"id":"o1","name":"Todo"}}]}},"items":{{"pageInfo":{info},"nodes":[{}]}}}}}}}}}}"#, nodes.join(","))
+        };
+        let (a, b) = (page(&["I1", "I2"], Some("c1")), page(&["I3"], None));
+        assert_eq!(next_page(&a).as_deref(), Some("c1"));
+        assert_eq!(next_page(&b), None);
+        assert_eq!(next_page("{}"), None);
+        let merged = merge(&[a, b]).unwrap();
+        assert_eq!(next_page(&merged), None);
+        let p = parse(&merged).unwrap();
+        assert_eq!(p.cards.iter().map(|c| c.item.as_str()).collect::<Vec<_>>(), ["I1", "I2", "I3"]);
+        assert_eq!(vars(2, None), r#"{"n":2,"after":null}"#);
+        assert_eq!(vars(2, Some("c\"1")), r#"{"n":2,"after":"c\"1"}"#);
+    }
+
+    #[test]
+    fn the_hover_reads_the_body_alone() {
+        assert_eq!(parse_peek(r#"{"data":{"node":{"bodyText":"one\n\ntwo"}}}"#), "one\ntwo");
+        assert_eq!(parse_peek(r#"{"data":{"node":null}}"#), "");
+        assert!(peek_query().contains("bodyText"));
     }
 
     #[test]

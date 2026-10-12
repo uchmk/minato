@@ -211,7 +211,7 @@ pub fn repos_path() -> &'static str {
 }
 
 pub fn runs_path(repo: &str) -> String {
-    format!("/repos/{repo}/actions/runs?per_page=30")
+    format!("/repos/{repo}/actions/runs?per_page=10")
 }
 
 pub fn jobs_path(run: &Run) -> String {

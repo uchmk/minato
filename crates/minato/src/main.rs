@@ -238,6 +238,7 @@ impl eframe::App for Minato {
             if let Some((k, col)) = out.drop {
                 self.app.drop_card(k, col);
             }
+            self.app.peek_wanted = out.peek;
             // Not under a box that is over the view.
             let boxed = self.app.palette.is_some() || self.app.overlay.is_some() || self.app.confirm.is_some() || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
             if let Some((at, n)) = out.wheel.filter(|_| !boxed) {

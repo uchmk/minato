@@ -92,8 +92,14 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
                     out.drop = Some((ci, to));
                 }
             }
+            // The body's start: the list's, or asked for once the mouse is here.
             if dragged.is_none() {
-                crate::ui::peek(&resp, &card.peek);
+                let known = app.items.iter().find(|i| i.id == card.id).map(|i| i.peek.as_str()).filter(|t| !t.is_empty()).or_else(|| app.peeks.get(&card.id).map(String::as_str));
+                match known {
+                    Some(t) => crate::ui::peek(&resp, t),
+                    None if resp.hovered() => out.peek = Some(card.id.clone()),
+                    None => {}
+                }
             }
             let picked = focus && k == app.bs.row;
             card_box(&p, app, cr, ci, picked, now);

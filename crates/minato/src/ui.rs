@@ -28,6 +28,8 @@ pub struct Out {
     /// A card clicked, and a card dropped on a column.
     pub pick: Option<usize>,
     pub drop: Option<(usize, usize)>,
+    /// A card under the mouse whose body has not come (its node id).
+    pub peek: Option<String>,
     /// A row, a chip or a column clicked in the view.
     pub click: Option<Click>,
     /// The view's columns as a divider was dragged to.

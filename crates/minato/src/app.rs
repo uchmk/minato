@@ -337,7 +337,10 @@ pub struct App {
     pub bs: BoardState,
     /// Moves that can be undone: the Project item and the option it came from.
     pub board_undo: Vec<(String, String)>,
-    /// Set when the board should be fetched again at once.
+    /// The start of the bodies of the board's cards (by node id), asked for
+    /// when the mouse is first over one; the card the mouse wants it for.
+    pub peeks: HashMap<String, String>,
+    pub peek_wanted: Option<String>,
     /// Calls the window has asked for; the net takes them.
     pub outbox: Vec<Outgoing>,
     pub quit: bool,
@@ -373,7 +376,7 @@ pub enum Confirm {
 }
 
 /// What GitHub said about one run.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RunDetail {
     pub id: u64,
     /// The workflow file at the run's commit (the `needs:` graph, the inputs).
@@ -478,6 +481,8 @@ impl App {
             board: None,
             bs: BoardState::default(),
             board_undo: Vec::new(),
+            peeks: HashMap::new(),
+            peek_wanted: None,
             outbox: Vec::new(),
             quit: false,
             // The mock's widths at 1280 px: 400 | rest, and 210 | 470 | rest.
@@ -1654,7 +1659,6 @@ mod tests {
             labels: Vec::new(),
             option: Some(option.into()),
             priority: None,
-            peek: String::new(),
         };
         board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], priority_field: "PF".into(), priority_options: vec![col("p1", "High")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
     }
