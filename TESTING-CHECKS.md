@@ -108,3 +108,15 @@
 - [ ] **10.8** Press `o` on a card → The browser opens the issue or PR
 - [ ] **10.9** Use a token without the `project` scope and press `L` → An error toast appears and, after a moment, the card returns to its column
 - [ ] **10.10** Put many cards in one column → No scrollbar; far cards fold and "more" shows
+
+## 11. Notifications and palette
+
+- [ ] **11.1** Press `n` with unread GitHub notifications → Unread threads list with repo, kind, reason, age and title; the bell count matches
+- [ ] **11.2** Press `Enter` on a thread → The browser opens its issue, PR or commit; the row goes and the count drops by one
+- [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
+- [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
+- [ ] **11.5** Press `n` again → The view comes back
+- [ ] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field
+- [ ] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
+- [ ] **11.8** Type `board`, press `Enter` → The Board view opens
+- [ ] **11.9** Press `Esc`, and `Ctrl+Shift+P` twice → The palette closes; the second press closes it again

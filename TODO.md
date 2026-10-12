@@ -13,9 +13,9 @@
 - [x] 5c. Actions view (v0.6.0: runs, filters, jobs, last 10, artifacts, R X D e p o; `D` sends no inputs; logs open in the browser)
 - [ ] 5d. Dispatch inputs from the workflow YAML, logs inside the app, a `needs:` graph of the jobs
 - [x] 6. Board view (v0.7.0: Project uchmk Status columns, H L and drag write to GitHub, u undo)
-- [ ] 6b. Palette (Ctrl+Shift+P)
+- [x] 6b. Palette (v0.8.0: Ctrl+Shift+P, commands and `#number` items)
 - [ ] 7. Writes (comment, close, label, merge) with confirmation
-- [ ] 8. Notifications, release workflow
+- [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 
 ## Owner
 

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use minato_core::actions::{self, Run};
 use minato_core::board;
+use minato_core::notes;
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
@@ -41,6 +42,7 @@ pub struct Net {
     run_found: std::collections::HashMap<String, Vec<Run>>,
     next_runs: Instant,
     next_board: Instant,
+    next_notes: Instant,
     /// The run whose jobs and artifacts were last asked for.
     asked_run: Option<u64>,
 }
@@ -50,6 +52,9 @@ const RUNS: Duration = Duration::from_secs(45);
 
 /// How often the board is asked again, while it is open.
 const BOARD: Duration = Duration::from_secs(60);
+
+/// How often the notifications are asked again.
+const NOTES: Duration = Duration::from_secs(90);
 
 /// How many repositories' runs are shown.
 const REPOS: usize = 8;
@@ -66,7 +71,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), asked_run: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -148,6 +153,21 @@ impl Net {
                                 _ => {}
                             }
                         }
+                        "notes" => match notes::parse(&f.body) {
+                            Ok(v) => {
+                                app.unread = v.len() as u32;
+                                app.notes = v;
+                                app.ns.clamp(app.notes.len());
+                            }
+                            Err(e) => app.say(e),
+                        },
+                        k if k.starts_with("note:") => {
+                            if let Some(done) = self.pending.remove(k) {
+                                let words = app.tr(done);
+                                app.say(words);
+                            }
+                            self.next_notes = Instant::now();
+                        }
                         "board" => match board::parse(&f.body) {
                             Ok(p) => {
                                 app.bs.clamp(&p);
@@ -223,6 +243,9 @@ impl Net {
                     if reply.key.starts_with("board:") {
                         self.next_board = Instant::now();
                     }
+                    if reply.key.starts_with("note:") {
+                        self.next_notes = Instant::now();
+                    }
                     app.say(e);
                 }
             }
@@ -249,6 +272,10 @@ impl Net {
                 worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 self.next_search = now + SEARCH;
             }
+        }
+        if app.viewer.is_some() && now >= self.next_notes {
+            worker.send(get("notes", notes::PATH));
+            self.next_notes = now + NOTES;
         }
         if app.viewer.is_some() && app.view == crate::app::View::Board && now >= self.next_board {
             worker.send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: "{}".into() } });
@@ -285,7 +312,7 @@ impl Net {
             }
             self.asked = want;
         }
-        let wake = self.next_poll.min(self.next_search).min(match app.view {
+        let wake = self.next_poll.min(self.next_search).min(self.next_notes).min(match app.view {
             crate::app::View::Actions => self.next_runs,
             crate::app::View::Board => self.next_board,
             _ => self.next_search,

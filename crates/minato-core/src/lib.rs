@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod board;
+pub mod notes;
 pub mod composer;
 pub mod fold;
 pub mod github;

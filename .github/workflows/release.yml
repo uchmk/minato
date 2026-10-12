@@ -1,0 +1,161 @@
+name: Release
+
+# Started by hand from the Actions tab with the tag (`v0.8.0`), which is
+# created at the commit this runs on if it does not exist yet. It fails when
+# the tag differs from the version in Cargo.toml. Six files: Windows (x64 and
+# ARM64, built on the x64 runner) as .zip; macOS and Linux as .tar.gz.
+# Nothing is code-signed.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, e.g. v0.8.0. It is created if it does not exist.'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Work out the tag
+        id: tag
+        shell: bash
+        run: echo "name=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the tag matches Cargo.toml
+        shell: bash
+        run: |
+          crate=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          tag="${{ steps.tag.outputs.name }}"
+          if [ "v$crate" != "$tag" ]; then
+            echo "::error::tag $tag does not match Cargo.toml's $crate"
+            exit 1
+          fi
+
+      - name: Add the ARM64 target
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --locked --workspace --all-features
+
+      - name: Build x64
+        run: cargo build --release --locked -p minato --target x86_64-pc-windows-msvc
+
+      - name: Build ARM64
+        run: cargo build --release --locked -p minato --target aarch64-pc-windows-msvc
+
+      - name: Package the binaries
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.name }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($pair in @(@('x64', 'x86_64-pc-windows-msvc'), @('arm64', 'aarch64-pc-windows-msvc'))) {
+            $arch, $target = $pair
+            $name = "minato-$tag-windows-$arch"
+            New-Item -ItemType Directory -Force "stage/$name" | Out-Null
+            Copy-Item "target/$target/release/minato.exe" "stage/$name"
+            Compress-Archive -Path "stage/$name" -DestinationPath "dist/$name.zip" -Force
+          }
+          Get-ChildItem dist
+
+      # English notes from the first paragraph of each `vX.Y.Z:` commit since
+      # the previous tag (CHANGELOG.md is Japanese and is not used).
+      - name: Write the notes from the commits
+        shell: bash
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          range="${prev:+$prev..}HEAD"
+          [ -n "$prev" ] || range="HEAD~1..HEAD"
+          commits=$(git log --reverse --no-merges --format='%H %s' "$range" \
+                    | grep -E '^[0-9a-f]+ v[0-9]+\.[0-9]+\.[0-9]+' | cut -d' ' -f1)
+          [ -n "$commits" ] || commits=$(git log --reverse --no-merges --format=%H "$range")
+          : > notes.md
+          for sha in $commits; do
+            printf '## %s\n\n' "$(git log -1 --format=%s "$sha")" >> notes.md
+            git log -1 --format=%b "$sha" | awk '
+              /^(Co-Authored-By|Co-authored-by|Claude-Session|Signed-off-by):/ { next }
+              NF == 0 { if (seen) exit; next }
+              { print; seen = 1 }
+            ' >> notes.md
+            printf '\n' >> notes.md
+          done
+          [ -s notes.md ] || printf 'No commits between %s and %s.\n\n' "${prev:-the start}" "$tag" > notes.md
+          printf '\n**Nothing here is code-signed**; Windows and macOS warn about an unknown publisher. Windows is the platform this is tested on; the other builds are compiled only.\n' >> notes.md
+          printf '\n詳細は [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/%s/CHANGELOG.md) にあります（日本語）。\n' "$tag" >> notes.md
+
+      - name: Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.tag.outputs.name }}
+          body_path: notes.md
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+
+  unix:
+    needs: windows
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+          - name: macos-x64
+            os: macos-14
+            target: x86_64-apple-darwin
+          - name: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Work out the tag
+        id: tag
+        run: echo "name=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked -p minato --target ${{ matrix.target }}
+
+      - name: Pack
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          mkdir -p dist
+          tar -C "target/${{ matrix.target }}/release" \
+              -czf "dist/minato-$tag-${{ matrix.name }}.tar.gz" minato
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*.tar.gz
+          fail_on_unmatched_files: true

@@ -12,6 +12,7 @@ use minato_core::github::worker::Call;
 use minato_core::github::write;
 use minato_core::inbox::{Card, InboxState, Mark, Rules};
 use minato_core::list::{Detail, Item, Kind, ListState};
+use minato_core::notes::{self, Note, NotesState};
 
 use crate::prefs::Prefs;
 
@@ -114,6 +115,20 @@ pub enum Mode {
     Main,
     Settings,
     Help,
+    /// The notifications, over the view.
+    Notes,
+}
+
+/// What picking a line of the palette does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cmd {
+    Go(View),
+    Settings,
+    Help,
+    Notes,
+    MarkAll,
+    /// An issue, PR or discussion (its node id).
+    Item(String),
 }
 
 pub struct App {
@@ -165,6 +180,11 @@ pub struct App {
     /// Calls the window has asked for; the net takes them.
     pub outbox: Vec<Outgoing>,
     pub quit: bool,
+    /// The unread notifications.
+    pub notes: Vec<Note>,
+    pub ns: NotesState,
+    /// The palette, while it is open.
+    pub palette: Option<ito_palette::View>,
 }
 
 /// What GitHub said about one run.
@@ -208,6 +228,9 @@ impl App {
             prefs,
             lang: "en".into(),
             unread: 0,
+            notes: Vec::new(),
+            ns: NotesState::default(),
+            palette: None,
             synced: None,
             api: None,
             toast: None,
@@ -261,14 +284,16 @@ impl App {
     /// A character typed (not a key with Ctrl or Alt: those are the
     /// shortcuts). Returns whether it was used.
     pub fn feed(&mut self, c: char) -> bool {
-        if self.compose.is_some() || self.confirm.is_some() {
+        if self.compose.is_some() || self.confirm.is_some() || self.palette.is_some() {
             return true;
         }
         match (self.mode, c) {
+            (Mode::Notes, c) => return self.notes_key(c),
             (Mode::Help, '?') => self.mode = Mode::Main,
             (Mode::Settings, _) | (Mode::Help, _) => return false,
             (Mode::Main, '?') => self.mode = Mode::Help,
             (Mode::Main, ',') => self.mode = Mode::Settings,
+            (Mode::Main, 'n') => self.mode = Mode::Notes,
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
@@ -309,6 +334,9 @@ impl App {
         if let Some(id) = self.confirm.take() {
             self.merge(&id);
             return true;
+        }
+        if self.mode == Mode::Notes {
+            return self.notes_key('\n');
         }
         self.mode == Mode::Main && match self.view {
             View::List => self.list_key(' '),
@@ -386,6 +414,75 @@ impl App {
             _ => return self.bs.key(c, p),
         }
         true
+    }
+
+    /// A key over the notifications: `j k` move, `Enter` opens the thread and
+    /// marks it read, `d` marks it read, `A` marks all, `n` closes.
+    fn notes_key(&mut self, c: char) -> bool {
+        match c {
+            'n' => self.mode = Mode::Main,
+            'A' => self.mark_all_read(),
+            'd' | 'o' | '\n' => {
+                if self.ns.sel < self.notes.len() {
+                    let note = self.notes.remove(self.ns.sel);
+                    if c != 'd' {
+                        self.open_url = Some(note.url);
+                    }
+                    self.queue(&format!("note:{}", note.id), notes::mark_read(&note.id), None);
+                    self.unread = self.notes.len() as u32;
+                    self.ns.clamp(self.notes.len());
+                }
+            }
+            _ => return self.ns.key(c, self.notes.len()),
+        }
+        true
+    }
+
+    pub fn mark_all_read(&mut self) {
+        if self.notes.is_empty() {
+            return;
+        }
+        self.notes.clear();
+        self.unread = 0;
+        self.ns = NotesState::default();
+        self.queue("note:all", notes::mark_all(), Some("notes.all_read"));
+    }
+
+    /// The lines of the palette: the commands, then the items (`#12 title`).
+    pub fn palette_entries(&self) -> Vec<ito_palette::Entry<Cmd>> {
+        use ito_palette::Entry;
+        let mut e = Vec::new();
+        for v in View::ALL {
+            e.push(Entry::new(format!("{} {}", self.tr("cmd.go"), self.tr(v.label())), v.digit().to_string(), Cmd::Go(v)));
+        }
+        e.push(Entry::new(self.tr("key.notes"), "n", Cmd::Notes));
+        e.push(Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll));
+        e.push(Entry::new(self.tr("key.settings"), ",", Cmd::Settings));
+        e.push(Entry::new(self.tr("key.help"), "?", Cmd::Help));
+        for i in self.items.iter().take(200) {
+            let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
+            x.detail = i.repo.clone();
+            e.push(x);
+        }
+        e
+    }
+
+    /// Do what a palette line says.
+    pub fn run_cmd(&mut self, cmd: Cmd) {
+        match cmd {
+            Cmd::Go(v) => {
+                self.mode = Mode::Main;
+                self.view = v;
+            }
+            Cmd::Settings => self.mode = Mode::Settings,
+            Cmd::Help => self.mode = Mode::Help,
+            Cmd::Notes => self.mode = Mode::Notes,
+            Cmd::MarkAll => self.mark_all_read(),
+            Cmd::Item(id) => {
+                self.mode = Mode::Main;
+                self.show_in_list(&id);
+            }
+        }
     }
 
     /// A card dropped on a column (the mouse): the same write as `H` `L`.
@@ -706,6 +803,52 @@ mod tests {
         a.board = Some(board_with_two_cards());
         assert!(a.feed('o'));
         assert_eq!(a.open_url.as_deref(), Some("https://example.test/I1"));
+    }
+
+    fn note(id: &str) -> Note {
+        Note { id: id.into(), repo: "o/r".into(), title: "t".into(), kind: "Issue".into(), reason: "mention".into(), updated_at: String::new(), url: format!("https://example.test/{id}") }
+    }
+
+    #[test]
+    fn n_opens_the_notifications_and_enter_reads_one() {
+        let mut a = app();
+        a.notes = vec![note("1"), note("2")];
+        a.unread = 2;
+        assert!(a.feed('n'));
+        assert_eq!(a.mode, Mode::Notes);
+        assert!(a.feed('j'));
+        assert!(a.enter());
+        assert_eq!(a.open_url.as_deref(), Some("https://example.test/2"));
+        assert_eq!((a.notes.len(), a.unread), (1, 1));
+        assert!(a.outbox[0].key.ends_with("note:2"));
+        assert!(a.feed('n'));
+        assert_eq!(a.mode, Mode::Main);
+    }
+
+    #[test]
+    fn capital_a_marks_everything_read_once() {
+        let mut a = app();
+        a.notes = vec![note("1")];
+        a.unread = 1;
+        a.feed('n');
+        a.feed('A');
+        a.feed('A');
+        assert!(a.notes.is_empty());
+        assert_eq!((a.unread, a.outbox.len()), (0, 1));
+    }
+
+    #[test]
+    fn the_palette_lists_commands_and_runs_one() {
+        let mut a = app();
+        let e = a.palette_entries();
+        assert!(e.iter().any(|x| x.pick == Cmd::Go(View::Board)));
+        a.run_cmd(Cmd::Go(View::Board));
+        assert_eq!(a.view, View::Board);
+        a.run_cmd(Cmd::Notes);
+        assert_eq!(a.mode, Mode::Notes);
+        a.palette = Some(ito_palette::View::new());
+        assert!(a.feed('q'));
+        assert!(!a.quit);
     }
 
     #[test]

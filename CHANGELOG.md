@@ -2,6 +2,14 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.8.0] - 2026-10-12
+
+### Added
+
+- 通知（`n`）: GitHub の未読の通知を一覧にする（リポジトリ・種類・理由・経過・題）。90 秒ごとに取り直し、タイトルバーのベルの数も合わせる。`j` `k` で動く、`Enter` / `o` でブラウザに開いて既読にする、`d` で既読だけ、`A` ですべて既読。`n` で閉じる。
+- コマンドパレット（`Ctrl+Shift+P`）: 画面の移動・通知・設定・ヘルプ・すべて既読のコマンドと、一覧にある issue / PR / discussion を `#番号 題` で探して開く。
+- リリースのワークフロー `release.yml`: Actions から `tag`（`vX.Y.Z`）を渡して回す。`Cargo.toml` の版と違えば落ちる。Windows（x64 / ARM64）は `.zip`、macOS と Linux は `.tar.gz`。
+
 ## [0.7.0] - 2026-10-12
 
 ### Added

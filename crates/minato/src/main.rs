@@ -14,6 +14,7 @@ mod compose_ui;
 mod icon;
 mod inbox_ui;
 mod list_ui;
+mod notes_ui;
 mod net;
 mod prefs;
 mod settings;
@@ -42,13 +43,11 @@ impl Minato {
             let palette = i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::P);
             (i.events.clone(), palette)
         });
-        if palette {
-            // The palette comes with the commands (stage 6).
-            let words = self.app.tr("empty.soon");
-            self.app.say(words);
+        if palette && self.app.compose.is_none() && self.app.confirm.is_none() {
+            self.app.palette = self.app.palette.is_none().then(ito_palette::View::new);
         }
         for e in events {
-            if self.app.compose.is_some() {
+            if self.app.compose.is_some() || self.app.palette.is_some() {
                 break;
             }
             match e {
@@ -66,6 +65,19 @@ impl Minato {
                 _ => {}
             }
         }
+    }
+}
+
+/// The palette over the window, while it is open.
+fn palette_show(ctx: &egui::Context, app: &mut App) {
+    let Some(mut view) = app.palette.take() else { return };
+    let c = ito_theme::colors();
+    let style = ito_palette::Style { panel: c.panel, border: c.border, text: c.fg, dim: c.dim, selected_bg: ui::ACCENT.gamma_multiply(0.22), selected_text: c.fg };
+    let words = ito_palette::Words { hint: app.tr("palette.hint"), none: app.tr("palette.none") };
+    match ito_palette::show(ctx, &mut view, &app.palette_entries(), &style, &words) {
+        None => app.palette = Some(view),
+        Some(ito_palette::Answer::Close) => {}
+        Some(ito_palette::Answer::Pick(cmd)) => app.run_cmd(cmd),
     }
 }
 
@@ -101,6 +113,7 @@ impl eframe::App for Minato {
                 self.app.mode = Mode::Settings;
             }
             compose_ui::show(ui, &mut self.app);
+            palette_show(&ctx, &mut self.app);
         }
         if let Some(url) = self.app.open_url.take() {
             ctx.open_url(egui::OpenUrl::new_tab(url));

@@ -36,6 +36,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     title_bar(ui, app, title, &mut out);
     match app.mode {
         Mode::Help => help(ui, app, body),
+        Mode::Notes => crate::notes_ui::draw(ui, app, body),
         _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body),
         _ if app.view == View::List => crate::list_ui::draw(ui, app, body),
         _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body),
@@ -254,6 +255,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect) {
     let keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
         Mode::Help => vec![("?", "key.back"), ("Esc", "key.back")],
+        Mode::Notes => vec![("j k", "key.next"), ("Enter", "key.open"), ("d", "key.read"), ("A", "cmd.mark_all"), ("n", "key.back")],
         Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("?", "key.help")]).collect(),
     };
     for (k, (key, word)) in keys.iter().enumerate() {
