@@ -1,0 +1,31 @@
+[package]
+name = "minato"
+description = "A keyboard-driven GitHub client for issues, PRs, Actions and Projects"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The checklist generator; its own tests run with the rest.
+[[example]]
+name = "make-testcheck"
+test = true
+
+[build-dependencies]
+ito-winres = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f" }
+
+[dependencies]
+minato-core = { path = "../minato-core" }
+# Every ito crate at the same rev as tsumugi and kura.
+ito-i18n = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f", features = ["edit"] }
+ito-common = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f", features = ["clock"] }
+ito-theme = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f" }
+ito-prefs = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f" }
+ito-keys = { git = "https://github.com/uchmk/ito", rev = "45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f", features = ["egui"] }
+# eframe's own defaults, but for `winit/default` (see tsumugi): the Wayland
+# frame is drawn without the title's text, which brings an unmaintained crate.
+eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "links", "wayland", "web_screen_reader", "wgpu", "x11"] }
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita-notitle"] }
+egui = "0.36"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

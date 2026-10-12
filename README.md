@@ -10,7 +10,7 @@ A sibling of [tsumugi](https://github.com/uchmk/tsumugi) and
 [yagura](https://github.com/uchmk/yagura), sharing their crates in
 [ito](https://github.com/uchmk/ito).
 
-**Status: design.** There is no app yet. The agreed screens are an HTML mock:
+**Status: v0.1.0, the skeleton.** The window, the title bar, the four empty views, the key list and the settings screen run; GitHub is not connected yet. The agreed screens are an HTML mock:
 open [docs/mock/minato.html](docs/mock/minato.html) in a browser and press `?`
 for the keys. What the mock settles is written down in
 [docs/design.md](docs/design.md).

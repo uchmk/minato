@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'LICENSE-*']
+  pull_request:
+    paths-ignore: ['**.md', 'LICENSE-*']
+  # Merge lanes starts it after its share: its push, made with the
+  # workflow's token, starts no workflow by itself
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    # Windows is the target platform; Linux is cheap and catches the Unix PTY.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    # A test that hangs (a server holding a pipe open) fails the job instead
+    # of holding the runner for six hours.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo build --locked --workspace --all-features
+      - run: cargo test --workspace --all-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup target add x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings
+
+  # ARM64, Windows and Linux: the tests on GitHub's ARM64 runners.
+  # On a push to main and by hand, not on a pull request -- the x64 jobs gate
+  # those, and this would add its wait to every one.
+  arm64:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/arm64.yml
+
