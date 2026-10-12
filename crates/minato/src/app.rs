@@ -75,6 +75,7 @@ impl View {
                 ("Space", "key.details"),
                 ("r", "key.write"),
                 ("N", "key.new"),
+                ("S", "key.repo"),
                 ("d", "key.done"),
                 ("s", "key.later"),
                 ("u", "key.undo"),
@@ -89,6 +90,7 @@ impl View {
                 ("h l", "key.columns"),
                 ("r", "key.write"),
                 ("N", "key.new"),
+                ("S", "key.repo"),
                 ("a", "key.assign"),
                 ("m", "key.merge"),
                 ("x", "key.close"),
@@ -350,6 +352,7 @@ impl App {
             (Mode::Main, '?') => self.mode = Mode::Help,
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
+            (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
             (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
@@ -760,6 +763,13 @@ impl App {
         self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
         self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
         self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
+    }
+
+    /// `S`: show the settings of the selected item's repository (read only).
+    fn repo_settings(&mut self) {
+        let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
+        self.queue(&format!("a-repo:{repo}"), Call::Get(minato_core::reposettings::path(&repo)), None);
+        self.overlay = Some(Overlay::Log(LogView::new(0, format!("{repo}  settings"))));
     }
 
     /// `N`: open the writing box for a new issue in the selected item's

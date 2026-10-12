@@ -11,5 +11,6 @@ pub mod github;
 pub mod inbox;
 pub mod list;
 pub mod mainci;
+pub mod reposettings;
 pub mod status;
 pub mod workflow;

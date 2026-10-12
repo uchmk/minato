@@ -278,6 +278,13 @@ impl Net {
                                 d.workflow = Some(workflow::parse(&text));
                             }
                         }
+                        k if k.starts_with("a-repo:") => {
+                            if let Some(Overlay::Log(l)) = app.overlay.as_mut() {
+                                if l.job_id == 0 && l.name.starts_with(&k[7..]) {
+                                    l.lines = Some(minato_core::reposettings::lines(&f.body).unwrap_or_else(|e| vec![e]));
+                                }
+                            }
+                        }
                         k if k.starts_with("a-log:") => {
                             let id: u64 = k[6..].parse().unwrap_or(0);
                             if let Some(Overlay::Log(l)) = app.overlay.as_mut() {

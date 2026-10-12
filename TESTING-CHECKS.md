@@ -190,3 +190,8 @@
 - [ ] **19.1** In the inbox or the list press `N` → The writing box opens titled "New issue" with the repository of the selected item
 - [ ] **19.2** Type a title, a new line and a body, then `Ctrl+Enter` → A toast says the issue was created; it is on GitHub with that title and body and appears in the list soon
 - [ ] **19.3** Press `N`, leave it empty, `Ctrl+Enter` → A toast says the title is empty and the box stays open
+
+## 20. Repository settings
+
+- [ ] **20.1** In the inbox or the list press `S` → A box titled with the repository shows description, visibility, default branch, topics, the three merge methods, delete-branch-after-merge, issues, discussions and archived
+- [ ] **20.2** Press `Esc` → The box closes

@@ -17,6 +17,7 @@
 - [x] 7. Writes (comment, close, label, merge) with confirmation (v0.9.1: `x` close and `m` merge ask first, in the list and the inbox; comment and labels were v0.5.0)
 - [x] 11. Closed items in the list (v0.13.0: `C` toggles, `x` opens one again; discussions are not shown while it is on)
 - [x] 12. New issue (v0.16.0: `N` in the inbox and the list)
+- [x] 13. Repository settings, read only (v0.17.0: `S` in the inbox and the list)
 - [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 
 ## Owner
