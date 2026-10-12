@@ -1,6 +1,6 @@
 //! The pure parts of the writing box: wrapping a selection for Ctrl+B / I /
-//! K, a small Markdown reader for the preview, and the picker for labels and
-//! assignees.
+//! K and the toolbar, a small Markdown reader for the preview and the
+//! detail, and the picker for labels and assignees.
 
 /// `text` with `left` and `right` put around the characters `a..b` (counted
 /// in chars). Returns the new text and the selection, still on the same
@@ -27,27 +27,110 @@ pub fn link(text: &str, a: usize, b: usize) -> (String, usize, usize) {
     (out, e + 2, e + 5)
 }
 
+/// A button of the writing box's toolbar (GitHub's, less the slash).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tool {
+    Heading,
+    Bold,
+    Italic,
+    Quote,
+    Code,
+    Link,
+    Bullets,
+    Numbers,
+    Tasks,
+    Mention,
+    Reference,
+}
+
+impl Tool {
+    pub const ALL: [Tool; 11] = [Tool::Heading, Tool::Bold, Tool::Italic, Tool::Quote, Tool::Code, Tool::Link, Tool::Bullets, Tool::Numbers, Tool::Tasks, Tool::Mention, Tool::Reference];
+}
+
+/// What a toolbar button does to `text` with the characters `a..b`
+/// selected: the new text and selection.
+pub fn tool(text: &str, a: usize, b: usize, t: Tool) -> (String, usize, usize) {
+    let (a, b) = (a.min(b), a.max(b));
+    match t {
+        Tool::Bold => wrap(text, a, b, "**", "**"),
+        Tool::Italic => wrap(text, a, b, "_", "_"),
+        Tool::Link => link(text, a, b),
+        Tool::Code if text.chars().skip(a).take(b - a).any(|c| c == '\n') => wrap(text, a, b, "```\n", "\n```"),
+        Tool::Code => wrap(text, a, b, "`", "`"),
+        Tool::Mention => wrap(text, b, b, "@", ""),
+        Tool::Reference => wrap(text, b, b, "#", ""),
+        Tool::Heading => lines(text, a, b, |_| "### ".into()),
+        Tool::Quote => lines(text, a, b, |_| "> ".into()),
+        Tool::Bullets => lines(text, a, b, |_| "- ".into()),
+        Tool::Numbers => lines(text, a, b, |k| format!("{}. ", k + 1)),
+        Tool::Tasks => lines(text, a, b, |_| "- [ ] ".into()),
+    }
+}
+
+/// `mark(k)` put at the start of each line the selection touches (the k-th
+/// of them); the selection moves to keep the same text.
+fn lines(text: &str, a: usize, b: usize, mark: impl Fn(usize) -> String) -> (String, usize, usize) {
+    let chars: Vec<char> = text.chars().collect();
+    let b = b.min(chars.len());
+    let a = a.min(b);
+    let start = chars[..a].iter().rposition(|&c| c == '\n').map_or(0, |i| i + 1);
+    // The starts of the lines from `start` to the one `b` is on.
+    let mut starts = vec![start];
+    starts.extend((start..b).filter(|&i| chars[i] == '\n').map(|i| i + 1));
+    let mut out = String::new();
+    let (mut na, mut nb) = (a, b);
+    let mut from = 0;
+    for (k, &at) in starts.iter().enumerate() {
+        out.extend(&chars[from..at]);
+        let m = mark(k);
+        let n = m.chars().count();
+        out.push_str(&m);
+        if at <= a {
+            na += n;
+        }
+        nb += n;
+        from = at;
+    }
+    out.extend(&chars[from..]);
+    (out, na, nb)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Block {
     Heading(u8, String),
     Bullet(String),
+    /// A numbered item: its number as written, and the text.
+    Numbered(String, String),
+    /// A task: whether it is ticked, and the text.
+    Task(bool, String),
     Quote(String),
     Code(String),
+    /// A table's rows, the cells of each (the line under the head dropped).
+    Table(Vec<Vec<String>>),
+    /// `---`.
+    Rule,
     Para(String),
 }
 
-/// A small reading of Markdown for the preview: headings, bullets, quotes,
-/// fenced code and paragraphs. Inline marks stay as typed.
+/// A small reading of Markdown: headings, bullets, numbered items, tasks,
+/// quotes, fenced code, tables, rules and paragraphs. HTML comments (issue
+/// templates leave them) and lines that are only a tag are dropped. Inline
+/// marks stay as typed; [`spans`] reads them.
 pub fn blocks(text: &str) -> Vec<Block> {
     let mut out = Vec::new();
     let mut code: Option<Vec<&str>> = None;
     let mut para: Vec<&str> = Vec::new();
-    fn flush(para: &mut Vec<&str>, out: &mut Vec<Block>) {
+    let mut table: Vec<Vec<String>> = Vec::new();
+    fn flush(para: &mut Vec<&str>, table: &mut Vec<Vec<String>>, out: &mut Vec<Block>) {
         if !para.is_empty() {
             out.push(Block::Para(para.join(" ")));
             para.clear();
         }
+        if !table.is_empty() {
+            out.push(Block::Table(std::mem::take(table)));
+        }
     }
+    let text = without_comments(text);
     for line in text.lines() {
         if let Some(buf) = &mut code {
             if line.trim_start().starts_with("```") {
@@ -58,29 +141,175 @@ pub fn blocks(text: &str) -> Vec<Block> {
             }
             continue;
         }
-        let t = line.trim_start();
+        let t = line.trim();
+        if t.starts_with('|') {
+            if !para.is_empty() {
+                out.push(Block::Para(para.join(" ")));
+                para.clear();
+            }
+            let cells: Vec<String> = t.trim_matches('|').split('|').map(|c| c.trim().to_string()).collect();
+            // The line under the head (`|---|:--:|`) only says how to align.
+            if !cells.iter().all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':'))) {
+                table.push(cells);
+            }
+            continue;
+        }
         if t.starts_with("```") {
-            flush(&mut para, &mut out);
+            flush(&mut para, &mut table, &mut out);
             code = Some(Vec::new());
-        } else if t.is_empty() {
-            flush(&mut para, &mut out);
+        } else if t.is_empty() || is_tag(t) {
+            flush(&mut para, &mut table, &mut out);
         } else if let Some(h) = heading(t) {
-            flush(&mut para, &mut out);
+            flush(&mut para, &mut table, &mut out);
             out.push(h);
-        } else if let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
-            flush(&mut para, &mut out);
-            out.push(Block::Bullet(rest.trim().to_string()));
+        } else if t.len() >= 3 && ['-', '*', '_'].iter().any(|&m| t.chars().all(|c| c == m)) {
+            flush(&mut para, &mut table, &mut out);
+            out.push(Block::Rule);
+        } else if let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")).or_else(|| t.strip_prefix("+ ")) {
+            flush(&mut para, &mut table, &mut out);
+            let rest = rest.trim();
+            let task = [("[ ] ", false), ("[x] ", true), ("[X] ", true)].into_iter().find_map(|(m, on)| rest.strip_prefix(m).map(|r| (on, r)));
+            out.push(match task {
+                Some((on, r)) => Block::Task(on, r.trim().to_string()),
+                None => Block::Bullet(rest.to_string()),
+            });
+        } else if let Some((n, rest)) = numbered(t) {
+            flush(&mut para, &mut table, &mut out);
+            out.push(Block::Numbered(n, rest));
         } else if let Some(rest) = t.strip_prefix('>') {
-            flush(&mut para, &mut out);
+            flush(&mut para, &mut table, &mut out);
             out.push(Block::Quote(rest.trim().to_string()));
         } else {
+            if !table.is_empty() {
+                out.push(Block::Table(std::mem::take(&mut table)));
+            }
             para.push(t);
         }
     }
     if let Some(buf) = code {
         out.push(Block::Code(buf.join("\n")));
     }
-    flush(&mut para, &mut out);
+    flush(&mut para, &mut table, &mut out);
+    out
+}
+
+/// `text` without its `<!-- … -->`.
+fn without_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<!--") {
+        out.push_str(&rest[..i]);
+        match rest[i..].find("-->") {
+            Some(j) => rest = &rest[i + j + 3..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A line that is only an HTML tag (`<details>`, `</summary>`, `<br/>`).
+fn is_tag(t: &str) -> bool {
+    t.starts_with('<') && t.ends_with('>') && t.matches('<').count() == 1 && t[1..].starts_with(|c: char| c.is_ascii_alphabetic() || c == '/')
+}
+
+/// `12. text` as its number and text.
+fn numbered(t: &str) -> Option<(String, String)> {
+    let digits = t.chars().take_while(char::is_ascii_digit).count();
+    let rest = t[digits..].strip_prefix(". ").or_else(|| t[digits..].strip_prefix(") "))?;
+    (digits > 0 && digits < 10).then(|| (t[..digits].to_string(), rest.trim().to_string()))
+}
+
+/// A run of text with the same inline marks.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Span {
+    pub text: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub strike: bool,
+    pub code: bool,
+    /// Where a link goes.
+    pub link: Option<String>,
+}
+
+/// The inline marks of one block: `**bold**` / `__bold__`, `_italic_` /
+/// `*italic*`, `~~struck~~`, `` `code` ``, `[text](url)` and `![alt](url)`
+/// (shown as its alt). A mark that is never closed stays as typed.
+pub fn spans(s: &str) -> Vec<Span> {
+    let chars: Vec<char> = s.chars().collect();
+    let n = chars.len();
+    let mut out: Vec<Span> = Vec::new();
+    let mut cur = Span::default();
+    fn push(out: &mut Vec<Span>, cur: &mut Span) {
+        if !cur.text.is_empty() {
+            let next = Span { text: String::new(), ..cur.clone() };
+            out.push(std::mem::replace(cur, next));
+        }
+    }
+    let closes = |from: usize, mark: &[char]| (from..n).any(|j| chars[j..].starts_with(mark));
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
+        let rest = &chars[i..];
+        if c == '\\' && i + 1 < n && chars[i + 1].is_ascii_punctuation() {
+            cur.text.push(chars[i + 1]);
+            i += 2;
+            continue;
+        }
+        if c == '`' {
+            if let Some(j) = (i + 1..n).find(|&j| chars[j] == '`') {
+                push(&mut out, &mut cur);
+                out.push(Span { text: chars[i + 1..j].iter().collect(), code: true, ..cur.clone() });
+                i = j + 1;
+                continue;
+            }
+        }
+        let image = c == '!' && rest.get(1) == Some(&'[');
+        if c == '[' || image {
+            let open = i + usize::from(image);
+            let close = (open + 1..n).find(|&j| chars[j] == ']');
+            let end = close.filter(|&k| chars.get(k + 1) == Some(&'(')).and_then(|k| (k + 2..n).find(|&j| chars[j] == ')').map(|e| (k, e)));
+            if let Some((close, end)) = end {
+                push(&mut out, &mut cur);
+                let label: String = chars[open + 1..close].iter().collect();
+                let url: String = chars[close + 2..end].iter().collect();
+                let text = if image { format!("[{}]", if label.is_empty() { "image" } else { &label }) } else { label };
+                out.push(Span { text, link: Some(url), ..cur.clone() });
+                i = end + 1;
+                continue;
+            }
+        }
+        let pair = rest.get(..2).filter(|p| p[0] == p[1] && matches!(p[0], '*' | '_' | '~'));
+        if let Some(pair) = pair {
+            let strike = pair[0] == '~';
+            let on = if strike { cur.strike } else { cur.bold };
+            if on || closes(i + 2, pair) {
+                push(&mut out, &mut cur);
+                if strike {
+                    cur.strike = !on;
+                } else {
+                    cur.bold = !on;
+                }
+            } else {
+                cur.text.extend(pair);
+            }
+            i += 2;
+            continue;
+        }
+        if c == '*' || c == '_' {
+            let inside = c == '_' && i > 0 && chars[i - 1].is_alphanumeric() && chars.get(i + 1).is_some_and(|x| x.is_alphanumeric());
+            let opens = chars.get(i + 1).is_some_and(|x| !x.is_whitespace()) && closes(i + 1, &[c]);
+            if !inside && (cur.italic || opens) {
+                push(&mut out, &mut cur);
+                cur.italic = !cur.italic;
+                i += 1;
+                continue;
+            }
+        }
+        cur.text.push(c);
+        i += 1;
+    }
+    push(&mut out, &mut cur);
     out
 }
 
@@ -208,6 +437,62 @@ mod tests {
         );
         assert_eq!(blocks("#nospace"), vec![Block::Para("#nospace".into())]);
         assert_eq!(blocks("```\nopen"), vec![Block::Code("open".into())]);
+    }
+
+    #[test]
+    fn markdown_lists_tables_and_comments() {
+        let got = blocks("<!-- template\nhint -->\n1. one\n2) two\n- [ ] todo\n- [x] done\n---\n<details>\n| a | b |\n|---|:-:|\n| 1 | 2 |\nafter");
+        assert_eq!(
+            got,
+            vec![
+                Block::Numbered("1".into(), "one".into()),
+                Block::Numbered("2".into(), "two".into()),
+                Block::Task(false, "todo".into()),
+                Block::Task(true, "done".into()),
+                Block::Rule,
+                Block::Table(vec![vec!["a".into(), "b".into()], vec!["1".into(), "2".into()]]),
+                Block::Para("after".into()),
+            ]
+        );
+        assert_eq!(blocks("a <!-- open"), vec![Block::Para("a".into())]);
+    }
+
+    #[test]
+    fn inline_marks_are_read() {
+        let s = spans("say **bold** and _it_ with `co*de*` and [link](https://x.test) ~~no~~");
+        let plain: Vec<(&str, bool, bool, bool, bool)> = s.iter().map(|x| (x.text.as_str(), x.bold, x.italic, x.code, x.strike)).collect();
+        assert_eq!(
+            plain,
+            vec![
+                ("say ", false, false, false, false),
+                ("bold", true, false, false, false),
+                (" and ", false, false, false, false),
+                ("it", false, true, false, false),
+                (" with ", false, false, false, false),
+                ("co*de*", false, false, true, false),
+                (" and ", false, false, false, false),
+                ("link", false, false, false, false),
+                (" ", false, false, false, false),
+                ("no", false, false, false, true),
+            ]
+        );
+        assert_eq!(s[7].link.as_deref(), Some("https://x.test"));
+        // Unclosed marks and snake_case stay as typed.
+        let t: String = spans("a ** b and snake_case_name and 2 * 3").iter().map(|x| x.text.clone()).collect();
+        assert_eq!(t, "a ** b and snake_case_name and 2 * 3");
+        assert_eq!(spans("![shot](u.png)")[0].text, "[shot]");
+        assert_eq!(spans("\\*not\\*")[0].text, "*not*");
+    }
+
+    #[test]
+    fn the_toolbar_marks_lines_and_words() {
+        assert_eq!(tool("ab", 0, 2, Tool::Bold).0, "**ab**");
+        assert_eq!(tool("ab", 1, 1, Tool::Mention), ("a@b".to_string(), 2, 2));
+        assert_eq!(tool("a\nb", 0, 3, Tool::Code).0, "```\na\nb\n```");
+        assert_eq!(tool("one\ntwo\nthree", 1, 5, Tool::Numbers), ("1. one\n2. two\nthree".to_string(), 4, 11));
+        assert_eq!(tool("x\ny", 2, 2, Tool::Quote), ("x\n> y".to_string(), 4, 4));
+        assert_eq!(tool("", 0, 0, Tool::Tasks), ("- [ ] ".to_string(), 6, 6));
+        assert_eq!(tool("hi", 2, 2, Tool::Heading).0, "### hi");
     }
 
     #[test]

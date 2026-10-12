@@ -5,7 +5,7 @@
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
 use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::list::{age, epoch};
 
 use crate::app::{App, Click, Pane, now_epoch};
@@ -162,7 +162,7 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         return;
     }
     let sel = app.acts.sel.min(shown.len() - 1);
-    let f = fold(&vec![ROW_FULL; shown.len()], ROW_FOLDED, MORE_H, body.height(), sel);
+    let f = fold_head(&vec![ROW_FULL; shown.len()], ROW_FOLDED, MORE_H, body.height(), sel, HEAD);
     let now = now_epoch();
     let mut y = body.top();
     if f.above > 0 {

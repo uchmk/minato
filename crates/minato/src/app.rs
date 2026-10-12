@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use minato_core::actions::{self, ActState, Artifact, Job, Run};
 use minato_core::board::{self, BoardState, Project};
-use minato_core::composer::Picker;
+use minato_core::composer::{Picker, Tool};
 use minato_core::github::worker::Call;
 use minato_core::github::write;
 use minato_core::inbox::{Card, Group, InboxState, Mark, Status};
@@ -154,6 +154,36 @@ pub fn three(left: f32, mid: f32) -> Node<Pane> {
     Node::Split { dir: Dir::Right, ratio: left, first: Box::new(Node::Leaf(Pane::Left)), second: Box::new(rest) }
 }
 
+/// A split's ratios, the outer one first (as state.toml keeps them).
+pub fn ratios(n: &Node<Pane>) -> Vec<f32> {
+    match n {
+        Node::Split { ratio, first, second, .. } => {
+            let mut out = vec![*ratio];
+            out.extend(ratios(first));
+            out.extend(ratios(second));
+            out
+        }
+        Node::Leaf(_) => Vec::new(),
+    }
+}
+
+/// Put `rs` back into a split in the same order; a list of another length
+/// (from another version of the views) is left alone.
+fn set_ratios(n: &mut Node<Pane>, rs: &[f32]) {
+    fn walk(n: &mut Node<Pane>, rs: &mut std::slice::Iter<f32>) {
+        if let Node::Split { ratio, first, second, .. } = n {
+            if let Some(r) = rs.next() {
+                *ratio = *r;
+            }
+            walk(first, rs);
+            walk(second, rs);
+        }
+    }
+    if ratios(n).len() == rs.len() {
+        walk(n, &mut rs.iter());
+    }
+}
+
 /// What the mouse clicked in a view: it does what the keys that get there do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Click {
@@ -172,6 +202,19 @@ pub enum Click {
     ActCol(actions::Col),
     /// The writing box's strip under the detail.
     Write,
+    /// A button of the box's toolbar.
+    Tool(Tool),
+    /// The box's Write (`false`) or Preview (`true`) tab.
+    Tab(bool),
+    /// Comment (`false`), or Close (with the comment if there is one).
+    Send(bool),
+}
+
+impl Click {
+    /// Whether it is the writing box's own, so the box stays open for it.
+    pub fn is_compose(&self) -> bool {
+        matches!(self, Click::Write | Click::Tool(_) | Click::Tab(_) | Click::Send(_))
+    }
 }
 
 /// What the mouse did in the notifications.
@@ -234,6 +277,10 @@ pub struct App {
     pub open_url: Option<String>,
     /// The writing box, while it is open.
     pub compose: Option<Compose>,
+    /// What was written in the box on an item and left there (by a click
+    /// elsewhere or Esc), by node id; it comes back when the box opens again.
+    pub drafts: HashMap<String, String>,
+    state_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The item (node id) a merge waits to be confirmed for.
     pub confirm: Option<String>,
     /// What the confirmation is for.
@@ -328,6 +375,8 @@ pub struct Compose {
     pub people: Vec<String>,
     /// The repository's open milestones, `(number, title)`.
     pub milestones: Vec<(u64, String)>,
+    /// A toolbar button clicked, for the box to apply to its selection.
+    pub tool: Option<Tool>,
 }
 
 impl App {
@@ -358,6 +407,8 @@ impl App {
             detail: None,
             open_url: None,
             compose: None,
+            drafts: HashMap::new(),
+            state_tx: None,
             confirm: None,
             confirm_act: Confirm::Merge,
             runs: Vec::new(),
@@ -716,6 +767,32 @@ impl App {
             }
             Click::ActCol(col) => self.acts.col = col,
             Click::Write => self.open_compose(),
+            Click::Tool(t) => {
+                self.open_compose();
+                if let Some(c) = self.compose.as_mut() {
+                    c.preview = false;
+                    c.tool = Some(t);
+                }
+            }
+            Click::Tab(on) => {
+                self.open_compose();
+                if let Some(c) = self.compose.as_mut() {
+                    c.preview = on;
+                }
+            }
+            Click::Send(close) => {
+                self.open_compose();
+                let empty = self.compose.as_ref().is_none_or(|c| c.text.trim().is_empty());
+                match (close, empty) {
+                    // Close with nothing written asks first, as `x` does.
+                    (true, true) => {
+                        self.close_compose();
+                        self.ask_close();
+                    }
+                    (false, true) => {}
+                    _ => self.send_comment(close),
+                }
+            }
         }
         let all = self.inbox_all();
         self.inbox.clamp(&all, &self.items);
@@ -728,6 +805,14 @@ impl App {
             View::Actions => self.acts_split = n,
             View::Board => {}
         }
+        if let Some(tx) = &self.state_tx {
+            let _ = tx.send(minato_core::state::format(&self.columns()));
+        }
+    }
+
+    /// The columns' widths as state.toml keeps them.
+    pub fn columns(&self) -> minato_core::state::State {
+        minato_core::state::State { inbox: ratios(&self.inbox_split), list: ratios(&self.list_split), actions: ratios(&self.acts_split) }
     }
 
     pub fn mark_all_read(&mut self) {
@@ -873,6 +958,17 @@ impl App {
         self.marks_tx = Some(writer(path));
     }
 
+    /// Keep the columns' widths in `path` (state.toml), the same way.
+    pub fn keep_state(&mut self, path: std::path::PathBuf) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let st = minato_core::state::parse(&text);
+            set_ratios(&mut self.inbox_split, &st.inbox);
+            set_ratios(&mut self.list_split, &st.list);
+            set_ratios(&mut self.acts_split, &st.actions);
+        }
+        self.state_tx = Some(writer(path));
+    }
+
     /// Keep minato's settings in `path`, the same way.
     pub fn keep_settings(&mut self, path: std::path::PathBuf) {
         if let Ok(text) = std::fs::read_to_string(&path) {
@@ -952,10 +1048,27 @@ impl App {
     /// repository's labels and people.
     pub fn open_compose(&mut self) {
         let Some(item) = self.writable() else { return };
+        if self.compose.as_ref().is_some_and(|c| c.id == item.id) {
+            return;
+        }
+        self.close_compose();
         self.queue(&format!("labels:{}", item.repo), Call::Get(write::labels_path(&item.repo)), None);
         self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
         self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
-        self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
+        let text = self.drafts.remove(&item.id).unwrap_or_default();
+        self.compose = Some(Compose { id: item.id, text, preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), tool: None });
+    }
+
+    /// Close the box, keeping what was written on an item as its draft (a
+    /// new issue's text is not kept). An open picker writes what changed.
+    pub fn close_compose(&mut self) {
+        if self.compose.as_ref().is_some_and(|c| c.picker.is_some()) {
+            self.apply_pick();
+        }
+        let Some(c) = self.compose.take() else { return };
+        if !c.id.starts_with("new:") && !c.text.trim().is_empty() {
+            self.drafts.insert(c.id, c.text);
+        }
     }
 
     /// `M`: mark the newest comment of the selected discussion that is not
@@ -989,7 +1102,8 @@ impl App {
     /// repository (the first one listed when nothing is selected).
     fn new_issue(&mut self) {
         let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
-        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
+        self.close_compose();
+        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), tool: None });
     }
 
     /// Send the comment; `close` also closes the item.
@@ -1009,6 +1123,11 @@ impl App {
             return;
         }
         let Some(item) = self.item(&c.id) else { return };
+        // Comment with nothing written: the box stays as it is.
+        if !close && c.text.trim().is_empty() {
+            self.compose = Some(c);
+            return;
+        }
         let n = self.outbox.len();
         if !c.text.trim().is_empty() {
             self.queue(&format!("write:{n}:comment"), write::comment(&item, &c.text), Some("write.commented"));
@@ -1097,7 +1216,7 @@ impl App {
     }
 
     /// `x`: ask before closing the selected issue or PR.
-    fn ask_close(&mut self) {
+    pub fn ask_close(&mut self) {
         match self.selected() {
             Some(i) if i.kind != Kind::Discussion && !i.merged && !minato_core::mainci::is_stub(i) => {
                 self.confirm = Some(i.id.clone());
@@ -1640,6 +1759,78 @@ mod tests {
         a.outbox.clear();
         a.send_comment(false);
         assert!(a.outbox.is_empty());
+    }
+
+    #[test]
+    fn leaving_the_box_keeps_the_text_as_a_draft() {
+        let mut a = with_pr();
+        a.feed('r');
+        a.compose.as_mut().unwrap().text = "half".into();
+        a.close_compose();
+        assert!(a.compose.is_none());
+        assert_eq!(a.drafts.get("P1").map(String::as_str), Some("half"));
+        a.click(Click::Write);
+        assert_eq!(a.compose.as_ref().unwrap().text, "half");
+        assert!(a.drafts.is_empty());
+        // Opening it again on the same item keeps what is there.
+        a.compose.as_mut().unwrap().text = "half more".into();
+        a.click(Click::Write);
+        assert_eq!(a.compose.as_ref().unwrap().text, "half more");
+        // An empty box leaves no draft.
+        a.compose.as_mut().unwrap().text = "  ".into();
+        a.close_compose();
+        assert!(a.drafts.is_empty());
+    }
+
+    #[test]
+    fn the_strip_buttons_open_the_box_and_send() {
+        let mut a = with_pr();
+        a.click(Click::Tool(Tool::Bold));
+        let c = a.compose.as_ref().unwrap();
+        assert!(c.tool == Some(Tool::Bold) && !c.preview);
+        a.click(Click::Tab(true));
+        assert!(a.compose.as_ref().unwrap().preview);
+        a.outbox.clear();
+        // Comment with nothing written does nothing and keeps the box.
+        a.click(Click::Send(false));
+        assert!(a.outbox.is_empty() && a.compose.is_some());
+        // Close with nothing written asks first.
+        a.click(Click::Send(true));
+        assert!(a.compose.is_none());
+        assert_eq!(a.confirm.as_deref(), Some("P1"));
+        assert!(a.confirm_act == Confirm::Close);
+        a.confirm = None;
+        a.click(Click::Write);
+        a.outbox.clear();
+        a.compose.as_mut().unwrap().text = "done".into();
+        a.click(Click::Send(true));
+        let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["write:0:comment", "write:0:state"]);
+    }
+
+    #[test]
+    fn the_widths_come_back_from_state_toml() {
+        let dir = std::env::temp_dir().join(format!("minato-state-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let f = dir.join("state.toml");
+        let mut a = app();
+        let mut st = a.columns();
+        assert!(!st.inbox.is_empty());
+        for r in st.inbox.iter_mut().chain(st.list.iter_mut()).chain(st.actions.iter_mut()) {
+            *r = 0.31;
+        }
+        std::fs::write(&f, minato_core::state::format(&st)).unwrap();
+        a.keep_state(f.clone());
+        assert_eq!(a.columns(), st);
+        // A list of another length is left alone.
+        let mut short = st.clone();
+        short.inbox.push(0.5);
+        let mut b = app();
+        std::fs::write(&f, minato_core::state::format(&short)).unwrap();
+        let before = b.columns().inbox;
+        b.keep_state(f);
+        assert_eq!(b.columns().inbox, before);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

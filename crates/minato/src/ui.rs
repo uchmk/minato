@@ -36,6 +36,9 @@ pub struct Out {
     pub note: Option<NoteClick>,
     /// Where the bell is, for the notifications to hang from.
     pub bell_at: Option<Rect>,
+    /// The field the detail's strip left for the writing box, while the box
+    /// is open on the item it shows.
+    pub compose_at: Option<Rect>,
 }
 
 /// How far apart the columns are: the 1 px line between them, which the
@@ -187,9 +190,26 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     p.text(acct.center(), Align2::CENTER_CENTER, initial, FontId::proportional(12.0), if app.viewer.is_some() { c.fg } else { c.dim });
     resp.on_hover_text(app.viewer.as_deref().unwrap_or(app.tr("account")));
     right = acct.left() - 10.0;
+    // The palette field in the middle of what is left, the bell just right
+    // of it as in tsumugi.
+    let free = Rect::from_min_max(pos2(left_end + 12.0, r.top()), pos2(right - 34.0, r.bottom()));
+    let w = (free.width()).clamp(0.0, 420.0);
+    let mut bell_left = right - 28.0;
+    if w > 120.0 {
+        let field = Rect::from_center_size(pos2(r.center().x.clamp(free.left() + w / 2.0, free.right() - w / 2.0), mid), vec2(w, 26.0));
+        let resp = ui.interact(field, ui.id().with("palette"), Sense::click());
+        p.rect_filled(field, CornerRadius::same(7), if resp.hovered() { c.panel } else { c.side });
+        p.rect_stroke(field, CornerRadius::same(7), Stroke::new(1.0, c.border), StrokeKind::Inside);
+        p.text(field.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, app.tr("palette.hint"), FontId::proportional(12.5), c.dim);
+        p.text(field.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, "Ctrl+Shift+P", FontId::monospace(11.0), c.dim);
+        if resp.clicked() {
+            out.palette = true;
+        }
+        bell_left = field.right() + 6.0;
+    }
     // The bell with the unread count, as in tsumugi: 28 by 24, the cup dim
     // while nothing is unread, a gold badge ("9+" past nine) when something is.
-    let bell = Rect::from_center_size(pos2(right - 14.0, mid), vec2(28.0, 24.0));
+    let bell = Rect::from_min_size(pos2(bell_left, mid - 12.0), vec2(28.0, 24.0));
     let resp = ui.interact(bell, ui.id().with("bell"), Sense::click());
     if resp.hovered() {
         p.rect_filled(bell, CornerRadius::same(6), c.panel);
@@ -206,21 +226,6 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     }
     out.bell_at = Some(bell);
     resp.on_hover_text(app.tr("bell"));
-    let right_start = bell.left() - 12.0;
-    // The palette field in the middle of what is left.
-    let free = Rect::from_min_max(pos2(left_end + 12.0, r.top()), pos2(right_start, r.bottom()));
-    let w = (free.width()).clamp(0.0, 420.0);
-    if w > 120.0 {
-        let field = Rect::from_center_size(pos2(r.center().x.clamp(free.left() + w / 2.0, free.right() - w / 2.0), mid), vec2(w, 26.0));
-        let resp = ui.interact(field, ui.id().with("palette"), Sense::click());
-        p.rect_filled(field, CornerRadius::same(7), if resp.hovered() { c.panel } else { c.side });
-        p.rect_stroke(field, CornerRadius::same(7), Stroke::new(1.0, c.border), StrokeKind::Inside);
-        p.text(field.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, app.tr("palette.hint"), FontId::proportional(12.5), c.dim);
-        p.text(field.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, "Ctrl+Shift+P", FontId::monospace(11.0), c.dim);
-        if resp.clicked() {
-            out.palette = true;
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

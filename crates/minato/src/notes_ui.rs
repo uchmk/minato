@@ -5,7 +5,7 @@
 //! `minato_core::fold` when they do not fit (no scrollbar).
 
 use egui::{Align2, FontId, Rect, Sense, Stroke, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::list::{age, epoch};
 use minato_core::notes::{self, Note};
 
@@ -52,7 +52,7 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
                 return;
             }
             let sel = app.ns.sel.min(app.notes.len() - 1);
-            let f = fold(&vec![ROW_FULL; app.notes.len()], ROW_FOLDED, MORE_H, room.max(ROW_FULL), sel);
+            let f = fold_head(&vec![ROW_FULL; app.notes.len()], ROW_FOLDED, MORE_H, room.max(ROW_FULL), sel, HEAD);
             let now = now_epoch();
             if f.above > 0 {
                 more(ui, app, f.above, "list.above");

@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod board;
+pub mod cache;
 pub mod notes;
 pub mod prefs;
 pub mod composer;
@@ -12,5 +13,6 @@ pub mod inbox;
 pub mod list;
 pub mod mainci;
 pub mod reposettings;
+pub mod state;
 pub mod status;
 pub mod workflow;

@@ -3,7 +3,7 @@
 //! scrollbar anywhere.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::inbox::Group;
 use minato_core::list::{Ci, Col, Item, Kind, Pick, Saved, age, epoch, options};
 
@@ -155,7 +155,7 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     }
     let heights: Vec<f32> = shown.iter().map(|i| if i.labels.is_empty() { ROW_PLAIN } else { ROW_FULL }).collect();
     let sel = app.list.sel.min(shown.len() - 1);
-    let f = fold(&heights, ROW_FOLDED, MORE_H, body.height(), sel);
+    let f = fold_head(&heights, ROW_FOLDED, MORE_H, body.height(), sel, HEAD);
     let now = now_epoch();
     let all = app.inbox_all();
     let marked: Vec<&str> = all.iter().filter(|card| card.group != Group::Done).map(|card| app.items[card.at].id.as_str()).collect();

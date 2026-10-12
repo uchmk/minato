@@ -70,6 +70,52 @@ pub fn fold(heights: &[f32], folded: f32, more: f32, box_h: f32, selected: usize
     out
 }
 
+/// How many rows a list read from the top keeps whole at most.
+pub const HEAD: usize = 10;
+
+/// The fold for a list read from the top (the inbox, the notifications):
+/// rather than folding every row to fit them all, as many rows as fit (up to
+/// `head`, from the selected one outward, the earlier first at equal
+/// distance) stay whole, the next ones fold, and the rest are hidden and
+/// counted. When everything fits whole, everything is.
+pub fn fold_head(heights: &[f32], folded: f32, more: f32, box_h: f32, selected: usize, head: usize) -> Fold {
+    let n = heights.len();
+    if n == 0 {
+        return Fold { rows: Vec::new(), above: 0, below: 0 };
+    }
+    if heights.iter().sum::<f32>() <= box_h {
+        return Fold { rows: vec![Show::Full; n], above: 0, below: 0 };
+    }
+    let on = selected.min(n - 1);
+    let mut near: Vec<usize> = (0..n).collect();
+    near.sort_by(|&a, &b| on.abs_diff(a).cmp(&on.abs_diff(b)).then(a.cmp(&b)));
+    let mut rows = vec![Show::Hidden; n];
+    let (mut above, mut below) = (on, n - 1 - on);
+    rows[on] = Show::Full;
+    let mut total = heights[on];
+    let fits = |total: f32, above: usize, below: usize| total + if above > 0 { more } else { 0.0 } + if below > 0 { more } else { 0.0 } <= box_h;
+    // Whole rows first, then folded ones; each pass stops at the first row
+    // that does not fit, so what is shown stays in one piece.
+    let mut k = 1;
+    for (show, cap) in [(Show::Full, head.max(1)), (Show::Folded, n)] {
+        let mut count = if show == Show::Full { 1 } else { 0 };
+        while k < n && count < cap {
+            let at = near[k];
+            let h = if show == Show::Full { heights[at] } else { heights[at].min(folded) };
+            let (a, b) = if at < on { (above - 1, below) } else { (above, below - 1) };
+            if !fits(total + h, a, b) {
+                break;
+            }
+            rows[at] = show;
+            total += h;
+            (above, below) = (a, b);
+            count += 1;
+            k += 1;
+        }
+    }
+    Fold { rows, above, below }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +212,35 @@ mod tests {
         assert_eq!(f.rows[2], Show::Full);
         // Folding the 5-high row would gain nothing, but it may still be marked.
         assert!(f.rows[0] != Show::Full || f.rows[1] != Show::Full);
+    }
+    #[test]
+    fn head_keeps_the_top_rows_whole() {
+        // 30 rows of 40 into 300: six whole, then folded ones, the rest hidden.
+        let f = fold_head(&[40.0; 30], 10.0, 8.0, 300.0, 0, 10);
+        let s = shown(&f);
+        assert!(s.starts_with("FFFFFF"), "{s}");
+        assert_eq!(f.above, 0);
+        assert!(f.below > 0);
+        let full = s.matches('F').count();
+        let mini = s.matches('m').count();
+        assert!(full as f32 * 40.0 + mini as f32 * 10.0 + 8.0 <= 300.0);
+        // No more than `head` whole even when more would fit.
+        let f = fold_head(&[40.0; 30], 10.0, 8.0, 1000.0, 0, 10);
+        assert_eq!(shown(&f).matches('F').count(), 10);
+        // Everything whole when it all fits.
+        assert_eq!(shown(&fold_head(&[40.0; 5], 10.0, 8.0, 200.0, 0, 2)), "FFFFF");
+    }
+
+    #[test]
+    fn head_follows_the_selection_in_one_piece() {
+        let f = fold_head(&[40.0; 20], 10.0, 8.0, 200.0, 10, 10);
+        assert_eq!(f.rows[10], Show::Full);
+        let s = shown(&f);
+        let first = s.find(|c| c != '.').unwrap();
+        let last = s.rfind(|c| c != '.').unwrap();
+        assert!(!s[first..=last].contains('.'), "{s}");
+        assert_eq!(f.above, first);
+        assert_eq!(f.below, 19 - last);
+        assert!(fold_head(&[], 10.0, 8.0, 100.0, 0, 10).rows.is_empty());
     }
 }

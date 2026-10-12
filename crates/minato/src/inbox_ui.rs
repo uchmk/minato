@@ -5,7 +5,7 @@
 //! scrolling. A click does what the keys that get there do.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::inbox::{Card, Group, InboxState, Status};
 use minato_core::list::{Label, age, epoch};
 
@@ -111,7 +111,7 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
     let empties = groups.iter().filter(|g| !shown.iter().any(|card| card.group == **g)).count();
     let room = body.height() - groups.len() as f32 * SEC_H - empties as f32 * EMPTY_H;
     let sel = app.inbox.sel.min(shown.len().saturating_sub(1));
-    let f = fold(&vec![CARD_FULL; shown.len()], CARD_MINI, MORE_H, room, sel);
+    let f = fold_head(&vec![CARD_FULL; shown.len()], CARD_MINI, MORE_H, room, sel, HEAD);
     let now = now_epoch();
     let mut y = body.top();
     if f.above > 0 {

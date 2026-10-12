@@ -60,7 +60,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 6.1 | Press `2` after the connection is up | Within a few seconds your open issues, PRs and discussions list in three lines each; the CI mark and the comment count stand at the right |
 | 6.2 | Press `j` / `k` | The selected row moves; the detail at the right follows within a second |
-| 6.3 | Shrink the window height until the rows do not fit | Far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears |
+| 6.3 | Shrink the window height until the rows do not fit | The first ten rows keep their full size as long as they fit; far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears |
 | 6.4 | Press `h`, then `j` and `Space` on a repository | The list narrows to it and the query line over the list changes; the chosen option is filled |
 | 6.5 | Pick "CI is red" | Only PRs with a red mark remain |
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
@@ -76,14 +76,14 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 7.3 | Press `d`, then `u` | The card moves to "Done today" with a toast, and `u` brings it back |
 | 7.4 | Press `s` | The card disappears (back tomorrow 9:00) with a toast; `u` brings it back |
 | 7.5 | Press `f`, `F`, `t` | The chips at the lower left change and the cards narrow; after the last choice they return to All |
-| 7.6 | Shrink the window height | Far cards fold to their title, then hide with "⋯" lines; no scrollbar |
+| 7.6 | Shrink the window height | The first ten cards keep their full size as long as they fit; far cards fold to their title, then hide with "⋯" lines; no scrollbar |
 | 7.7 | Press `o` | The item opens in the browser |
 
 ## 8. Writing box and fields
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 8.1 | Select an item and press `r` | A box opens at the bottom with the item's name on top and the key hints below; the cursor is in the field |
+| 8.1 | Select an item and press `r` | The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window |
 | 8.2 | Type text, press `Ctrl+P`, then `Esc` | The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field |
 | 8.3 | Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` | `**word**`, `_word_` and `[word](url)` (with `url` selected) |
 | 8.4 | Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` | The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change |
@@ -143,7 +143,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 11.4 | Press `A` | All rows go, a toast says so, and the bell shows none; GitHub shows them read |
 | 11.5 | Press `n` again, `Esc`, or click outside the list | The list closes; clicking the bell opens and closes it |
 | 11.5a | Click a row, then "Mark all read" at the top | The row opens as with `Enter`; the button marks every row read |
-| 11.6 | Press `Ctrl+Shift+P` | A palette opens over the window with a search field |
+| 11.6 | Press `Ctrl+Shift+P` | A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット) |
 | 11.7 | Type `#` and part of a title, press `Enter` | The list opens on that item |
 | 11.8 | Type `board`, press `Enter` | The Board view opens |
 | 11.9 | Press `Esc`, and `Ctrl+Shift+P` twice | The palette closes; the second press closes it again |
@@ -181,7 +181,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 14.2 | Press `Ctrl+,` | The settings screen opens; `Esc` returns |
 | 14.3 | Click the palette field in the title bar | The command palette opens, the same as `Ctrl+Shift+P` |
 | 14.4 | With no unread notification look at the bell, then with some | Dim cup without a badge; with unread, a gold badge with the count (`9+` past nine), the same look as tsumugi's bell |
-| 14.5 | Click the bell | The notifications list opens under it, its right edge under the bell |
+| 14.5 | Click the bell | The bell stands right of the palette field; the notifications list opens under it, its right edge under the bell |
 
 ## 15. The minato page of the settings
 
@@ -266,3 +266,18 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 24.4 | Open the palette and look at the commands tsumugi also has | They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き) |
 | 24.5 | Compare the inbox, list, Actions and notifications with `docs/mock/minato.html` | The same layout: the inbox's tag chips, "Your turn" / "Waiting" / "Done today" with their hints, the detail's "Next" box and keys, the list's filter column with counts, the Actions run rows and detail |
 | 24.6 | Select an item that is a stub for a red main CI (no thread) | The detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…" |
+
+## 25. Comment box, Markdown, kept widths and the cache
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 25.1 | Select an issue and look under the detail | A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment" |
+| 25.2 | Click the text area, type two lines, then click another row | The box takes the cursor in place; after the click the box leaves and the text stays; back on the item, clicking the box shows the text again |
+| 25.3 | Select a word and click B, I, the link and the list buttons | The word becomes `**word**`, `_word_`, `[word](url)`, and the line a list item; hovering a button shows its name |
+| 25.4 | Click Preview, then Write | The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text |
+| 25.5 | With nothing written click "Comment", then "Close issue" | "Comment" is dim and does nothing; "Close issue" asks first, as `x` does |
+| 25.6 | Type a comment and click "Close with comment" (the close button's name once there is text) | The comment is sent and the issue is closed |
+| 25.7 | Look at an item whose body and comments use Markdown | Headings, bold, italic, code, lists, quotes and links show as such in the detail, not as raw marks |
+| 25.8 | Drag a column line in the inbox, list and Actions, close minato and start it again | The columns come back at the widths they were left at (state.toml in minato's state folder) |
+| 25.9 | Start minato while offline after a run with the connection up | The inbox, list, Actions and Board show the last answers at once; a selected item shows its last detail |
+| 25.10 | Online, select an item, another, and the first again | The first detail shows at once and is not asked again unless the item changed on GitHub |

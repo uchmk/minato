@@ -15,6 +15,7 @@ mod detail_ui;
 mod icon;
 mod inbox_ui;
 mod list_ui;
+mod md_ui;
 mod notes_ui;
 mod net;
 mod overlay;
@@ -121,6 +122,13 @@ impl eframe::App for Minato {
         } else {
             let was = self.app.mode;
             let out = ui::frame(ui, &self.app);
+            // The box in the detail is left (its text kept as the item's
+            // draft) for anything else the mouse does.
+            let inline = self.app.compose.as_ref().is_some_and(|c| !c.id.starts_with("new:"));
+            let elsewhere = out.view.is_some() || out.click.as_ref().is_some_and(|c| !c.is_compose()) || out.note.is_some() || out.pick.is_some() || out.drop.is_some() || out.bell || out.palette;
+            if inline && elsewhere {
+                self.app.close_compose();
+            }
             if let Some(v) = out.view {
                 self.app.view = v;
             }
@@ -146,7 +154,7 @@ impl eframe::App for Minato {
             if out.palette && self.app.palette.is_none() {
                 self.app.palette = Some(ito_palette::View::new());
             }
-            compose_ui::show(ui, &mut self.app);
+            compose_ui::show(ui, &mut self.app, out.compose_at);
             overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }
@@ -259,6 +267,7 @@ fn main() -> eframe::Result {
             let marks_file = prefs.base.as_ref().map(|b| b.join("minato-marks.json"));
             let settings_file = prefs.base.as_ref().map(|b| b.join("minato-settings.json"));
             let searches_file = prefs.base.as_ref().map(|b| b.join("minato-searches.txt"));
+            let state_file = ito_common::state_dir("minato").map(|d| d.join("state.toml"));
             let mut app = App::new(prefs);
             if let Some(f) = marks_file {
                 app.keep_marks(f);
@@ -269,7 +278,10 @@ fn main() -> eframe::Result {
             if let Some(f) = searches_file {
                 app.keep_searches(f);
             }
-            Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx) }))
+            if let Some(f) = state_file {
+                app.keep_state(f);
+            }
+            Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache"))) }))
         }),
     )
 }
