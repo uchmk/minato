@@ -84,11 +84,11 @@ fn head(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
             Kind::Pr => "Pull request",
             Kind::Discussion => "Discussion",
         };
-        lx = p.text(pos2(lx, y1), Align2::LEFT_CENTER, format!("{kind} #{}", item.number), FontId::monospace(12.5), c.fg).right() + 8.0;
+        lx = p.text(pos2(lx, y1), Align2::LEFT_CENTER, format!("{kind} #{}", item.number), FontId::monospace(13.5), c.fg).right() + 8.0;
     }
     style::labels(p, lx, y1, &item.labels, x + w);
     let y = y1 + 10.0 + 10.0;
-    let title = p.layout(item.title.clone(), FontId::proportional(19.0), c.fg, w);
+    let title = p.layout(item.title.clone(), FontId::proportional(21.0), c.fg, w);
     let th = title.size().y;
     p.galley(pos2(x + 0.5, y), title.clone(), c.fg);
     p.galley(pos2(x, y), title, c.fg);
@@ -113,7 +113,7 @@ fn head(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
     }
     let mut mx = x;
     for m in meta {
-        mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(12.0), c.dim).right() + 14.0;
+        mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(13.0), c.dim).right() + 14.0;
     }
     y + 16.0
 }
@@ -159,7 +159,7 @@ fn keys(p: &Painter, app: &App, item: &Item, card: Option<&Card>, x: f32, y: f32
 fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
     let c = ito_theme::colors();
     let Some((_, d)) = app.detail.as_ref().filter(|(id, _)| *id == item.id) else {
-        p.text(pos2(x, y + 20.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(12.5), c.dim);
+        p.text(pos2(x, y + 20.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(13.5), c.dim);
         return y + 40.0;
     };
     let mut y = y;
@@ -176,7 +176,7 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
     }
     if !d.body.trim().is_empty() {
         y = style::heading(p, x, y, app.tr("detail.body"));
-        let md = crate::md_ui::layout(p, &d.body, w, 13.0);
+        let md = crate::md_ui::layout(p, &d.body, w, BODY);
         md.paint(p, x, y);
         y += md.height;
     }
@@ -196,11 +196,11 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
         style::dot(p, pos2(x + 6.0, y + 8.0), 5.0, dot);
         last = y + 8.0;
         let when = epoch(&e.created_at).map(|t| age(&e.created_at, now.max(t))).unwrap_or_default();
-        let a = style::bold(p, pos2(tx, y + 8.0), Align2::LEFT_CENTER, &e.author, FontId::proportional(12.0), c.fg);
-        p.text(pos2(a.right() + 8.0, y + 8.0), Align2::LEFT_CENTER, when, FontId::monospace(12.0), c.dim);
-        y += 20.0;
+        let a = style::bold(p, pos2(tx, y + 8.0), Align2::LEFT_CENTER, &e.author, FontId::proportional(13.0), c.fg);
+        p.text(pos2(a.right() + 8.0, y + 8.0), Align2::LEFT_CENTER, when, FontId::monospace(13.0), c.dim);
+        y += 22.0;
         if !e.body.trim().is_empty() {
-            let md = crate::md_ui::layout(p, &e.body, w - 22.0, 13.0);
+            let md = crate::md_ui::layout(p, &e.body, w - 22.0, BODY);
             md.paint(p, tx, y);
             y += md.height;
         }
@@ -209,6 +209,9 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
     p.set(line, egui::Shape::rect_filled(Rect::from_min_max(pos2(x + 5.0, top + 8.0), pos2(x + 7.0, last)), 0.0, c.border));
     y
 }
+
+/// The size of the body's and the comments' words.
+const BODY: f32 = 14.5;
 
 /// The composer at the foot: the fields to set as chips, then the box to
 /// write in. A click anywhere on it starts writing; while the box is open

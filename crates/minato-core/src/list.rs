@@ -305,6 +305,22 @@ impl ListState {
         true
     }
 
+    /// `gg` and `G`: the first or the last of the column in focus (the
+    /// detail's top, or as far down as it goes: the app stops it at its end).
+    pub fn jump(&mut self, end: bool, items: &[Item], me: &str) {
+        match self.col {
+            Col::Filters => {
+                let n: usize = options(items, &self.searches).iter().map(|(_, v)| v.len()).sum();
+                self.cursor = if end { n.saturating_sub(1) } else { 0 };
+            }
+            Col::Items => {
+                self.sel = if end { self.shown(items, me).len().saturating_sub(1) } else { 0 };
+                self.scroll = 0.0;
+            }
+            Col::Detail => self.scroll = if end { f32::MAX } else { 0.0 },
+        }
+    }
+
     /// Choose a filter option; the selection goes back to the top.
     pub fn apply(&mut self, p: Pick) {
         match p {

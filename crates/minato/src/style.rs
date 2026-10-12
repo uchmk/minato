@@ -191,7 +191,7 @@ pub fn dot(p: &Painter, at: Pos2, r: f32, color: Color32) {
 pub fn heading(p: &Painter, x: f32, y: f32, text: &str) -> f32 {
     let c = ito_theme::colors();
     let y = y + 18.0;
-    bold(p, pos2(x, y + 8.0), Align2::LEFT_CENTER, text, FontId::proportional(11.5), c.dim);
+    bold(p, pos2(x, y + 8.0), Align2::LEFT_CENTER, text, FontId::proportional(12.5), c.dim);
     y + 22.0
 }
 
@@ -218,9 +218,9 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> f32 {
         (kg.size().x + 10.0 + 8.0 + lg.size().x + 24.0, k)
     });
     let words_w = (w - pad * 2.0 - go.map_or(0.0, |(gw, _)| gw + 14.0)).max(80.0);
-    let lead = p.layout_no_wrap(n.lead.to_owned(), FontId::proportional(12.5), c.fg);
-    let label = p.layout(n.label.to_owned(), FontId::proportional(14.0), c.fg, words_w);
-    let note = (!n.note.is_empty()).then(|| p.layout(n.note.to_owned(), FontId::proportional(12.5), c.dim, words_w));
+    let lead = p.layout_no_wrap(n.lead.to_owned(), FontId::proportional(13.5), c.fg);
+    let label = p.layout(n.label.to_owned(), FontId::proportional(15.0), c.fg, words_w);
+    let note = (!n.note.is_empty()).then(|| p.layout(n.note.to_owned(), FontId::proportional(13.5), c.dim, words_w));
     let h = 9.0 + lead.size().y + label.size().y + note.as_ref().map_or(0.0, |g| g.size().y) + 9.0;
     let r = Rect::from_min_size(pos2(x, y), vec2(w, h));
     p.rect_filled(r, CornerRadius::same(8), card());
@@ -252,14 +252,14 @@ pub fn alt_keys(p: &Painter, x: f32, y: f32, right: f32, keys: &[(&str, &str)]) 
     let mut kx = x + 2.0;
     let mut y = y + 10.0;
     for (k, word) in keys {
-        let w = p.layout_no_wrap(word.to_string(), FontId::proportional(12.5), c.dim).size().x;
+        let w = p.layout_no_wrap(word.to_string(), FontId::proportional(13.5), c.dim).size().x;
         let kw = p.layout_no_wrap(k.to_string(), FontId::monospace(11.0), c.fg).size().x + 10.0;
         if kx + kw + 4.0 + w > right && kx > x + 2.0 {
             kx = x + 2.0;
             y += 22.0;
         }
         let e = kbd(p, kx, y, k);
-        let t = p.text(pos2(e + 4.0, y), Align2::LEFT_CENTER, *word, FontId::proportional(12.5), c.dim);
+        let t = p.text(pos2(e + 4.0, y), Align2::LEFT_CENTER, *word, FontId::proportional(13.5), c.dim);
         kx = t.right() + 16.0;
     }
     y + 16.0
@@ -269,13 +269,13 @@ pub fn alt_keys(p: &Painter, x: f32, y: f32, right: f32, keys: &[(&str, &str)]) 
 #[allow(clippy::too_many_arguments)]
 pub fn check_row(p: &Painter, x: f32, y: f32, w: f32, mark: &str, color: Color32, name: &str, time: &str) -> f32 {
     let c = ito_theme::colors();
-    let r = Rect::from_min_size(pos2(x, y), vec2(w, 26.0));
+    let r = Rect::from_min_size(pos2(x, y), vec2(w, 28.0));
     if color == BAD {
         p.rect_filled(r, CornerRadius::same(6), BAD.gamma_multiply(0.10));
     }
-    p.text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, mark, FontId::proportional(13.0), color);
-    let t = p.text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, time, FontId::monospace(12.0), c.dim);
-    p.with_clip_rect(Rect::from_min_max(r.min, pos2(t.left() - 8.0, r.bottom()))).text(pos2(r.left() + 30.0, r.center().y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), c.fg);
+    p.text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, mark, FontId::proportional(14.0), color);
+    let t = p.text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, time, FontId::monospace(13.0), c.dim);
+    p.with_clip_rect(Rect::from_min_max(r.min, pos2(t.left() - 8.0, r.bottom()))).text(pos2(r.left() + 30.0, r.center().y), Align2::LEFT_CENTER, name, FontId::proportional(14.0), c.fg);
     r.bottom()
 }
 

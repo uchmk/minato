@@ -56,7 +56,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         match pane {
             Pane::Left => filter_col(ui, app, rect, out),
             Pane::Mid => runs_col(ui, app, rect, out),
-            Pane::Right => detail_col(ui, app, rect),
+            Pane::Right => detail_col(ui, app, rect, out),
         }
         if app.acts.col == col {
             ui.painter().line_segment([rect.left_top(), rect.right_top()], Stroke::new(2.0, ACCENT));
@@ -253,7 +253,7 @@ fn run_row(p: &Painter, run: &Run, row: Rect, full: bool, on: bool, hover: bool,
 /// The run as the mock's detail draws it: where and what state; the title
 /// and how it went; the next step and the other keys; the jobs, the last ten
 /// results and the artifacts.
-fn detail_col(ui: &Ui, app: &App, r: Rect) {
+fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
     p.rect_filled(r, 0.0, c.bg);
@@ -264,16 +264,17 @@ fn detail_col(ui: &Ui, app: &App, r: Rect) {
     let now = now_epoch();
     let x = r.left() + 26.0;
     let w = (r.width() - 52.0).min(900.0);
-    let mut y = r.top() + 18.0 - app.acts.scroll * LINE + 10.0;
+    let top = r.top() + 18.0 - app.acts.scroll * LINE + 10.0;
+    let mut y = top;
     // The head: the repository, Run, the workflow and its number, the state.
     let mut hx = style::tag(&p, x, y, &run.repo, &run.repo) + 8.0;
     hx = style::run_chip(&p, hx, y, "▶ Run", ACCENT) + 8.0;
-    hx = p.text(pos2(hx, y), Align2::LEFT_CENTER, format!("{} #{}", run.workflow, run.number), FontId::monospace(12.5), c.fg).right() + 8.0;
+    hx = p.text(pos2(hx, y), Align2::LEFT_CENTER, format!("{} #{}", run.workflow, run.number), FontId::monospace(13.5), c.fg).right() + 8.0;
     let color = tone(run.status);
     let words = format!("{} {}", run.status.mark(), app.tr(run.status.word()));
     style::chip(&p, hx, y, &words, FontId::proportional(11.5), 7.0, 18.0, 9, color, color.gamma_multiply(0.14), color);
     y += 10.0 + 10.0;
-    let title = p.layout(run.title.clone(), FontId::proportional(19.0), c.fg, w);
+    let title = p.layout(run.title.clone(), FontId::proportional(21.0), c.fg, w);
     let th = title.size().y;
     p.galley(pos2(x + 0.5, y), title.clone(), c.fg);
     p.galley(pos2(x, y), title, c.fg);
@@ -283,7 +284,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect) {
     let mut mx = x;
     for m in [run.event.clone(), branch, run.sha.clone(), run.actor.clone(), dur, ago(&run.started_at, now)] {
         if !m.is_empty() {
-            mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(12.0), c.dim).right() + 14.0;
+            mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(13.0), c.dim).right() + 14.0;
         }
     }
     y += 16.0;
@@ -311,7 +312,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect) {
     y = style::heading(&p, x, y, app.tr("run.jobs"));
     match have.and_then(|d| d.jobs.as_ref()) {
         None => {
-            p.text(pos2(x, y + 9.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(12.5), c.dim);
+            p.text(pos2(x, y + 9.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(13.5), c.dim);
             y += 18.0;
         }
         Some(jobs) => match have.and_then(|d| d.workflow.as_ref()).filter(|w| w.layers().iter().all(|&l| l < MAX_COLS) && w.jobs.iter().any(|j| !j.needs.is_empty())) {
@@ -341,12 +342,14 @@ fn detail_col(ui: &Ui, app: &App, r: Rect) {
         y = style::heading(&p, x, y, app.tr("run.artifacts"));
         for a in arts {
             let cy = y + 10.0;
-            let m = p.text(pos2(x + 10.0, cy), Align2::LEFT_CENTER, "▤", FontId::monospace(12.0), c.fg);
-            p.text(pos2(m.right() + 10.0, cy), Align2::LEFT_CENTER, &a.name, FontId::monospace(12.0), c.fg);
-            p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(a.bytes), FontId::monospace(12.0), c.dim);
-            y += 20.0;
+            let m = p.text(pos2(x + 10.0, cy), Align2::LEFT_CENTER, "▤", FontId::monospace(13.0), c.fg);
+            p.text(pos2(m.right() + 10.0, cy), Align2::LEFT_CENTER, &a.name, FontId::monospace(13.0), c.fg);
+            p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(a.bytes), FontId::monospace(13.0), c.dim);
+            y += 22.0;
         }
     }
+    // The keys stop when the end is a little above the foot.
+    out.detail_max = Some(((y - top + 36.0 - r.height()) / LINE).ceil().max(0.0));
 }
 
 /// Most columns the `needs:` graph is drawn with; deeper workflows are listed.

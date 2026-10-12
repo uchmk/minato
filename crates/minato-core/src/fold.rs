@@ -70,8 +70,9 @@ pub fn fold(heights: &[f32], folded: f32, more: f32, box_h: f32, selected: usize
     out
 }
 
-/// How many rows a list read from the top keeps whole at most.
-pub const HEAD: usize = 10;
+/// How many rows a list read from the top keeps whole at most: the selected
+/// one and five on each side.
+pub const HEAD: usize = 11;
 
 /// The fold for a list read from the top (the inbox, the notifications):
 /// rather than folding every row to fit them all, as many rows as fit (up to
@@ -229,6 +230,14 @@ mod tests {
         assert_eq!(shown(&f).matches('F').count(), 10);
         // Everything whole when it all fits.
         assert_eq!(shown(&fold_head(&[40.0; 5], 10.0, 8.0, 200.0, 0, 2)), "FFFFF");
+    }
+
+    #[test]
+    fn head_keeps_five_whole_on_each_side() {
+        let f = fold_head(&[40.0; 30], 10.0, 8.0, 1000.0, 15, HEAD);
+        assert_eq!(&shown(&f)[10..21], "FFFFFFFFFFF");
+        assert_eq!(f.rows[9], Show::Folded);
+        assert_eq!(f.rows[21], Show::Folded);
     }
 
     #[test]

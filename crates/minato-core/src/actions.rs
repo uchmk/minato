@@ -390,6 +390,21 @@ impl ActState {
     pub fn clamp(&mut self, runs: &[Run]) {
         self.sel = self.sel.min(self.shown(runs).len().saturating_sub(1));
     }
+
+    /// `gg` and `G`, as the list's.
+    pub fn jump(&mut self, end: bool, runs: &[Run]) {
+        match self.col {
+            Col::Filters => {
+                let n: usize = options(runs).iter().map(|(_, v)| v.len()).sum();
+                self.cursor = if end { n.saturating_sub(1) } else { 0 };
+            }
+            Col::Runs => {
+                self.sel = if end { self.shown(runs).len().saturating_sub(1) } else { 0 };
+                self.scroll = 0.0;
+            }
+            Col::Detail => self.scroll = if end { f32::MAX } else { 0.0 },
+        }
+    }
 }
 
 /// The last `n` finished results of the run's workflow, newest first.

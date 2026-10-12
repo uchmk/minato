@@ -116,14 +116,15 @@ impl View {
 }
 
 /// The keys that work in every view.
-pub const GLOBAL_KEYS: [(&str, &str); 7] = [
+pub const GLOBAL_KEYS: [(&str, &str); 8] = [
     ("1 2 3 4", "key.views"),
+    ("gg G", "key.ends"),
     ("Ctrl+,", "key.settings"),
     ("Ctrl+= - 0", "key.scale"),
     ("Ctrl+Shift+P", "key.palette"),
     ("n", "key.notes"),
     ("u", "key.undo"),
-    ("?", "key.help"),
+    ("F1 ?", "key.help"),
 ];
 
 /// What the window shows.
@@ -245,7 +246,6 @@ pub enum NoteClick {
 /// What picking a line of the palette does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cmd {
-    Go(View),
     Settings,
     Help,
     Notes,
@@ -326,6 +326,11 @@ pub struct App {
     pub ns: NotesState,
     /// The wheel's turn not yet a whole step (a touchpad's small ones).
     pub wheel_acc: f32,
+    /// How far the detail drawn last can scroll, in lines: the keys and the
+    /// wheel stop there.
+    pub detail_max: Option<f32>,
+    /// `g` typed once: a second makes `gg`.
+    pub pending_g: bool,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
     /// The columns of the inbox, the list and the Actions view, as the mouse left them.
@@ -415,6 +420,8 @@ impl App {
             api: None,
             toast: None,
             wheel_acc: 0.0,
+            detail_max: None,
+            pending_g: false,
             viewer: None,
             items: Vec::new(),
             inbox: InboxState::default(),
@@ -533,11 +540,75 @@ impl App {
                 Wheel::Detail => {}
             }
         }
+        self.clamp_scroll();
+    }
+
+    /// Keep the scroll of the view's detail at its end or above.
+    pub fn clamp_scroll(&mut self) {
+        let Some(max) = self.detail_max else { return };
+        let s = match self.view {
+            View::Inbox => &mut self.inbox.scroll,
+            View::List => &mut self.list.scroll,
+            View::Actions => &mut self.acts.scroll,
+            View::Board => return,
+        };
+        *s = s.min(max);
+    }
+
+    /// F1: the list of the keys, or back from it.
+    pub fn toggle_help(&mut self) {
+        if self.compose.is_some() || self.confirm.is_some() || self.overlay.is_some() {
+            return;
+        }
+        self.palette = None;
+        self.mode = if self.mode == Mode::Help { Mode::Main } else { Mode::Help };
+    }
+
+    /// `gg` (`end` false) and `G`: the first or the last of the column in
+    /// focus, as in kura; the top or the end of a detail.
+    fn jump(&mut self, end: bool) {
+        let me = self.viewer.clone().unwrap_or_default();
+        match (self.mode, self.view) {
+            (Mode::Notes, _) => self.ns.jump(end, self.notes.len()),
+            (_, View::Inbox) => {
+                let all = self.inbox_all();
+                self.inbox.jump(end, &all, &self.items);
+            }
+            (_, View::List) => self.list.jump(end, &self.items, &me),
+            (_, View::Actions) => self.acts.jump(end, &self.runs),
+            (_, View::Board) => {
+                if let Some(p) = self.board.as_ref() {
+                    self.bs.jump(end, p);
+                }
+            }
+        }
     }
 
     /// A character typed (not a key with Ctrl or Alt: those are the
     /// shortcuts). Returns whether it was used.
     pub fn feed(&mut self, c: char) -> bool {
+        let g = std::mem::take(&mut self.pending_g);
+        let free = self.compose.is_none() && self.confirm.is_none() && self.palette.is_none() && self.overlay.is_none() && matches!(self.mode, Mode::Main | Mode::Notes);
+        let used = match c {
+            'g' if free => {
+                if g {
+                    self.jump(false);
+                } else {
+                    self.pending_g = true;
+                }
+                true
+            }
+            'G' if free => {
+                self.jump(true);
+                true
+            }
+            _ => self.feed_key(c),
+        };
+        self.clamp_scroll();
+        used
+    }
+
+    fn feed_key(&mut self, c: char) -> bool {
         if self.compose.is_some() || self.confirm.is_some() || self.palette.is_some() || self.overlay.is_some() {
             return true;
         }
@@ -910,18 +981,17 @@ impl App {
     /// The lines of the palette: the commands, then the items (`#12 title`).
     pub fn palette_entries(&self) -> Vec<ito_palette::Entry<Cmd>> {
         use ito_palette::Entry;
-        let mut e = Vec::new();
-        for v in View::ALL {
-            e.push(Entry::new(format!("{} {}", self.tr("cmd.go"), self.tr(v.label())), v.digit().to_string(), Cmd::Go(v)));
-        }
-        // tsumugi's words for the same commands.
-        e.push(Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes));
-        e.push(Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll));
-        e.push(Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings));
-        e.push(Entry::new(self.tr("cmd.zoom_in"), "Ctrl+=", Cmd::Scale(ito_common::ScaleTo::In)));
-        e.push(Entry::new(self.tr("cmd.zoom_out"), "Ctrl+-", Cmd::Scale(ito_common::ScaleTo::Out)));
-        e.push(Entry::new(self.tr("cmd.zoom_reset"), "Ctrl+0", Cmd::Scale(ito_common::ScaleTo::Reset)));
-        e.push(Entry::new(self.tr("cmd.help"), "?", Cmd::Help));
+        // tsumugi's words for the same commands; the views are not here, as
+        // the bar shows them with their keys.
+        let mut e = vec![
+            Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes),
+            Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll),
+            Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings),
+            Entry::new(self.tr("cmd.zoom_in"), "Ctrl+=", Cmd::Scale(ito_common::ScaleTo::In)),
+            Entry::new(self.tr("cmd.zoom_out"), "Ctrl+-", Cmd::Scale(ito_common::ScaleTo::Out)),
+            Entry::new(self.tr("cmd.zoom_reset"), "Ctrl+0", Cmd::Scale(ito_common::ScaleTo::Reset)),
+            Entry::new(self.tr("cmd.help"), "F1", Cmd::Help),
+        ];
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
             x.detail = i.repo.clone();
@@ -933,10 +1003,6 @@ impl App {
     /// Do what a palette line says.
     pub fn run_cmd(&mut self, cmd: Cmd) {
         match cmd {
-            Cmd::Go(v) => {
-                self.mode = Mode::Main;
-                self.view = v;
-            }
             Cmd::Settings => self.mode = Mode::Settings,
             Cmd::Help => self.mode = Mode::Help,
             Cmd::Notes => self.mode = Mode::Notes,
@@ -1592,14 +1658,12 @@ mod tests {
     fn the_palette_lists_commands_and_runs_one() {
         let mut a = app();
         let e = a.palette_entries();
-        assert!(e.iter().any(|x| x.pick == Cmd::Go(View::Board)));
+        assert!(!e.iter().any(|x| x.key == "1"), "no lines for the views");
         // The names of the commands tsumugi has too are tsumugi's.
         let name = |c: Cmd| e.iter().find(|x| x.pick == c).map(|x| x.title.clone());
         assert_eq!(name(Cmd::Settings).as_deref(), Some(a.tr("cmd.settings")));
         assert_eq!(name(Cmd::Notes).as_deref(), Some(a.tr("cmd.notes")));
         assert_eq!(name(Cmd::Help).as_deref(), Some(a.tr("cmd.help")));
-        a.run_cmd(Cmd::Go(View::Board));
-        assert_eq!(a.view, View::Board);
         a.run_cmd(Cmd::Notes);
         assert_eq!(a.mode, Mode::Notes);
         a.palette = Some(ito_palette::View::new());
@@ -2031,6 +2095,56 @@ jobs:
         a.items[0].merged = true;
         a.feed('x');
         assert!(a.confirm.is_none() && a.toast.is_some());
+    }
+
+    #[test]
+    fn gg_and_g_go_to_the_ends() {
+        let mut a = with_pr();
+        a.items.push(pr("P2"));
+        a.items.push(pr("P3"));
+        a.view = View::List;
+        a.list.col = minato_core::list::Col::Items;
+        a.feed('G');
+        assert_eq!(a.list.sel, 2);
+        a.feed('g');
+        assert_eq!(a.list.sel, 2, "one g waits for the second");
+        a.feed('g');
+        assert_eq!(a.list.sel, 0);
+        // A key between the two g's starts over.
+        a.feed('G');
+        a.feed('g');
+        a.feed('k');
+        a.feed('g');
+        assert_eq!(a.list.sel, 1);
+    }
+
+    #[test]
+    fn the_detail_stops_at_its_end() {
+        let mut a = with_pr();
+        a.view = View::List;
+        a.list.col = minato_core::list::Col::Detail;
+        a.detail_max = Some(4.0);
+        for _ in 0..10 {
+            a.feed('j');
+        }
+        assert_eq!(a.list.scroll, 4.0);
+        a.feed('k');
+        assert_eq!(a.list.scroll, 3.0, "one up from the end shows at once");
+        a.feed('G');
+        assert_eq!(a.list.scroll, 4.0);
+        a.feed('g');
+        a.feed('g');
+        assert_eq!(a.list.scroll, 0.0);
+    }
+
+    #[test]
+    fn f1_opens_and_closes_the_keys() {
+        let mut a = app();
+        a.palette = Some(ito_palette::View::new());
+        a.toggle_help();
+        assert!(a.mode == Mode::Help && a.palette.is_none());
+        a.toggle_help();
+        assert_eq!(a.mode, Mode::Main);
     }
 
     #[test]

@@ -108,6 +108,9 @@ impl eframe::App for Minato {
         if let Some(to) = ctx.input_mut(scale_key) {
             self.app.scale(to);
         }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
+            self.app.toggle_help();
+        }
         if self.app.mode != Mode::Settings {
             self.keys(&ctx);
         }
@@ -125,6 +128,8 @@ impl eframe::App for Minato {
         } else {
             let was = self.app.mode;
             let out = ui::frame(ui, &self.app);
+            self.app.detail_max = out.detail_max;
+            self.app.clamp_scroll();
             // The box in the detail is left (its text kept as the item's
             // draft) for anything else the mouse does.
             let inline = self.app.compose.as_ref().is_some_and(|c| !c.id.starts_with("new:"));

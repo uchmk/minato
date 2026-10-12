@@ -348,9 +348,9 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect) {
     let mut x = r.left() + 12.0;
     let keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
-        Mode::Help => vec![("?", "key.back"), ("Esc", "key.back")],
+        Mode::Help => vec![("F1", "key.back"), ("Esc", "key.back")],
         Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
-        Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("?", "key.help")]).collect(),
+        Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("F1", "key.help")]).collect(),
     };
     for (k, (key, word)) in keys.iter().enumerate() {
         let best = k == 0;
@@ -393,30 +393,41 @@ fn word_for(app: &App, key: &'static str) -> &'static str {
 fn help(ui: &mut Ui, app: &App, r: Rect) {
     let c = ito_theme::colors();
     let p = ui.painter().clone();
-    let w = r.width().min(640.0);
-    let card = Rect::from_center_size(r.center(), vec2(w, (r.height() - 24.0).clamp(80.0, 420.0)));
+    // Two columns: the keys of everywhere and of the notifications at the
+    // left, the view's at the right, so they all fit.
+    let left: [(&str, &[(&str, &'static str)]); 2] = [(app.tr("help.global"), &GLOBAL_KEYS), (app.tr("help.notes"), &NOTES_KEYS)];
+    let right: [(&str, &[(&str, &'static str)]); 1] = [(app.tr(app.view.label()), app.view.keys())];
+    let tall = |s: &[(&str, &[(&str, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
+    let h = 50.0 + tall(&left).max(tall(&right)) + 30.0;
+    let w = (r.width() - 24.0).min(860.0);
+    let card = Rect::from_center_size(r.center(), vec2(w, h.min(r.height() - 24.0).max(80.0)));
     p.rect_filled(card, CornerRadius::same(10), c.raised());
     p.rect_stroke(card, CornerRadius::same(10), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
-    let mut y = card.top() + 18.0;
-    p.text(pos2(card.left() + 20.0, y), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
-    y += 32.0;
-    let section = |title: &str, rows: &[(&str, &'static str)], y: &mut f32| {
-        p.text(pos2(card.left() + 20.0, *y), Align2::LEFT_TOP, title, FontId::proportional(11.5), ACCENT);
-        *y += 20.0;
-        for (key, word) in rows {
-            if *y + 18.0 > card.bottom() - 28.0 {
-                return;
+    p.text(pos2(card.left() + 20.0, card.top() + 18.0), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
+    let col_w = (w - 40.0) / 2.0;
+    let column = |x: f32, sections: &[(&str, &[(&str, &'static str)])]| {
+        let mut y = card.top() + 50.0;
+        for (title, rows) in sections {
+            p.text(pos2(x, y), Align2::LEFT_TOP, *title, FontId::proportional(11.5), ACCENT);
+            y += 20.0;
+            for (key, word) in rows.iter() {
+                if y + 18.0 > card.bottom() - 28.0 {
+                    return;
+                }
+                p.text(pos2(x, y), Align2::LEFT_TOP, *key, FontId::monospace(12.0), c.fg);
+                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(pos2(x + 120.0, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(12.5), c.dim);
+                y += 20.0;
             }
-            p.text(pos2(card.left() + 20.0, *y), Align2::LEFT_TOP, *key, FontId::monospace(12.0), c.fg);
-            p.text(pos2(card.left() + 150.0, *y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(12.5), c.dim);
-            *y += 20.0;
+            y += 8.0;
         }
-        *y += 8.0;
     };
-    section(app.tr("help.global"), &GLOBAL_KEYS, &mut y);
-    section(app.tr(app.view.label()), app.view.keys(), &mut y);
+    column(card.left() + 20.0, &left);
+    column(card.left() + 20.0 + col_w, &right);
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
 }
+
+/// The keys over the notifications, for the help.
+const NOTES_KEYS: [(&str, &str); 6] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];
 
 /// The message, while its time lasts: at the top right under the title bar,
 /// over everything (the settings, the boxes, the palette), as in kura; a

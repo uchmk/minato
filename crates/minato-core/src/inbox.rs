@@ -348,6 +348,13 @@ impl InboxState {
         self.sel = self.sel.min(n.saturating_sub(1));
     }
 
+    /// `gg` and `G`: the first card or the last.
+    pub fn jump(&mut self, end: bool, all: &[Card], items: &[Item]) {
+        self.sel = if end { usize::MAX } else { 0 };
+        self.scroll = 0.0;
+        self.clamp(all, items);
+    }
+
     /// The selected card, if any.
     pub fn selected(&self, all: &[Card], items: &[Item]) -> Option<Card> {
         self.shown(all, items).get(self.sel).copied()

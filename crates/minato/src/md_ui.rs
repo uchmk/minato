@@ -214,7 +214,7 @@ impl Md {
                     p.circle_filled(pos2(at.x - GUTTER + 8.0, at.y + line_mid(&part.text)), 2.2, c.dim);
                 }
                 Deco::Number(n) => {
-                    p.text(pos2(at.x - 5.0, at.y + line_mid(&part.text)), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(12.5), c.dim);
+                    p.text(pos2(at.x - 5.0, at.y + line_mid(&part.text)), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(13.5), c.dim);
                 }
                 Deco::Task(on) => {
                     let b = Rect::from_center_size(pos2(at.x - GUTTER + 8.0, at.y + line_mid(&part.text)), vec2(11.0, 11.0));

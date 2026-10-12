@@ -208,6 +208,12 @@ impl BoardState {
         true
     }
 
+    /// `gg` and `G`: the first card of the column or the last.
+    pub fn jump(&mut self, end: bool, p: &Project) {
+        self.row = if end { usize::MAX } else { 0 };
+        self.clamp(p);
+    }
+
     pub fn clamp(&mut self, p: &Project) {
         self.col = self.col.min(p.columns().len().saturating_sub(1));
         self.row = self.row.min(p.in_column(self.col).len().saturating_sub(1));

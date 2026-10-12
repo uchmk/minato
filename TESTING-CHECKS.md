@@ -22,10 +22,10 @@
 
 - [ ] **2.1** Press `1`, `2`, `3`, `4` → The matching tab lights with an underline and the empty view's name and text change
 - [ ] **2.2** Click each tab → Same as the digit
-- [ ] **2.3** Press `?` → A card lists the global keys and the current view's keys; `?` or `Esc` closes it; digits do nothing while it is open
+- [ ] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right; `F1`, `?` or `Esc` closes it; digits do nothing while it is open
 - [ ] **2.4** Press `,` or click the comma button → The settings screen opens; `Esc` closes it
 - [ ] **2.5** Press `Ctrl+Shift+P` → A toast says it is not connected yet (the palette comes later)
-- [ ] **2.6** Look at the keybar in each view → The keys of the view at the left, the first one lit, ending with `?`; no overflow at 720 px
+- [ ] **2.6** Look at the keybar in each view → The keys of the view at the left, the first one lit, ending with `F1`; no overflow at 720 px
 
 ## 3. Keybar status and clock
 
@@ -51,7 +51,7 @@
 
 - [ ] **6.1** Press `2` after the connection is up → Within a few seconds your open issues, PRs and discussions list in three lines each; the CI mark and the comment count stand at the right
 - [ ] **6.2** Press `j` / `k` → The selected row moves; the detail at the right follows within a second
-- [ ] **6.3** Shrink the window height until the rows do not fit → The first ten rows keep their full size as long as they fit; far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears
+- [ ] **6.3** Shrink the window height until the rows do not fit → The first eleven rows keep their full size as long as they fit; far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears
 - [ ] **6.4** Press `h`, then `j` and `Space` on a repository → The list narrows to it and the query line over the list changes; the chosen option is filled
 - [ ] **6.5** Pick "CI is red" → Only PRs with a red mark remain
 - [ ] **6.6** Press `l` twice and `j` → The detail scrolls by lines, with no scrollbar; moving the row resets it
@@ -243,3 +243,12 @@
 - [ ] **26.4** Press Ctrl+=, Ctrl++ (with Shift), Ctrl+- and Ctrl+0, also on the settings screen, and pick "Zoom in" in the palette → The window grows or shrinks a step, a message says the size (as kura's), Ctrl+0 brings it back to 100%; kura and tsumugi take the same size from common.toml
 - [ ] **26.5** Rest the pointer on an inbox card, a list row and a board card → A box with the first lines of the item's body in monospace shows, as tsumugi's peek of a session; none for an item without a body or while a card is dragged
 - [ ] **26.6** Press `a` on an item, then do other things that leave a message (`d`, Ctrl+=) → Each message shows at the top right under the title bar, over the palette and the settings too, and goes after about four seconds
+
+## 27. Larger details, the ends, F1 and the palette
+
+- [ ] **27.1** Look at the detail of an item in the inbox and the list, and of a run in Actions → The title, the meta line, the next box, the checks, the body and the comments read a step larger than in 0.23.0; nothing overlaps
+- [ ] **27.2** In an inbox with 30 cards and a short window, select one in the middle → Eleven cards stay whole: the selected one and five above and five below it; the others fold or hide
+- [ ] **27.3** Focus a long detail (`l` in the list, Actions' detail) and hold `j`, then press `k` once; turn the wheel down over it too → The scroll stops once the end shows; one `k` moves it up at once
+- [ ] **27.4** Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications → `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd
+- [ ] **27.5** Press `F1` in each view, with the palette open and in the notifications → The key list opens (the palette closes); `F1` again closes it; the keybar ends with `F1`; the list has "gg G"
+- [ ] **27.6** Open the palette → There are no lines to go to Inbox, List, Actions or Board

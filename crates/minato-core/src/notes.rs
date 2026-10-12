@@ -136,6 +136,12 @@ impl NotesState {
     pub fn clamp(&mut self, len: usize) {
         self.sel = self.sel.min(len.saturating_sub(1));
     }
+
+    /// `gg` and `G`: the first or the last.
+    pub fn jump(&mut self, end: bool, len: usize) {
+        self.sel = if end { usize::MAX } else { 0 };
+        self.clamp(len);
+    }
 }
 
 #[cfg(test)]
