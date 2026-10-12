@@ -35,6 +35,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         Mode::Help => help(ui, app, body),
         _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body),
         _ if app.view == View::List => crate::list_ui::draw(ui, app, body),
+        _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body),
         _ => empty_view(ui, app, body),
     }
     key_bar(ui, app, keybar);

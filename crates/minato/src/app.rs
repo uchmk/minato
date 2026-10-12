@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use std::collections::HashMap;
 
+use minato_core::actions::{self, ActState, Artifact, Job, Run};
 use minato_core::composer::Picker;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
@@ -148,9 +149,22 @@ pub struct App {
     pub compose: Option<Compose>,
     /// The item (node id) a merge waits to be confirmed for.
     pub confirm: Option<String>,
+    /// The workflow runs of the repositories, newest first.
+    pub runs: Vec<Run>,
+    /// The Actions view's selection and filters.
+    pub acts: ActState,
+    /// The jobs and artifacts of one run, once fetched.
+    pub run_detail: Option<RunDetail>,
     /// Calls the window has asked for; the net takes them.
     pub outbox: Vec<Outgoing>,
     pub quit: bool,
+}
+
+/// What GitHub said about one run.
+pub struct RunDetail {
+    pub id: u64,
+    pub jobs: Option<Vec<Job>>,
+    pub artifacts: Option<Vec<Artifact>>,
 }
 
 /// One call for the worker, and the words to say when it has gone through.
@@ -200,6 +214,9 @@ impl App {
             open_url: None,
             compose: None,
             confirm: None,
+            runs: Vec::new(),
+            acts: ActState::default(),
+            run_detail: None,
             outbox: Vec::new(),
             quit: false,
         };
@@ -246,6 +263,7 @@ impl App {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
                 None if self.view == View::Inbox => return self.inbox_key(c),
+                None if self.view == View::Actions => return self.actions_key(c),
                 None => return false,
             },
         }
@@ -281,7 +299,49 @@ impl App {
             self.merge(&id);
             return true;
         }
-        self.mode == Mode::Main && self.view == View::List && self.list_key(' ')
+        self.mode == Mode::Main && match self.view {
+            View::List => self.list_key(' '),
+            View::Actions => self.actions_key(' '),
+            _ => false,
+        }
+    }
+
+    /// The run under the cursor of the Actions view.
+    pub fn run(&self) -> Option<&Run> {
+        self.acts.selected(&self.runs)
+    }
+
+    /// A key in the Actions view: `R` runs the failed jobs again, `X` stops,
+    /// `D` starts the workflow by hand, `e` opens the failed job's log, `p`
+    /// the pull request, `o` the run; the rest moves the cursor.
+    fn actions_key(&mut self, c: char) -> bool {
+        let Some(run) = self.run().cloned() else { return self.acts.key(c, &self.runs) };
+        if self.acts.col == actions::Col::Filters && c != 'e' && c != 'o' && c != 'p' {
+            return self.acts.key(c, &self.runs);
+        }
+        match c {
+            'R' if run.status == actions::Status::Bad => self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran")),
+            'R' => self.say_key("run.not_failed"),
+            'X' if run.status.active() => self.queue(&format!("write:{}:cancel", run.id), actions::cancel(&run), Some("run.cancelled")),
+            'X' => self.say_key("run.not_active"),
+            'D' => self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched")),
+            'e' => {
+                let failed = self.run_detail.as_ref().filter(|d| d.id == run.id).and_then(|d| d.jobs.as_ref()).and_then(|j| j.iter().find(|j| j.status == actions::Status::Bad));
+                self.open_url = Some(failed.map_or_else(|| run.url.clone(), |j| j.url.clone()));
+            }
+            'p' => match actions::pr_url(&run) {
+                Some(u) => self.open_url = Some(u),
+                None => self.say_key("run.no_pr"),
+            },
+            'o' => self.open_url = Some(run.url.clone()),
+            _ => return self.acts.key(c, &self.runs),
+        }
+        true
+    }
+
+    fn say_key(&mut self, key: &'static str) {
+        let words = self.tr(key);
+        self.say(words);
     }
 
     /// Every card of the inbox now, before its filters.
@@ -447,6 +507,62 @@ mod tests {
 
     fn app() -> App {
         App::new(Prefs::empty())
+    }
+
+    fn run(id: u64, status: actions::Status, pr: Option<u64>) -> Run {
+        Run {
+            id,
+            repo: "uchmk/kura".into(),
+            workflow_id: 5,
+            workflow: "check".into(),
+            number: id,
+            title: "t".into(),
+            event: "push".into(),
+            branch: "main".into(),
+            sha: "abc".into(),
+            actor: "u".into(),
+            status,
+            started_at: "2026-10-12T09:00:00Z".into(),
+            updated_at: "2026-10-12T09:01:00Z".into(),
+            url: format!("https://github.com/uchmk/kura/actions/runs/{id}"),
+            pr,
+        }
+    }
+
+    #[test]
+    fn actions_keys_rerun_cancel_and_open() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Bad, Some(9)), run(2, actions::Status::Running, None)];
+        assert!(a.feed('R'));
+        assert_eq!(a.outbox.len(), 1);
+        assert_eq!(a.outbox[0].key, "write:1:rerun");
+        // Only a going run can be stopped.
+        assert!(a.feed('X'));
+        assert_eq!(a.outbox.len(), 1);
+        assert!(a.feed('p'));
+        assert_eq!(a.open_url.take().as_deref(), Some("https://github.com/uchmk/kura/pull/9"));
+        assert!(a.feed('j'));
+        assert!(a.feed('X'));
+        assert_eq!(a.outbox[1].key, "write:2:cancel");
+        assert!(a.feed('R'));
+        assert_eq!(a.outbox.len(), 2, "a running run is not re-run");
+        assert!(a.feed('D'));
+        assert_eq!(a.outbox[2].key, "write:2:dispatch");
+        assert!(a.feed('e'));
+        assert!(a.open_url.take().unwrap().ends_with("/runs/2"));
+        assert!(a.feed('p'));
+        assert!(a.open_url.is_none(), "no pull request to open");
+    }
+
+    #[test]
+    fn actions_filters_take_the_keys_in_their_column() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Bad, None)];
+        assert!(a.feed('h'));
+        assert!(!a.feed('R'), "the filter column ignores it");
+        assert!(a.outbox.is_empty(), "R does nothing in the filter column");
     }
 
     #[test]

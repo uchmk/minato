@@ -82,3 +82,16 @@
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [ ] **8.11** Press `a` on an issue → You are assigned; a toast says so
 - [ ] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change
+
+## 9. Actions
+
+- [ ] **9.1** Press `3` → The runs of your repositories appear, newest first, each with a mark (✓ ✗ ◐ ◷ ⊘), its workflow, event, branch, repository, number, actor and age
+- [ ] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
+- [ ] **9.3** Select a run → The detail shows the status, the title, the meta line, the next step, the jobs with durations, the last 10 results and artifacts
+- [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
+- [ ] **9.5** Select a running run and press `X` → A toast says it is stopping; the run turns to cancelled
+- [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` → A toast says the workflow started; a new run appears
+- [ ] **9.7** Press `e` on a failed run → The browser opens the failed job's page
+- [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
+- [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
+- [ ] **9.10** Fill the list with many runs → No scrollbar; far rows fold and "more" shows

@@ -10,7 +10,8 @@
 - [x] 4. List view (three columns) (v0.3.0; read only)
 - [x] 5. Writing box and fields (v0.5.0: comment, labels, assignees, merge, assign self)
 - [ ] 5b. Pickers for Status / Priority / Milestone / Reviewers (the `updateProjectV2ItemFieldValue` builder exists), and showing / ordering the fields in the settings screen
-- [ ] 5c. Actions view
+- [x] 5c. Actions view (v0.6.0: runs, filters, jobs, last 10, artifacts, R X D e p o; `D` sends no inputs; logs open in the browser)
+- [ ] 5d. Dispatch inputs from the workflow YAML, logs inside the app, a `needs:` graph of the jobs
 - [ ] 6. Board view, palette (Ctrl+Shift+P)
 - [ ] 7. Writes (comment, close, label, merge) with confirmation
 - [ ] 8. Notifications, release workflow

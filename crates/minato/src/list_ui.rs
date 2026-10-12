@@ -16,9 +16,9 @@ const MORE_H: f32 = 22.0;
 const HEAD_H: f32 = 30.0;
 pub const LINE: f32 = 18.0;
 
-const OK: Color32 = Color32::from_rgb(0x3F, 0xA4, 0x6A);
-const BAD: Color32 = Color32::from_rgb(0xD1, 0x49, 0x5B);
-const PENDING: Color32 = Color32::from_rgb(0xE0, 0xA0, 0x30);
+pub const OK: Color32 = Color32::from_rgb(0x3F, 0xA4, 0x6A);
+pub const BAD: Color32 = Color32::from_rgb(0xD1, 0x49, 0x5B);
+pub const PENDING: Color32 = Color32::from_rgb(0xE0, 0xA0, 0x30);
 const MERGED: Color32 = Color32::from_rgb(0x89, 0x57, 0xE5);
 
 fn ci_color(ci: Ci) -> Color32 {

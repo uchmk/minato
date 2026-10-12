@@ -5,6 +5,7 @@
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use minato_core::actions::{self, Run};
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
@@ -33,7 +34,20 @@ pub struct Net {
     asked: Option<String>,
     /// What to say when a write (by its job key) has gone through.
     pending: std::collections::HashMap<String, &'static str>,
+    /// The repositories whose runs are asked for (none until GitHub says).
+    repos: Vec<String>,
+    /// The last runs of each repository.
+    run_found: std::collections::HashMap<String, Vec<Run>>,
+    next_runs: Instant,
+    /// The run whose jobs and artifacts were last asked for.
+    asked_run: Option<u64>,
 }
+
+/// How often the runs are asked again, while the Actions view is open.
+const RUNS: Duration = Duration::from_secs(45);
+
+/// How many repositories' runs are shown.
+const REPOS: usize = 8;
 
 /// How often the lists are searched again.
 const SEARCH: Duration = Duration::from_secs(120);
@@ -47,7 +61,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default() }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -129,6 +143,42 @@ impl Net {
                                 _ => {}
                             }
                         }
+                        "a-repos" => match actions::parse_repos(&f.body) {
+                            Ok(v) => {
+                                self.repos = v.into_iter().take(REPOS).collect();
+                                self.next_runs = Instant::now();
+                            }
+                            Err(e) => app.say(e),
+                        },
+                        k if k.starts_with("a-runs:") => match actions::parse_runs(&f.body) {
+                            Ok(v) => {
+                                self.run_found.insert(k["a-runs:".len()..].to_string(), v);
+                                let mut all: Vec<Run> = self.run_found.values().flatten().cloned().collect();
+                                all.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+                                app.runs = all;
+                                app.acts.clamp(&app.runs);
+                            }
+                            Err(e) => app.say(e),
+                        },
+                        k if k.starts_with("a-jobs:") || k.starts_with("a-arts:") => {
+                            let jobs = k.starts_with("a-jobs:");
+                            let id: u64 = k[7..].parse().unwrap_or(0);
+                            let d = app.run_detail.get_or_insert(crate::app::RunDetail { id, jobs: None, artifacts: None });
+                            if d.id != id {
+                                *d = crate::app::RunDetail { id, jobs: None, artifacts: None };
+                            }
+                            if jobs {
+                                match actions::parse_jobs(&f.body) {
+                                    Ok(v) => d.jobs = Some(v),
+                                    Err(e) => app.say(e),
+                                }
+                            } else {
+                                match actions::parse_artifacts(&f.body) {
+                                    Ok(v) => d.artifacts = Some(v),
+                                    Err(e) => app.say(e),
+                                }
+                            }
+                        }
                         k if k.starts_with("write:") => {
                             if f.body.contains("\"errors\"") {
                                 app.say(f.body.chars().take(160).collect::<String>());
@@ -138,7 +188,9 @@ impl Net {
                             }
                             // Look again at once, and re-ask the detail.
                             self.next_search = Instant::now();
+                            self.next_runs = Instant::now();
                             self.asked = None;
+                            self.asked_run = None;
                         }
                         _ => {}
                     }
@@ -172,6 +224,29 @@ impl Net {
                 self.next_search = now + SEARCH;
             }
         }
+        if app.viewer.is_some() && app.view == crate::app::View::Actions {
+            if self.repos.is_empty() {
+                if now >= self.next_runs {
+                    worker.send(get("a-repos", actions::repos_path()));
+                    self.next_runs = now + RUNS;
+                }
+            } else if now >= self.next_runs {
+                for r in &self.repos {
+                    worker.send(Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) });
+                }
+                self.next_runs = now + RUNS;
+                self.asked_run = None;
+            }
+            let run = app.run().cloned();
+            let want = run.as_ref().map(|r| r.id);
+            if want != self.asked_run {
+                if let Some(r) = &run {
+                    worker.send(Job { key: format!("a-jobs:{}", r.id), call: Call::Get(actions::jobs_path(r)) });
+                    worker.send(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
+                }
+                self.asked_run = want;
+            }
+        }
         let want = app.selected().map(|i| i.id.clone());
         if want != self.asked {
             if let Some(id) = &want {
@@ -180,7 +255,7 @@ impl Net {
             }
             self.asked = want;
         }
-        let wake = self.next_poll.min(self.next_search);
+        let wake = self.next_poll.min(self.next_search).min(if app.view == crate::app::View::Actions { self.next_runs } else { self.next_search });
         ctx.request_repaint_after(wake.saturating_duration_since(now));
     }
 }

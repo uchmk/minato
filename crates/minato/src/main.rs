@@ -5,6 +5,7 @@
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod actions_ui;
 mod app;
 mod fonts;
 mod i18n;
