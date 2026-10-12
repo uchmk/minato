@@ -48,6 +48,14 @@ impl View {
         View::ALL.into_iter().find(|v| v.digit() == c)
     }
 
+    /// The next view in 1 2 3 4 order (the one before with `back`), round
+    /// from the last to the first.
+    pub fn next(self, back: bool) -> View {
+        let at = View::ALL.iter().position(|&v| v == self).unwrap_or(0);
+        let n = View::ALL.len();
+        View::ALL[if back { (at + n - 1) % n } else { (at + 1) % n }]
+    }
+
     /// The word-table key of its name.
     pub fn label(self) -> &'static str {
         match self {
@@ -87,6 +95,7 @@ impl View {
                 ("a", "key.assign"),
                 ("o", "key.browser"),
                 ("f F t", "key.filter"),
+                ("/", "key.find"),
             ],
             View::List => &[
                 ("j k", "key.next"),
@@ -100,6 +109,7 @@ impl View {
                 ("C", "key.closed"),
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
+                ("/", "key.find"),
             ],
             View::Actions => &[
                 ("j k", "key.next"),
@@ -116,8 +126,9 @@ impl View {
 }
 
 /// The keys that work in every view.
-pub const GLOBAL_KEYS: [(&str, &str); 8] = [
+pub const GLOBAL_KEYS: [(&str, &str); 9] = [
     ("1 2 3 4", "key.views"),
+    ("Tab S-Tab", "key.cycle"),
     ("gg G", "key.ends"),
     ("Ctrl+,", "key.settings"),
     ("Ctrl+= - 0", "key.scale"),
@@ -333,6 +344,12 @@ pub struct App {
     pub pending_g: bool,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
+    /// The search box's text (`/`), which filters the inbox and the list.
+    pub find_text: String,
+    /// The search box has the keys.
+    pub find_open: bool,
+    /// The box opened in this frame: its `/` is still in the input.
+    pub find_fresh: bool,
     /// The columns of the inbox, the list and the Actions view, as the mouse left them.
     pub inbox_split: Node<Pane>,
     pub list_split: Node<Pane>,
@@ -422,6 +439,9 @@ impl App {
             wheel_acc: 0.0,
             detail_max: None,
             pending_g: false,
+            find_text: String::new(),
+            find_open: false,
+            find_fresh: false,
             viewer: None,
             items: Vec::new(),
             inbox: InboxState::default(),
@@ -608,6 +628,18 @@ impl App {
         used
     }
 
+    /// Tab and Shift+Tab: the next or the previous view, as yagura's.
+    /// Only on the main screen with nothing over it.
+    pub fn cycle_view(&mut self, back: bool) -> bool {
+        let free = self.compose.is_none() && self.confirm.is_none() && self.palette.is_none() && self.overlay.is_none();
+        if !free || self.mode != Mode::Main {
+            return false;
+        }
+        self.pending_g = false;
+        self.view = self.view.next(back);
+        true
+    }
+
     fn feed_key(&mut self, c: char) -> bool {
         if self.compose.is_some() || self.confirm.is_some() || self.palette.is_some() || self.overlay.is_some() {
             return true;
@@ -622,6 +654,7 @@ impl App {
             (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
             (Mode::Main, 'M') if matches!(self.view, View::Inbox | View::List) => self.mark_answer(),
             (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
+            (Mode::Main, '/') if matches!(self.view, View::Inbox | View::List) => self.find_start(),
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
@@ -863,10 +896,63 @@ impl App {
         (at, card)
     }
 
+    /// `/`: the search box takes the keys, with the words it had.
+    fn find_start(&mut self) {
+        self.find_open = true;
+        self.find_fresh = true;
+    }
+
+    /// The search's words as typed: the inbox and the list show only what
+    /// has them all, from their first row.
+    pub fn set_find(&mut self, text: &str) {
+        self.find_text = text.to_string();
+        let q = minato_core::find::Query::new(text);
+        if q != self.inbox.find {
+            self.inbox.find = q.clone();
+            self.list.find = q;
+            (self.inbox.sel, self.inbox.scroll) = (0, 0.0);
+            (self.list.sel, self.list.scroll) = (0, 0.0);
+        }
+    }
+
+    /// Esc: the search box closed and its words gone.
+    pub fn find_clear(&mut self) {
+        self.find_open = false;
+        self.set_find("");
+    }
+
+    /// Whether the search filters the view on screen.
+    pub fn find_on(&self) -> bool {
+        self.mode == Mode::Main && matches!(self.view, View::Inbox | View::List) && (self.find_open || !self.inbox.find.is_empty())
+    }
+
+    /// The search's words for what the view shows.
+    pub fn lit(&self) -> &minato_core::find::Query {
+        &self.inbox.find
+    }
+
+    /// How many cards or rows the search leaves in the view.
+    pub fn find_count(&self) -> usize {
+        if self.view == View::Inbox {
+            return self.inbox.shown(&self.inbox_all(), &self.items).len();
+        }
+        self.list.shown(&self.items, self.viewer.as_deref().unwrap_or("")).len()
+    }
+
+    /// The box gives the keys back once anything is over it or the view
+    /// has no search (its words stay).
+    pub fn find_check(&mut self) {
+        let free = self.compose.is_none() && self.confirm.is_none() && self.palette.is_none() && self.overlay.is_none();
+        if !(free && self.mode == Mode::Main && matches!(self.view, View::Inbox | View::List)) {
+            self.find_open = false;
+        }
+    }
+
     /// Open the item whose page is `url`: in the inbox if it is a card
     /// there, else in the list. False if minato does not have it.
     fn open_item(&mut self, url: &str) -> bool {
         let (Some(at), card) = self.note_place(url) else { return false };
+        self.find_clear();
         if let Some(card) = card {
             self.inbox = InboxState { undo: std::mem::take(&mut self.inbox.undo), ..InboxState::default() };
             let all = self.inbox_all();
@@ -1042,6 +1128,7 @@ impl App {
     /// Open the list view on one item.
     fn show_in_list(&mut self, id: &str) {
         let me = self.viewer.clone().unwrap_or_default();
+        self.find_clear();
         self.list.filter = Default::default();
         self.list.col = minato_core::list::Col::Items;
         if let Some(k) = self.list.shown(&self.items, &me).iter().position(|i| i.id == id) {
@@ -1432,6 +1519,10 @@ impl App {
         if self.overlay.take().is_some() {
             return true;
         }
+        if self.find_on() {
+            self.find_clear();
+            return true;
+        }
         let was = self.mode;
         self.mode = Mode::Main;
         was != Mode::Main
@@ -1801,6 +1892,22 @@ mod tests {
     }
 
     #[test]
+    fn tab_cycles_the_views_round() {
+        let mut a = app();
+        for v in [View::List, View::Actions, View::Board, View::Inbox] {
+            assert!(a.cycle_view(false));
+            assert_eq!(a.view, v);
+        }
+        assert!(a.cycle_view(true));
+        assert_eq!(a.view, View::Board);
+        assert!(a.cycle_view(true));
+        assert_eq!(a.view, View::Actions);
+        a.mode = Mode::Notes;
+        assert!(!a.cycle_view(false));
+        assert_eq!(a.view, View::Actions);
+    }
+
+    #[test]
     fn comma_and_question_mark_open_and_escape_closes() {
         let mut a = app();
         assert!(a.feed(','));
@@ -1882,6 +1989,40 @@ mod tests {
         a.viewer = Some("uchmk".into());
         a.items = vec![pr("P1")];
         a
+    }
+
+    #[test]
+    fn slash_searches_the_inbox_and_the_list_and_esc_clears() {
+        let mut a = with_pr();
+        let mut other = pr("P2");
+        other.title = "Font size in the Preview".into();
+        other.number = 8;
+        a.items.push(other);
+        a.list.sel = 1;
+        assert!(a.feed('/'));
+        assert!(a.find_open && a.find_fresh);
+        a.set_find("font PREV");
+        assert_eq!(a.find_count(), 0);
+        a.set_find("font prev");
+        assert_eq!(a.find_count(), 1);
+        assert_eq!((a.list.sel, a.selected().map(|i| i.number)), (0, Some(8)));
+        // The inbox is searched with the same words.
+        assert_eq!(a.inbox.find, a.list.find);
+        // Enter keeps the words; Esc then clears them.
+        a.find_open = false;
+        assert!(a.find_on());
+        assert!(a.escape());
+        assert!(!a.find_on() && a.find_text.is_empty());
+        assert_eq!(a.find_count(), 2);
+        // Not in the views without a search, nor under the palette.
+        a.view = View::Actions;
+        a.feed('/');
+        assert!(!a.find_open);
+        a.view = View::List;
+        a.feed('/');
+        a.palette = Some(ito_palette::View::new());
+        a.find_check();
+        assert!(!a.find_open);
     }
 
     #[test]

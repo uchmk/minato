@@ -7,6 +7,7 @@ pub mod cache;
 pub mod notes;
 pub mod prefs;
 pub mod composer;
+pub mod find;
 pub mod fold;
 pub mod github;
 pub mod inbox;

@@ -5,7 +5,7 @@
 //! `minato_core::fold` when they do not fit (no scrollbar).
 
 use egui::{Align2, FontId, Rect, Sense, Stroke, Ui, pos2, vec2};
-use minato_core::fold::{HEAD, Show, fold_head};
+use minato_core::fold::{Show, fold};
 use minato_core::list::{age, epoch};
 use minato_core::notes::{self, Note};
 
@@ -17,7 +17,6 @@ use crate::ui::Out;
 const WIDTH: f32 = 420.0;
 const MARGIN: f32 = 10.0;
 const ROW_FULL: f32 = 66.0;
-const ROW_FOLDED: f32 = 34.0;
 const MORE_H: f32 = 22.0;
 /// What the window keeps under the list: the keybar and a little air.
 const BELOW: f32 = 28.0 + 12.0;
@@ -52,23 +51,21 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
                 return;
             }
             let sel = app.ns.sel.min(app.notes.len() - 1);
-            let f = fold_head(&vec![ROW_FULL; app.notes.len()], ROW_FOLDED, MORE_H, room.max(ROW_FULL), sel, HEAD);
+            let f = fold(&vec![ROW_FULL; app.notes.len()], MORE_H, room.max(ROW_FULL), sel);
             let now = now_epoch();
             if f.above > 0 {
                 more(ui, app, f.above, "list.above");
             }
             let last = app.notes.len() - 1 - f.below;
             for (k, n) in app.notes.iter().enumerate() {
-                let full = match f.rows[k] {
-                    Show::Hidden => continue,
-                    Show::Full => true,
-                    Show::Folded => false,
-                };
-                let (rect, resp) = ui.allocate_exact_size(vec2(WIDTH, if full { ROW_FULL } else { ROW_FOLDED }), Sense::click());
+                if f.rows[k] == Show::Hidden {
+                    continue;
+                }
+                let (rect, resp) = ui.allocate_exact_size(vec2(WIDTH, ROW_FULL), Sense::click());
                 if resp.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 }
-                row(ui, app, n, rect, full, k == sel || resp.hovered(), k != last, now);
+                row(ui, app, n, rect, k == sel || resp.hovered(), k != last, now);
                 if resp.clicked() {
                     action = Some(NoteClick::Open(k));
                 }
@@ -87,9 +84,8 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
 }
 
 /// One notification: the unread dot; repository, number, badge and age;
-/// what happened; the title (left out when folded).
-#[allow(clippy::too_many_arguments)]
-fn row(ui: &Ui, app: &App, n: &Note, r: Rect, full: bool, cur: bool, line: bool, now: i64) {
+/// what happened; the title.
+fn row(ui: &Ui, app: &App, n: &Note, r: Rect, cur: bool, line: bool, now: i64) {
     let c = ito_theme::colors();
     let p = ui.painter_at(r);
     if cur {
@@ -113,7 +109,7 @@ fn row(ui: &Ui, app: &App, n: &Note, r: Rect, full: bool, cur: bool, line: bool,
     }
     let inbox = app.tr("notes.inbox");
     if card.is_some() && lx + style::badge_w(&p, inbox) < t.left() - 6.0 {
-        lx = style::badge(&p, lx, y1, inbox) + 7.0;
+        style::badge(&p, lx, y1, inbox);
     }
     // What happened: the inbox's reason when it is a card there, else why
     // GitHub sent it.
@@ -124,13 +120,6 @@ fn row(ui: &Ui, app: &App, n: &Note, r: Rect, full: bool, cur: bool, line: bool,
             (app.tr(key), style::tone(tone))
         }
     };
-    if !full {
-        // Folded, the title still says which thread it is.
-        let d = p.text(pos2(lx, y1), Align2::LEFT_CENTER, "●", FontId::proportional(10.0), tone);
-        let g = style::truncated(&p, n.title.clone(), FontId::proportional(12.5), c.fg, t.left() - 8.0 - d.right() - 6.0);
-        p.galley(pos2(d.right() + 6.0, y1 - g.size().y / 2.0), g, c.fg);
-        return;
-    }
     let y2 = y1 + 20.0;
     let d = p.text(pos2(x, y2), Align2::LEFT_CENTER, "●", FontId::proportional(10.0), tone);
     let g = style::truncated(&p, what.to_owned(), FontId::proportional(13.0), c.fg, right - d.right() - 6.0);

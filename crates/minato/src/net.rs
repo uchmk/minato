@@ -3,6 +3,10 @@
 //! Each frame `pump` takes what has arrived; it never waits. The answers
 //! are kept on disk (`minato_core::cache`), so a start shows the last ones
 //! at once and a detail whose item has not moved is not asked again.
+//!
+//! Two workers, each one request at a time: `worker` for the polls (the
+//! searches, the board, the runs), `quick` for what a key asks for (a
+//! detail, a run's jobs, a log, a write), so it never waits behind a poll.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -35,6 +39,7 @@ type Found = Option<(Token, Source)>;
 pub struct Net {
     token_rx: Receiver<Found>,
     worker: Option<Worker>,
+    quick: Option<Worker>,
     next_poll: Instant,
     rate: Option<Rate>,
     next_search: Instant,
@@ -59,9 +64,13 @@ pub struct Net {
     run_found: std::collections::HashMap<String, Vec<Run>>,
     next_runs: Instant,
     next_board: Instant,
+    /// The number of the Project the board shows, once `board-pick` has said.
+    board_no: Option<u64>,
     next_notes: Instant,
     /// The run whose jobs and artifacts were last asked for.
     asked_run: Option<u64>,
+    /// After a run's jobs failed to come, when to ask again.
+    run_retry: Instant,
     /// The kept answers, until the thread has read them; where to write.
     cache_rx: Option<Receiver<Vec<cache::Entry>>>,
     cache_tx: Option<mpsc::Sender<cache::Entry>>,
@@ -85,6 +94,9 @@ const REPOS: usize = 8;
 
 /// How often the lists are searched again.
 const SEARCH: Duration = Duration::from_secs(120);
+
+/// How long to wait before asking again for a run's jobs that failed.
+const RETRY: Duration = Duration::from_secs(10);
 
 impl Net {
     /// Merge what the searches found into `app.items`: mentions marked, stubs
@@ -123,7 +135,8 @@ impl Net {
             }
             None => (None, None),
         };
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default() }
+        let now = Instant::now();
+        Net { token_rx, worker: None, quick: None, next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: now, next_board: now, board_no: None, next_notes: now, asked_run: None, run_retry: now, cache_rx, cache_tx, kept: Default::default(), live: Default::default() }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -243,12 +256,27 @@ impl Net {
                 }
                 self.next_notes = Instant::now();
             }
+            "board-pick" => match board::pick(body) {
+                Ok(n) => {
+                    if live && self.board_no != Some(n) {
+                        self.next_board = Instant::now();
+                    }
+                    self.board_no = Some(n);
+                }
+                Err(e) => app.say(e),
+            },
             "board" => match board::parse(body) {
                 Ok(p) => {
                     app.bs.clamp(&p);
                     app.board = Some(p);
                 }
-                Err(e) => app.say(e),
+                Err(e) => {
+                    // The Project may be gone or renumbered: pick again.
+                    if live {
+                        self.board_no = None;
+                    }
+                    app.say(e);
+                }
             },
             k if k.starts_with("board:") => {
                 if body.contains("\"errors\"") {
@@ -346,7 +374,8 @@ impl Net {
         if self.worker.is_none() {
             match self.token_rx.try_recv() {
                 Ok(Some((token, _))) => {
-                    let wake = ctx.clone();
+                    let (wake, wake2) = (ctx.clone(), ctx.clone());
+                    self.quick = Some(Worker::spawn(Client::new(UreqTransport::new(), token.clone()), move || wake2.request_repaint()));
                     let worker = Worker::spawn(Client::new(UreqTransport::new(), token), move || wake.request_repaint());
                     worker.send(get("me", "/user"));
                     worker.send(get("rate", "/rate_limit"));
@@ -364,8 +393,8 @@ impl Net {
             }
         }
         self.load_cache(app);
-        let Some(worker) = &self.worker else { return };
-        let replies: Vec<_> = std::iter::from_fn(|| worker.try_recv()).collect();
+        let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
+        let replies: Vec<_> = std::iter::from_fn(|| worker.try_recv().or_else(|| quick.try_recv())).collect();
         for reply in replies {
             match reply.result {
                 Ok(f) => {
@@ -395,16 +424,22 @@ impl Net {
                     if reply.key.starts_with("note:") {
                         self.next_notes = Instant::now();
                     }
+                    // A run's jobs that did not come are asked again soon,
+                    // not left "loading" until the next refresh.
+                    if reply.key.starts_with("a-jobs:") {
+                        self.asked_run = None;
+                        self.run_retry = Instant::now() + RETRY;
+                    }
                     app.say(e);
                 }
             }
         }
-        let Some(worker) = &self.worker else { return };
+        let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
         for o in app.outbox.drain(..) {
             if let Some(done) = o.done {
                 self.pending.insert(o.key.clone(), done);
             }
-            worker.send(Job { key: o.key, call: o.call });
+            quick.send(Job { key: o.key, call: o.call });
         }
         app.api = self.rate.map(|r| (r.remaining, r.limit));
         let now = Instant::now();
@@ -449,7 +484,10 @@ impl Net {
             self.next_notes = now + NOTES;
         }
         if app.viewer.is_some() && app.view == crate::app::View::Board && now >= self.next_board {
-            worker.send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: "{}".into() } });
+            match self.board_no {
+                None => worker.send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query().into(), variables: "{}".into() } }),
+                Some(n) => worker.send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: format!("{{\"n\":{n}}}") } }),
+            }
             self.next_board = now + BOARD;
         }
         if app.viewer.is_some() && app.view == crate::app::View::Actions {
@@ -467,12 +505,12 @@ impl Net {
             }
             let run = app.run().cloned();
             let want = run.as_ref().map(|r| r.id);
-            if want != self.asked_run {
+            if want != self.asked_run && now >= self.run_retry {
                 if let Some(r) = &run {
-                    worker.send(Job { key: format!("a-jobs:{}", r.id), call: Call::Get(actions::jobs_path(r)) });
-                    worker.send(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
+                    quick.send(Job { key: format!("a-jobs:{}", r.id), call: Call::Get(actions::jobs_path(r)) });
+                    quick.send(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
                     if let Some(path) = workflow::contents_path(r) {
-                        worker.send(Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
+                        quick.send(Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
                     }
                 }
                 self.asked_run = want;
@@ -493,7 +531,7 @@ impl Net {
                 }
                 if !fresh {
                     let vars = format!("{{\"id\":{}}}", json_str(id));
-                    worker.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
+                    quick.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
                 }
             }
             self.asked = want;
@@ -504,6 +542,7 @@ impl Net {
             crate::app::View::Board => self.next_board,
             _ => self.next_search,
         });
+        let wake = if self.run_retry > now { wake.min(self.run_retry) } else { wake };
         ctx.request_repaint_after(wake.saturating_duration_since(now));
     }
 }
@@ -514,7 +553,7 @@ impl Net {
 fn cached(key: &str, narrowed: bool) -> bool {
     match key {
         "items" => !narrowed,
-        "me" | "discussions" | "mentions" | "mainci" | "notes" | "board" | "a-repos" => true,
+        "me" | "discussions" | "mentions" | "mainci" | "notes" | "board-pick" | "board" | "a-repos" => true,
         k => k.starts_with("a-runs:"),
     }
 }

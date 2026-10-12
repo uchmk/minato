@@ -5,7 +5,7 @@
 //! scrolling. A click does what the keys that get there do.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{HEAD, Show, fold_head};
+use minato_core::fold::{Show, fold};
 use minato_core::inbox::{Card, Group, InboxState, Status};
 use minato_core::list::{Label, age, epoch};
 
@@ -13,9 +13,8 @@ use crate::app::{App, Click, Pane, Wheel, now_epoch};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
-/// A card and the 6 px under it; folded to its first line.
+/// A card and the 6 px under it.
 const CARD_FULL: f32 = 102.0;
-const CARD_MINI: f32 = 34.0;
 const CARD_GAP: f32 = 6.0;
 const MORE_H: f32 = 22.0;
 /// A section's header, and the 「なし」 of an empty one.
@@ -113,7 +112,7 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
     let empties = groups.iter().filter(|g| !shown.iter().any(|card| card.group == **g)).count();
     let room = body.height() - groups.len() as f32 * SEC_H - empties as f32 * EMPTY_H;
     let sel = app.inbox.sel.min(shown.len().saturating_sub(1));
-    let f = fold_head(&vec![CARD_FULL; shown.len()], CARD_MINI, MORE_H, room, sel, HEAD);
+    let f = fold(&vec![CARD_FULL; shown.len()], MORE_H, room, sel);
     let now = now_epoch();
     let mut y = body.top();
     if f.above > 0 {
@@ -140,17 +139,15 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
             continue;
         }
         for (k, card) in shown.iter().enumerate().filter(|(_, card)| card.group == g) {
-            let full = match f.rows[k] {
-                Show::Hidden => continue,
-                Show::Full => true,
-                Show::Folded => false,
-            };
-            let rect = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), (if full { CARD_FULL } else { CARD_MINI }) - CARD_GAP));
+            if f.rows[k] == Show::Hidden {
+                continue;
+            }
+            let rect = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), CARD_FULL - CARD_GAP));
             let resp = ui::hit(ui, rect, ("inbox-card", k));
             if resp.clicked() {
                 out.click = Some(Click::InboxCard(k));
             }
-            draw_card(p, app, card, rect, full, k == sel, resp.hovered(), now);
+            draw_card(p, app, card, rect, k == sel, resp.hovered(), now);
             ui::peek(&resp, &app.items[card.at].peek);
             y = rect.bottom() + CARD_GAP;
         }
@@ -181,9 +178,8 @@ pub fn card_why(app: &App, card: &Card) -> &'static str {
 }
 
 /// One card: kind, title and age; where and who; why in its tone; the
-/// repository and the labels. Folded, the first line alone.
-#[allow(clippy::too_many_arguments)]
-fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, full: bool, on: bool, hover: bool, now: i64) {
+/// repository and the labels.
+fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool, now: i64) {
     let c = ito_theme::colors();
     let item = &app.items[card.at];
     let tone = card_tone(card);
@@ -197,19 +193,16 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, full: bool, on: bool,
     p.rect_filled(Rect::from_min_size(r.min, vec2(3.0, r.height())), CornerRadius { nw: 8, sw: 8, ne: 0, se: 0 }, tone);
     let x = r.left() + 13.0;
     let right = r.right() - 10.0;
-    let y1 = r.top() + if full { 7.0 } else { 4.0 } + 10.0;
+    let y1 = r.top() + 7.0 + 10.0;
     let kx = style::kind_chip(&p, x, y1, item.kind) + 7.0;
     let when = epoch(&item.updated_at).map(|t| age(&item.updated_at, now.max(t))).unwrap_or_default();
     let t = p.text(pos2(right, y1), Align2::RIGHT_CENTER, when, FontId::monospace(11.5), c.dim);
-    let title = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), c.fg, t.left() - 7.0 - kx);
+    // The marked one first, so its ground is under both.
+    let title = style::truncated_lit(&p, item.title.clone(), FontId::proportional(13.0), c.fg, t.left() - 7.0 - kx, app.lit());
     let ty = y1 - title.size().y / 2.0;
-    if full {
-        p.galley(pos2(kx + 0.45, ty), title.clone(), c.fg);
-    }
     p.galley(pos2(kx, ty), title, c.fg);
-    if !full {
-        return;
-    }
+    let title = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), c.fg, t.left() - 7.0 - kx);
+    p.galley(pos2(kx + 0.45, ty), title, c.fg);
     let y2 = y1 + 20.0;
     let place = if minato_core::mainci::is_stub(item) { item.repo.clone() } else { format!("{} #{} · {}", item.repo, item.number, item.author) };
     let g = style::truncated(&p, place, FontId::monospace(12.0), c.dim, right - x);

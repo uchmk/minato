@@ -5,7 +5,7 @@
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
 use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
-use minato_core::fold::{HEAD, Show, fold_head};
+use minato_core::fold::{Show, fold};
 use minato_core::list::{age, epoch};
 
 use crate::app::{App, Click, Pane, Wheel, now_epoch};
@@ -13,9 +13,8 @@ use crate::list_ui::LINE;
 use crate::style::{self, ACCENT, Next};
 use crate::ui::{self, Out};
 
-/// A run, and one folded to its title.
+/// A run.
 const ROW_FULL: f32 = 76.0;
-const ROW_FOLDED: f32 = 28.0;
 const MORE_H: f32 = 22.0;
 /// The bar with the query.
 const HEAD_H: f32 = 40.0;
@@ -163,7 +162,7 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         return;
     }
     let sel = app.acts.sel.min(shown.len() - 1);
-    let f = fold_head(&vec![ROW_FULL; shown.len()], ROW_FOLDED, MORE_H, body.height(), sel, HEAD);
+    let f = fold(&vec![ROW_FULL; shown.len()], MORE_H, body.height(), sel);
     let now = now_epoch();
     let mut y = body.top();
     if f.above > 0 {
@@ -171,18 +170,16 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         y += MORE_H;
     }
     for (k, run) in shown.iter().enumerate() {
-        let h = match f.rows[k] {
-            Show::Hidden => continue,
-            Show::Full => ROW_FULL,
-            Show::Folded => ROW_FOLDED,
-        };
-        let row = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), h));
+        if f.rows[k] == Show::Hidden {
+            continue;
+        }
+        let row = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), ROW_FULL));
         let resp = ui::hit(ui, row, ("acts-run", k));
         if resp.clicked() {
             out.click = Some(Click::ActRun(k));
         }
-        run_row(&p, run, row, f.rows[k] == Show::Full, k == sel, resp.hovered(), now);
-        y += h;
+        run_row(&p, run, row, k == sel, resp.hovered(), now);
+        y += ROW_FULL;
     }
     if f.below > 0 {
         more(&p, app, body, y, f.below, "list.below");
@@ -217,7 +214,7 @@ fn ago(iso: &str, now: i64) -> String {
 
 /// One run: its state's mark; the title; the workflow, the event and the
 /// branch; where, who and when; the duration at the right.
-fn run_row(p: &Painter, run: &Run, row: Rect, full: bool, on: bool, hover: bool, now: i64) {
+fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64) {
     let c = ito_theme::colors();
     if on {
         p.rect_filled(row, 0.0, style::sel());
@@ -227,7 +224,7 @@ fn run_row(p: &Painter, run: &Run, row: Rect, full: bool, on: bool, hover: bool,
     }
     p.line_segment([row.left_bottom(), row.right_bottom()], Stroke::new(1.0, c.border));
     let p = p.with_clip_rect(row);
-    let y1 = row.top() + if full { 8.0 } else { 5.0 } + 9.0;
+    let y1 = row.top() + 8.0 + 9.0;
     p.text(pos2(row.left() + 14.0 + 8.0, y1), Align2::CENTER_CENTER, run.status.mark(), FontId::proportional(13.0), tone(run.status));
     let x = row.left() + 14.0 + 16.0 + 10.0;
     let right = row.right() - 14.0;
@@ -238,9 +235,6 @@ fn run_row(p: &Painter, run: &Run, row: Rect, full: bool, on: bool, hover: bool,
     let ty = y1 - g.size().y / 2.0;
     p.galley(pos2(x + 0.45, ty), g.clone(), c.fg);
     p.galley(pos2(x, ty), g, c.fg);
-    if !full {
-        return;
-    }
     let y2 = y1 + 9.0 + 4.0 + 9.0;
     let wx = style::chip(&p, x, y2, &run.workflow, FontId::monospace(11.0), 6.0, 17.0, 4, c.border, style::head(), c.fg) + 6.0;
     let g = style::truncated(&p, format!("{}  · {}", run.event, run.branch), FontId::monospace(11.0), c.dim, rx - wx);

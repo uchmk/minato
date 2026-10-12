@@ -244,11 +244,13 @@ pub struct ListState {
     pub scroll: f32,
     /// The owner's saved searches (one query each).
     pub searches: Vec<String>,
+    /// The words of the search box (`/`), over the filter.
+    pub find: crate::find::Query,
 }
 
 impl Default for ListState {
     fn default() -> Self {
-        ListState { col: Col::Items, filter: Filter::default(), cursor: 0, sel: 0, scroll: 0.0, searches: Vec::new() }
+        ListState { col: Col::Items, filter: Filter::default(), cursor: 0, sel: 0, scroll: 0.0, searches: Vec::new(), find: Default::default() }
     }
 }
 
@@ -258,9 +260,9 @@ impl ListState {
         self.filter.search.and_then(|i| self.searches.get(i)).map(String::as_str)
     }
 
-    /// The items that pass the filter, in the order given.
+    /// The items that pass the filter and the search, in the order given.
     pub fn shown<'a>(&self, items: &'a [Item], me: &str) -> Vec<&'a Item> {
-        items.iter().filter(|i| self.filter.matches(i, me)).collect()
+        items.iter().filter(|i| self.filter.matches(i, me) && self.find.takes(i)).collect()
     }
 
     /// The selected item's node id, if any.

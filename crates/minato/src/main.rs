@@ -66,6 +66,18 @@ impl Minato {
                 }
                 continue;
             }
+            // The search box takes the text; Enter, Esc and the arrows are
+            // read here.
+            if self.app.find_open {
+                match e {
+                    egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => self.app.find_clear(),
+                    egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => self.app.find_open = false,
+                    egui::Event::Key { key: egui::Key::ArrowDown, pressed: true, .. } => _ = self.app.feed('j'),
+                    egui::Event::Key { key: egui::Key::ArrowUp, pressed: true, .. } => _ = self.app.feed('k'),
+                    _ => {}
+                }
+                continue;
+            }
             match e {
                 egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => {
                     self.app.escape();
@@ -73,14 +85,24 @@ impl Minato {
                 egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
                     self.app.enter();
                 }
+                egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. } if !modifiers.ctrl && !modifiers.alt && !modifiers.command => {
+                    self.app.cycle_view(modifiers.shift);
+                }
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
                     if let Some(c) = arrow_char(key, &modifiers) {
                         self.app.feed(c);
                     }
                 }
                 egui::Event::Text(t) => {
-                    for c in t.chars() {
+                    let mut chars = t.chars();
+                    while let Some(c) = chars.next() {
                         self.app.feed(c);
+                        // Typed fast after `/`: the rest is the search's.
+                        if self.app.find_open {
+                            let text = format!("{}{}", self.app.find_text, chars.as_str());
+                            self.app.set_find(&text);
+                            break;
+                        }
                     }
                 }
                 _ => {}
@@ -127,6 +149,7 @@ impl eframe::App for Minato {
             settings::show(ui, &mut self.app);
         } else {
             let was = self.app.mode;
+            self.app.find_check();
             let out = ui::frame(ui, &self.app);
             self.app.detail_max = out.detail_max;
             self.app.clamp_scroll();
@@ -168,6 +191,7 @@ impl eframe::App for Minato {
                 self.app.palette = Some(ito_palette::View::new());
             }
             compose_ui::show(ui, &mut self.app, out.compose_at);
+            ui::find_box(ui, &mut self.app, out.find_at);
             overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }

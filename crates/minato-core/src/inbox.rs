@@ -276,11 +276,13 @@ pub struct InboxState {
     pub undo: Vec<(String, Option<Mark>)>,
     /// Lines the detail is scrolled by.
     pub scroll: f32,
+    /// The words of the search box (`/`).
+    pub find: crate::find::Query,
 }
 
 impl Default for InboxState {
     fn default() -> Self {
-        InboxState { sel: 0, status: Status::All, repo: None, tag: None, undo: Vec::new(), scroll: 0.0 }
+        InboxState { sel: 0, status: Status::All, repo: None, tag: None, undo: Vec::new(), scroll: 0.0, find: Default::default() }
     }
 }
 
@@ -293,7 +295,8 @@ fn cycle(all: &[String], cur: &Option<String>) -> Option<String> {
 }
 
 impl InboxState {
-    /// The cards that pass the status, repository and tag filters.
+    /// The cards that pass the status, repository and tag filters and the
+    /// search.
     pub fn shown(&self, all: &[Card], items: &[Item]) -> Vec<Card> {
         all.iter()
             .copied()
@@ -302,6 +305,7 @@ impl InboxState {
                 self.status.takes(c.group)
                     && self.repo.as_ref().is_none_or(|r| *r == i.repo)
                     && self.tag.as_ref().is_none_or(|t| i.labels.iter().any(|l| l.name == *t))
+                    && self.find.takes(i)
             })
             .collect()
     }

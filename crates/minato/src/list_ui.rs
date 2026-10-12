@@ -3,7 +3,7 @@
 //! scrollbar anywhere.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{HEAD, Show, fold_head};
+use minato_core::fold::{Show, fold};
 use minato_core::inbox::Group;
 use minato_core::list::{Ci, Col, Item, Kind, Pick, Saved, age, epoch, options};
 
@@ -11,10 +11,9 @@ use crate::app::{App, Click, Pane, Wheel, now_epoch};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
-/// A row with labels, one without, and one folded to its title.
+/// A row with labels, and one without.
 const ROW_FULL: f32 = 76.0;
 const ROW_PLAIN: f32 = 54.0;
-const ROW_FOLDED: f32 = 28.0;
 const MORE_H: f32 = 22.0;
 /// The bar with the query.
 const HEAD_H: f32 = 40.0;
@@ -157,7 +156,7 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     }
     let heights: Vec<f32> = shown.iter().map(|i| if i.labels.is_empty() { ROW_PLAIN } else { ROW_FULL }).collect();
     let sel = app.list.sel.min(shown.len() - 1);
-    let f = fold_head(&heights, ROW_FOLDED, MORE_H, body.height(), sel, HEAD);
+    let f = fold(&heights, MORE_H, body.height(), sel);
     let now = now_epoch();
     let all = app.inbox_all();
     let marked: Vec<&str> = all.iter().filter(|card| card.group != Group::Done).map(|card| app.items[card.at].id.as_str()).collect();
@@ -167,17 +166,16 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         y += MORE_H;
     }
     for (k, item) in shown.iter().enumerate() {
-        let h = match f.rows[k] {
-            Show::Hidden => continue,
-            Show::Full => heights[k],
-            Show::Folded => ROW_FOLDED,
-        };
+        if f.rows[k] == Show::Hidden {
+            continue;
+        }
+        let h = heights[k];
         let row = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), h));
         let resp = ui::hit(ui, row, ("list-item", k));
         if resp.clicked() {
             out.click = Some(Click::ListItem(k));
         }
-        item_row(&p, app, item, row, f.rows[k] == Show::Full, k == sel, resp.hovered(), marked.contains(&item.id.as_str()), now);
+        item_row(&p, app, item, row, k == sel, resp.hovered(), marked.contains(&item.id.as_str()), now);
         ui::peek(&resp, &item.peek);
         y += h;
     }
@@ -193,7 +191,7 @@ fn more(p: &Painter, app: &App, body: Rect, y: f32, n: usize, side: &'static str
 /// One item: its kind's mark; the title, the labels, and where and who;
 /// at the right the CI, the comments and the 受信箱 badge.
 #[allow(clippy::too_many_arguments)]
-fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, full: bool, on: bool, hover: bool, inbox: bool, now: i64) {
+fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: bool, inbox: bool, now: i64) {
     let c = ito_theme::colors();
     if on {
         p.rect_filled(row, 0.0, style::sel());
@@ -203,7 +201,7 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, full: bool, on: bool
     }
     p.line_segment([row.left_bottom(), row.right_bottom()], Stroke::new(1.0, c.border));
     let p = p.with_clip_rect(row);
-    let y1 = row.top() + if full { 8.0 } else { 5.0 } + 9.0;
+    let y1 = row.top() + 8.0 + 9.0;
     let (mark, color) = style::kind_mark(item.kind);
     p.text(pos2(row.left() + 14.0 + 8.0, y1), Align2::CENTER_CENTER, mark, FontId::proportional(13.0), color);
     let x = row.left() + 14.0 + 16.0 + 10.0;
@@ -221,25 +219,24 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, full: bool, on: bool
         rx = rx.min(t.left() - 10.0);
         ry += 17.0;
     }
-    if full && item.comments > 0 {
+    if item.comments > 0 {
         let t = p.text(pos2(right, ry), Align2::RIGHT_CENTER, format!("💬 {}", item.comments), FontId::proportional(12.0), c.dim);
         rx = rx.min(t.left() - 10.0);
         ry += 17.0;
     }
-    if full && inbox {
+    if inbox {
         let words = app.tr("notes.inbox");
         let w = style::badge_w(&p, words);
         style::badge(&p, right - w, ry, words);
         rx = rx.min(right - w - 10.0);
     }
     let title_color = if item.merged { MERGED } else { c.fg };
-    let g = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), title_color, rx - x);
+    // The marked one first, so its ground is under both.
+    let g = style::truncated_lit(&p, item.title.clone(), FontId::proportional(13.0), title_color, rx - x, app.lit());
     let ty = y1 - g.size().y / 2.0;
-    p.galley(pos2(x + 0.45, ty), g.clone(), title_color);
     p.galley(pos2(x, ty), g, title_color);
-    if !full {
-        return;
-    }
+    let g = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), title_color, rx - x);
+    p.galley(pos2(x + 0.45, ty), g, title_color);
     let mut y = y1 + 9.0;
     if !item.labels.is_empty() {
         style::labels(&p, x, y + 4.0 + 9.0, &item.labels, rx);

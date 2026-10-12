@@ -11,15 +11,34 @@ use crate::list::Label;
 /// The Project the board shows, by title (the first one when none matches).
 pub const TITLE: &str = "uchmk";
 
-/// The Project, its Status field and the cards. No variables.
+/// The Projects' numbers and titles only, to [`pick`] the one to show
+/// before asking for its cards. No variables.
+pub fn pick_query() -> &'static str {
+    "query { viewer { projectsV2(first: 20) { nodes { number title } } } }"
+}
+
+/// The number of the Project the board shows: the one titled [`TITLE`],
+/// else the first.
+pub fn pick(body: &str) -> Result<u64, String> {
+    let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let Some(nodes) = v.pointer("/data/viewer/projectsV2/nodes").and_then(Value::as_array) else {
+        return Err(v.pointer("/errors/0/message").and_then(Value::as_str).unwrap_or("no projects in the answer").to_string());
+    };
+    let p = nodes.iter().find(|p| text(p, "/title") == TITLE).or_else(|| nodes.first()).ok_or("no Project found")?;
+    p.pointer("/number").and_then(Value::as_u64).ok_or_else(|| "no Project number in the answer".to_string())
+}
+
+/// One Project (variable `n`, its number from [`pick`]), its Status field
+/// and the cards. Asking for one, not every Project's items, keeps the
+/// answer small.
 pub fn query() -> String {
     let content = "__typename ... on Issue { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
 ... on PullRequest { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
     format!(
-        "query {{ viewer {{ projectsV2(first: 20) {{ nodes {{ id title \
+        "query($n: Int!) {{ viewer {{ projectV2(number: $n) {{ id title \
 field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} priority: field(name: \"Priority\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
 items(first: 100) {{ nodes {{ id content {{ {content} }} \
-fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }} }}"
+fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }}"
     )
 }
 
@@ -75,8 +94,16 @@ pub fn parse(body: &str) -> Result<Project, String> {
             return Err(e.to_string());
         }
     }
-    let nodes = v.pointer("/data/viewer/projectsV2/nodes").and_then(Value::as_array).ok_or("no projects in the answer")?;
-    let p = nodes.iter().find(|p| text(p, "/title") == TITLE).or_else(|| nodes.first()).ok_or("no Project found")?;
+    // The answer to `query` has the one Project; one kept from before
+    // v0.25.0 has the list of them.
+    let p = match v.pointer("/data/viewer/projectV2") {
+        Some(Value::Null) => return Err(v.pointer("/errors/0/message").and_then(Value::as_str).unwrap_or("no Project found").to_string()),
+        Some(p) => p,
+        None => {
+            let nodes = v.pointer("/data/viewer/projectsV2/nodes").and_then(Value::as_array).ok_or("no projects in the answer")?;
+            nodes.iter().find(|p| text(p, "/title") == TITLE).or_else(|| nodes.first()).ok_or("no Project found")?
+        }
+    };
     let field = text(p, "/field/id");
     if field.is_empty() {
         return Err("the Project has no Status field".into());
@@ -289,6 +316,23 @@ mod tests {
     fn errors_and_missing_fields_are_reported() {
         assert_eq!(parse(r#"{"errors":[{"message":"Your token has not been granted the required scopes"}]}"#), Err("Your token has not been granted the required scopes".into()));
         assert!(parse(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
+        let gone = r#"{"data":{"viewer":{"projectV2":null}},"errors":[{"message":"Could not resolve to a ProjectV2 with the number 9."}]}"#;
+        assert_eq!(parse(gone), Err("Could not resolve to a ProjectV2 with the number 9.".into()));
+    }
+
+    #[test]
+    fn the_project_is_picked_by_title_then_read_alone() {
+        let list = r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":1,"title":"other"},{"number":2,"title":"uchmk"}]}}}}"#;
+        assert_eq!(pick(list), Ok(2));
+        assert_eq!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":5,"title":"x"}]}}}}"#), Ok(5));
+        assert!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
+        assert_eq!(pick(r#"{"errors":[{"message":"no scope"}]}"#), Err("no scope".into()));
+        assert!(query().starts_with("query($n: Int!) { viewer { projectV2(number: $n) {"));
+        // The one Project, as `query` answers.
+        let start = BODY.find(r#"{"id":"P1""#).unwrap();
+        let one = format!(r#"{{"data":{{"viewer":{{"projectV2":{}}}}}}}"#, &BODY[start..BODY.len() - "]}}}}".len()]);
+        let p = parse(&one).unwrap();
+        assert_eq!(p, project());
     }
 
     #[test]

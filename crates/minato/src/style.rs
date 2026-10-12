@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use egui::{Align2, Color32, CornerRadius, FontId, Galley, Painter, Pos2, Rect, Stroke, StrokeKind, pos2, vec2};
+use minato_core::find::Query;
 use minato_core::list::{Kind, Label};
 use minato_core::notes::Tone;
 
@@ -180,6 +181,27 @@ pub fn truncated(p: &Painter, text: String, font: FontId, color: Color32, width:
     let mut job = egui::text::LayoutJob::simple_singleline(text, font, color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(10.0));
     p.layout_job(job)
+}
+
+/// [`truncated`], with the search's words on a mark.
+pub fn truncated_lit(p: &Painter, text: String, font: FontId, color: Color32, width: f32, lit: &Query) -> Arc<Galley> {
+    let mut job = egui::text::LayoutJob { break_on_newline: false, ..Default::default() };
+    job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(10.0));
+    let plain = egui::text::TextFormat::simple(font, color);
+    let marked = egui::text::TextFormat { background: mark(), ..plain.clone() };
+    let mut at = 0;
+    for r in lit.ranges(&text) {
+        job.append(&text[at..r.start], 0.0, plain.clone());
+        job.append(&text[r.clone()], 0.0, marked.clone());
+        at = r.end;
+    }
+    job.append(&text[at..], 0.0, plain);
+    p.layout_job(job)
+}
+
+/// The ground under the search's words where they show.
+pub fn mark() -> Color32 {
+    RUN.gamma_multiply(0.4)
 }
 
 /// A filled dot.

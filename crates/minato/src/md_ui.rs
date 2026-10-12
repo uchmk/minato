@@ -2,11 +2,13 @@
 //! with its inline marks, laid out to a width first so the detail can stack
 //! what comes next under it and the preview can show its end.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, Color32, CornerRadius, FontId, Galley, Painter, Rect, Stroke, StrokeKind, pos2, vec2};
 use minato_core::composer::{Block, Span, blocks, spans};
+use minato_core::find::Query;
 
 use crate::style::{self, ACCENT};
 
@@ -52,6 +54,20 @@ enum Deco {
     Rule(f32),
     /// A `<summary>`'s open triangle and its ground, `w` by `h`.
     Summary(f32, f32),
+}
+
+thread_local! {
+    /// The search's words while the detail is laid out, marked where they
+    /// are.
+    static LIT: RefCell<Query> = RefCell::new(Query::default());
+}
+
+/// [`layout`], with the search's words on a mark.
+pub fn layout_lit(p: &Painter, text: &str, w: f32, size: f32, lit: &Query) -> Md {
+    LIT.with(|l| *l.borrow_mut() = lit.clone());
+    let md = layout(p, text, w, size);
+    LIT.with(|l| *l.borrow_mut() = Query::default());
+    md
 }
 
 /// `text` as Markdown laid out to `w`; `size` is the body's font size.
@@ -164,10 +180,11 @@ fn table(p: &Painter, rows: &[Vec<String>], w: f32, size: f32) -> (Vec<(f32, f32
 /// One block's inline marks as a galley (and its bold twin) to `w`.
 fn inline(p: &Painter, s: &str, w: f32, size: f32, color: Color32, all_bold: bool) -> Text {
     let runs = spans(s);
+    let lit: Vec<_> = LIT.with(|l| runs.iter().map(|r| l.borrow().ranges(&r.text)).collect());
     let job = |bold_only: bool| {
         let mut job = LayoutJob::default();
         job.wrap.max_width = w.max(10.0);
-        for r in &runs {
+        for (r, lit) in runs.iter().zip(&lit) {
             let mut f = format(r, size, color);
             if bold_only && !(r.bold || all_bold) {
                 f.color = Color32::TRANSPARENT;
@@ -175,7 +192,15 @@ fn inline(p: &Painter, s: &str, w: f32, size: f32, color: Color32, all_bold: boo
                 f.underline = Stroke::NONE;
                 f.strikethrough = Stroke::NONE;
             }
-            job.append(&r.text, 0.0, f);
+            // The twin of the bold runs leaves the mark to the first.
+            let marked = TextFormat { background: if bold_only { f.background } else { style::mark() }, ..f.clone() };
+            let mut at = 0;
+            for g in lit {
+                job.append(&r.text[at..g.start], 0.0, f.clone());
+                job.append(&r.text[g.clone()], 0.0, marked.clone());
+                at = g.end;
+            }
+            job.append(&r.text[at..], 0.0, f);
         }
         job
     };

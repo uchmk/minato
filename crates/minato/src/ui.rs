@@ -44,6 +44,8 @@ pub struct Out {
     pub wheel: Option<(Wheel, f32)>,
     /// How far the detail scrolls, in lines, before its end shows.
     pub detail_max: Option<f32>,
+    /// The search box's field in the keybar, while it has the keys.
+    pub find_at: Option<Rect>,
 }
 
 /// How far apart the columns are: the 1 px line between them, which the
@@ -140,7 +142,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
     }
-    key_bar(ui, app, keybar);
+    key_bar(ui, app, keybar, &mut out);
     ui.painter().line_segment([title.left_bottom(), title.right_bottom()], Stroke::new(1.0, c.border));
     ui.painter().line_segment([keybar.left_top(), keybar.right_top()], Stroke::new(1.0, c.border));
     // The notifications hang from the bell over the view, as in tsumugi.
@@ -341,15 +343,19 @@ fn empty_view(ui: &mut Ui, app: &App, r: Rect) {
 
 /// The keybar: the keys of the view at the left, the best one lit; the
 /// state of the sync and the clock at the right.
-fn key_bar(ui: &mut Ui, app: &App, r: Rect) {
+fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().clone();
     let mid = r.center().y;
     let mut x = r.left() + 12.0;
+    if app.find_on() {
+        x = find_bar(ui, app, r, out);
+    }
     let keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
         Mode::Help => vec![("F1", "key.back"), ("Esc", "key.back")],
         Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
+        Mode::Main if app.find_on() => Vec::new(),
         Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("F1", "key.help")]).collect(),
     };
     for (k, (key, word)) in keys.iter().enumerate() {
@@ -380,6 +386,56 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect) {
     p.text(pos2(right, mid), Align2::RIGHT_CENTER, format!("⟳ {ago}"), FontId::monospace(11.5), c.dim);
     if app.synced.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+    }
+}
+
+/// The search in the keybar: `/`, its words (the field while it has the
+/// keys), how many are left and its keys; the x after it.
+fn find_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) -> f32 {
+    let c = ito_theme::colors();
+    let p = ui.painter().clone();
+    let mid = r.center().y;
+    let x = r.left() + 12.0;
+    let galley = ui.fonts_mut(|f| f.layout_no_wrap("/".to_owned(), FontId::monospace(11.0), ACCENT));
+    let chip = Rect::from_min_size(pos2(x, mid - 9.0), vec2(galley.size().x + 12.0, 18.0));
+    p.rect_filled(chip, CornerRadius::same(4), ACCENT.gamma_multiply(0.18));
+    p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, ACCENT.gamma_multiply(0.6)), StrokeKind::Inside);
+    p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, ACCENT);
+    let field = Rect::from_min_size(pos2(chip.right() + 8.0, mid - 10.0), vec2(320.0f32.min(r.width() / 3.0), 20.0));
+    p.rect_filled(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), c.panel);
+    p.rect_stroke(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), Stroke::new(1.0, if app.find_open { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
+    if app.find_open {
+        out.find_at = Some(field);
+    } else {
+        let g = crate::style::truncated(&p, app.find_text.clone(), FontId::proportional(12.5), c.fg, field.width());
+        p.galley(pos2(field.left(), mid - g.size().y / 2.0), g, c.fg);
+    }
+    let n = app.find_count();
+    let t = p.text(pos2(field.right() + 14.0, mid), Align2::LEFT_CENTER, format!("{n} {}", app.tr("find.hits")), FontId::monospace(11.5), if n == 0 { crate::style::BAD } else { c.fg });
+    let t = p.text(pos2(t.right() + 14.0, mid), Align2::LEFT_CENTER, app.tr("find.keys"), FontId::proportional(12.0), c.dim);
+    t.right() + 14.0
+}
+
+/// The search box over its field in the keybar, while it has the keys: its
+/// text is the search's, set as it is typed.
+pub fn find_box(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
+    let Some(field) = at.filter(|_| app.find_open) else { return };
+    let ctx = ui.ctx().clone();
+    if std::mem::take(&mut app.find_fresh) {
+        // The `/` that opened it is in this frame's input: the field
+        // starts with the next.
+        ctx.request_repaint();
+        return;
+    }
+    let c = ito_theme::colors();
+    let id = egui::Id::new("minato-find");
+    let mut text = app.find_text.clone();
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(field));
+    let edit = egui::TextEdit::singleline(&mut text).id(id).frame(egui::Frame::NONE).desired_width(field.width()).lock_focus(true).font(FontId::proportional(12.5)).text_color(c.fg).hint_text(app.tr("find.hint"));
+    child.add(edit);
+    ctx.memory_mut(|m| m.request_focus(id));
+    if text != app.find_text {
+        app.set_find(&text);
     }
 }
 

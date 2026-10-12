@@ -13,7 +13,6 @@ use crate::ui::{ACCENT, Out};
 const HEAD_H: f32 = 34.0;
 const COL_HEAD_H: f32 = 30.0;
 const CARD_FULL: f32 = 74.0;
-const CARD_FOLDED: f32 = 26.0;
 const MORE_H: f32 = 22.0;
 const GAP: f32 = 8.0;
 const MIN_COL_W: f32 = 190.0;
@@ -67,20 +66,18 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             continue;
         }
         let sel = if focus { app.bs.row.min(ids.len() - 1) } else { 0 };
-        let f = fold(&vec![CARD_FULL; ids.len()], CARD_FOLDED, MORE_H, body.height(), sel);
+        let f = fold(&vec![CARD_FULL; ids.len()], MORE_H, body.height(), sel);
         let mut y = body.top();
         if f.above > 0 {
             more(&p, app, body, y, f.above, "list.above");
             y += MORE_H;
         }
         for (k, &ci) in ids.iter().enumerate() {
-            let h = match f.rows[k] {
-                Show::Hidden => continue,
-                Show::Full => CARD_FULL,
-                Show::Folded => CARD_FOLDED,
-            };
-            let cr = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), h - 4.0));
-            y += h;
+            if f.rows[k] == Show::Hidden {
+                continue;
+            }
+            let cr = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), CARD_FULL - 4.0));
+            y += CARD_FULL;
             let card = &board.cards[ci];
             let resp = ui.interact(cr, Id::new(("board-card", &card.item)), Sense::click_and_drag());
             if resp.clicked() || resp.drag_started() {
@@ -99,7 +96,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
                 crate::ui::peek(&resp, &card.peek);
             }
             let picked = focus && k == app.bs.row;
-            card_box(&p, app, cr, ci, picked, f.rows[k] == Show::Full, now);
+            card_box(&p, app, cr, ci, picked, now);
         }
         if f.below > 0 {
             more(&p, app, body, body.bottom() - MORE_H, f.below, "list.below");
@@ -109,7 +106,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     if let (Some(ci), Some(at)) = (dragged, ui.ctx().pointer_latest_pos()) {
         let ghost = Rect::from_center_size(at, vec2(w.min(260.0), CARD_FULL - 4.0));
         let top = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("board-ghost")));
-        card_box(&top, app, ghost, ci, true, true, now);
+        card_box(&top, app, ghost, ci, true, now);
         for &(_, rc) in &rects {
             if rc.x_range().contains(at.x) {
                 top.rect_stroke(rc, CornerRadius::same(8), Stroke::new(2.0, ACCENT), StrokeKind::Inside);
@@ -118,7 +115,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     }
 }
 
-fn card_box(p: &egui::Painter, app: &App, r: Rect, ci: usize, picked: bool, full: bool, now: i64) {
+fn card_box(p: &egui::Painter, app: &App, r: Rect, ci: usize, picked: bool, now: i64) {
     let c = ito_theme::colors();
     let Some(card) = app.board.as_ref().and_then(|b| b.cards.get(ci)) else { return };
     let p = p.with_clip_rect(r);
@@ -132,10 +129,6 @@ fn card_box(p: &egui::Painter, app: &App, r: Rect, ci: usize, picked: bool, full
         if let Some(t) = epoch(&item.created_at) {
             line1.push_str(&format!(" · {}", age(&item.created_at, now.max(t))));
         }
-    }
-    if !full {
-        p.text(pos2(x, r.center().y), Align2::LEFT_CENTER, format!("{repo} #{}  {}", card.number, card.title), FontId::proportional(11.5), c.fg);
-        return;
     }
     p.text(pos2(x, r.top() + 12.0), Align2::LEFT_CENTER, line1, FontId::proportional(10.5), c.dim);
     p.text(pos2(x, r.top() + 31.0), Align2::LEFT_CENTER, &card.title, FontId::proportional(12.5), c.fg);

@@ -176,7 +176,7 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
     }
     if !d.body.trim().is_empty() {
         y = style::heading(p, x, y, app.tr("detail.body"));
-        let md = crate::md_ui::layout(p, &d.body, w, BODY);
+        let md = crate::md_ui::layout_lit(p, &d.body, w, BODY, app.lit());
         md.paint(p, x, y);
         y += md.height;
     }
@@ -200,7 +200,7 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
         p.text(pos2(a.right() + 8.0, y + 8.0), Align2::LEFT_CENTER, when, FontId::monospace(13.0), c.dim);
         y += 22.0;
         if !e.body.trim().is_empty() {
-            let md = crate::md_ui::layout(p, &e.body, w - 22.0, BODY);
+            let md = crate::md_ui::layout_lit(p, &e.body, w - 22.0, BODY, app.lit());
             md.paint(p, tx, y);
             y += md.height;
         }

@@ -60,7 +60,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 6.1 | Press `2` after the connection is up | Within a few seconds your open issues, PRs and discussions list in three lines each; the CI mark and the comment count stand at the right |
 | 6.2 | Press `j` / `k` | The selected row moves; the detail at the right follows within a second |
-| 6.3 | Shrink the window height until the rows do not fit | The first eleven rows keep their full size as long as they fit; far rows fold to one line, then hide with "⋯ 上に/下に N 件"; no scrollbar appears |
+| 6.3 | Shrink the window height until the rows do not fit | As many whole rows as fit show around the selected one; the rest hide with "⋯ 上に/下に N 件"; no row is folded to one line and no scrollbar appears |
 | 6.4 | Press `h`, then `j` and `Space` on a repository | The list narrows to it and the query line over the list changes; the chosen option is filled |
 | 6.5 | Pick "CI is red" | Only PRs with a red mark remain |
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
@@ -76,7 +76,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 7.3 | Press `d`, then `u` | The card moves to "Done today" with a toast, and `u` brings it back |
 | 7.4 | Press `s` | The card disappears (back tomorrow 9:00) with a toast; `u` brings it back |
 | 7.5 | Press `f`, `F`, `t` | The chips at the lower left change and the cards narrow; after the last choice they return to All |
-| 7.6 | Shrink the window height | The first ten cards keep their full size as long as they fit; far cards fold to their title, then hide with "⋯" lines; no scrollbar |
+| 7.6 | Shrink the window height | As many whole cards as fit show around the selected one; the rest hide with "⋯" lines; no card is folded to its title and no scrollbar |
 | 7.7 | Press `o` | The item opens in the browser |
 
 ## 8. Writing box and fields
@@ -107,7 +107,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 9.1 | Press `3` | The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others fold to mark, title and duration |
+| 9.1 | Press `3` | The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others show whole too, as many as fit |
 | 9.2 | Press `h`, move with `j k`, press `Space` on "Failed" | Only failed runs stay; the query line and the count change; the filter shows counts |
 | 9.3 | Select a run | The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts |
 | 9.4 | Select a failed run and press `R` | A toast says the failed jobs are re-running; after a moment the run shows as running |
@@ -116,7 +116,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 9.7 | Press `e` on a failed run | The browser opens the failed job's page |
 | 9.8 | Press `p` on a run of a pull request, then `o` | The PR opens; then the run opens |
 | 9.9 | Press `R` on a passed run | A toast says only a failed run can be re-run; nothing is sent |
-| 9.10 | Fill the list with many runs | No scrollbar; far rows fold and "more" shows |
+| 9.10 | Fill the list with many runs | No scrollbar; the rows that do not fit hide and "more" shows; none is folded |
 
 ## 10. Board
 
@@ -131,13 +131,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 10.7 | Press `Enter` on a card that is in the list, then on one that is not | The list opens on it; otherwise a toast says it is not in the list |
 | 10.8 | Press `o` on a card | The browser opens the issue or PR |
 | 10.9 | Use a token without the `project` scope and press `L` | An error toast appears and, after a moment, the card returns to its column |
-| 10.10 | Put many cards in one column | No scrollbar; far cards fold and "more" shows |
+| 10.10 | Put many cards in one column | No scrollbar; the cards that do not fit hide and "more" shows; none is folded |
 
 ## 11. Notifications and palette
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 11.1 | Press `n` with unread GitHub notifications | A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; far rows fold to one line with the title |
+| 11.1 | Press `n` with unread GitHub notifications | A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line |
 | 11.2 | Press `Enter` on a thread minato has, then on one it does not | The list closes and the inbox (or the list) selects that thread; for the other, the browser opens it. Each time the row goes and the count drops by one |
 | 11.3 | Press `d` on a thread | The row goes without opening anything; after a refresh it stays gone on GitHub |
 | 11.4 | Press `A` | All rows go, a toast says so, and the bell shows none; GitHub shows them read |
@@ -298,8 +298,22 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | # | Do | Expect |
 | --- | --- | --- |
 | 27.1 | Look at the detail of an item in the inbox and the list, and of a run in Actions | The title, the meta line, the next box, the checks, the body and the comments read a step larger than in 0.23.0; nothing overlaps |
-| 27.2 | In an inbox with 30 cards and a short window, select one in the middle | Eleven cards stay whole: the selected one and five above and five below it; the others fold or hide |
+| 27.2 | In an inbox with 30 cards and a short window, select one in the middle | The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines |
 | 27.3 | Focus a long detail (`l` in the list, Actions' detail) and hold `j`, then press `k` once; turn the wheel down over it too | The scroll stops once the end shows; one `k` moves it up at once |
 | 27.4 | Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications | `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd |
 | 27.5 | Press `F1` in each view, with the palette open and in the notifications | The key list opens (the palette closes); `F1` again closes it; the keybar ends with `F1`; the list has "gg G" |
 | 27.6 | Open the palette | There are no lines to go to Inbox, List, Actions or Board |
+
+## 28. Search, Tab and the board's speed
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 28.1 | In the inbox press `/`, type `font kura` | A field opens in the keybar after a lit `/` chip (the `/` itself is not typed in); the cards narrow as you type to those with both words in the title, #number, repository, labels, author or body start; the keybar shows "N 件" (red at 0) and "Enter 決定 · Esc 消す"; the words are marked in the card titles and in the detail's body and comments |
+| 28.2 | Type a Japanese word with the IME in the search field | The IME's candidate window shows by the field; the committed word filters and is marked |
+| 28.3 | Search `preview`, then `Preview` | Lower case finds "Preview" and "preview"; once a capital is typed only "Preview" is found |
+| 28.4 | With the field open press `Down`/`Up`, then `Enter`, then `j k`, then `Esc` | The arrows move the selection; `Enter` closes the field but keeps the filter and the keybar line; `j k` move again; `Esc` clears the words and every card comes back |
+| 28.5 | Search in the inbox, press `2`, then `/` again | The list is filtered by the same words; `/` reopens the field with them, the cursor at the end |
+| 28.6 | With the field open click a view tab for Actions, open the palette, press `n` (bell) by mouse | The field closes each time; in Actions the keybar shows its keys again |
+| 28.7 | Press `Tab` five times from the inbox, then `Shift+Tab` | Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open |
+| 28.8 | Press `4` on a fresh start (no cache), then again after `1` and back | The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once |
+| 28.9 | Select a run in Actions while the network is off for 15 seconds, then turn it on | Its jobs come within about 10 seconds of the network coming back, not after the next refresh |
