@@ -59,7 +59,19 @@ fn compose(ui: &mut Ui, app: &mut App) {
     if c.preview {
         p.text(pos2(panel.right() - 14.0, panel.top() + 18.0), Align2::RIGHT_CENTER, app.tr("compose.preview"), FontId::proportional(11.5), ACCENT);
     }
-    let hint = if c.picker.is_some() { app.tr("pick.hint") } else { app.tr("compose.hint") };
+    let hint = if c.picker.is_some() {
+        app.tr("pick.hint").to_string()
+    } else {
+        let mut h = app.tr("compose.hint").to_string();
+        for k in app.settings.order {
+            if app.settings.fields[k] {
+                h.push_str(&format!("  Alt+{} {}", ["L", "A", "S", "M", "P", "R"][k], app.tr(["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k])));
+            }
+        }
+        h.push_str("  ");
+        h.push_str(app.tr("compose.esc"));
+        h
+    };
     p.with_clip_rect(panel).text(pos2(panel.left() + 14.0, panel.bottom() - 14.0), Align2::LEFT_CENTER, hint, FontId::proportional(11.0), colors.dim);
     let field = Rect::from_min_max(pos2(panel.left() + 14.0, panel.top() + 36.0), pos2(panel.right() - 14.0, panel.bottom() - 30.0));
     let id = Id::new("minato-compose");

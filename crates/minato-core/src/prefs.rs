@@ -13,17 +13,19 @@ pub struct Settings {
     pub rules: Rules,
     /// Labels, Assignees, Status, Milestone, Priority, Reviewers.
     pub fields: [bool; FIELDS],
+    /// The fields in the order the writing box lists them (indexes into `fields`).
+    pub order: [usize; FIELDS],
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { rules: Rules::default(), fields: [true, true, true, false, false, false] }
+        Settings { rules: Rules::default(), fields: [true, true, true, false, false, false], order: [0, 1, 2, 3, 4, 5] }
     }
 }
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "rules": self.rules.0, "fields": self.fields }).to_string()
+        json!({ "rules": self.rules.0, "fields": self.fields, "order": self.order }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
@@ -41,7 +43,22 @@ impl Settings {
         };
         fill("rules", &mut s.rules.0);
         fill("fields", &mut s.fields);
+        if let Some(list) = v.get("order").and_then(Value::as_array) {
+            let order: Vec<usize> = list.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect();
+            let mut seen = [false; FIELDS];
+            if order.len() == FIELDS && order.iter().all(|&k| k < FIELDS && !std::mem::replace(&mut seen[k], true)) {
+                s.order.copy_from_slice(&order);
+            }
+        }
         s
+    }
+
+    /// Move the field at place `at` of the order one place (`-1` up, `1` down).
+    pub fn shift(&mut self, at: usize, step: isize) {
+        let to = at as isize + step;
+        if (0..FIELDS as isize).contains(&to) {
+            self.order.swap(at, to as usize);
+        }
     }
 }
 
@@ -58,6 +75,19 @@ mod tests {
         assert_eq!(Settings::parse("nonsense"), Settings::default());
         let odd = Settings::parse(r#"{"fields":[false,"x"],"rules":[]}"#);
         assert!(!odd.fields[0] && odd.fields[1]);
+    }
+
+    #[test]
+    fn the_order_moves_and_only_a_permutation_is_read() {
+        let mut s = Settings::default();
+        s.shift(0, -1);
+        s.shift(5, 1);
+        assert_eq!(s.order, [0, 1, 2, 3, 4, 5]);
+        s.shift(0, 1);
+        assert_eq!(s.order, [1, 0, 2, 3, 4, 5]);
+        assert_eq!(Settings::parse(&s.to_json()).order, s.order);
+        assert_eq!(Settings::parse(r#"{"order":[0,0,1,2,3,4]}"#).order, [0, 1, 2, 3, 4, 5]);
+        assert_eq!(Settings::parse(r#"{"order":[0,1,2]}"#).order, [0, 1, 2, 3, 4, 5]);
     }
 
     #[test]

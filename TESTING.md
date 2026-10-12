@@ -199,3 +199,11 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 16.2 | On a closed issue press `x` | No confirmation; the toast says it was reopened and GitHub shows it open |
 | 16.3 | On a merged PR press `x` | Nothing is sent; a toast says it cannot be closed or reopened |
 | 16.4 | Press `C` again | Open items return, discussions included |
+
+## 17. Field order and conflicts
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 17.1 | In the "minato" page press ▼ on Labels, then open the writing box | The key line lists `Alt+A` before `Alt+L`; hidden fields are not listed |
+| 17.2 | Restart minato | The order is kept |
+| 17.3 | Have a green PR of yours with merge conflicts | It is not in the inbox as "ready to merge" |

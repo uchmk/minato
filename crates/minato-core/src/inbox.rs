@@ -79,7 +79,7 @@ pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
     let pr = item.kind == Kind::Pr;
     RULES.iter().copied().filter(|r| rules.0[r.index()]).find(|r| match r {
         Rule::RedCi => pr && mine && item.ci == Some(Ci::Bad),
-        Rule::Mergeable => pr && mine && !item.draft && !item.merged && item.ci == Some(Ci::Ok),
+        Rule::Mergeable => pr && mine && !item.draft && !item.merged && !item.conflict && item.ci == Some(Ci::Ok),
         Rule::Question => has_label(item, "question") && (mine || item.assignees.iter().any(|a| a == me)),
         Rule::NeedsOwner => has_label(item, "needs-owner"),
         Rule::Finding => has_label(item, "finding") && item.assignees.is_empty(),
@@ -350,6 +350,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            conflict: false,
             ci: None,
         }
     }
@@ -371,6 +372,9 @@ mod tests {
         assert_eq!(why(&green, "me", &r), Some(Rule::Mergeable));
         green.draft = true;
         assert_eq!(why(&green, "me", &r), None);
+        green.draft = false;
+        green.conflict = true;
+        assert_eq!(why(&green, "me", &r), None, "a PR with conflicts is not ready to merge");
         assert_eq!(why(&labelled(item("c", Kind::Issue, "x"), "needs-owner"), "me", &r), Some(Rule::NeedsOwner));
         let f = labelled(item("d", Kind::Issue, "x"), "finding");
         assert_eq!(why(&f, "me", &r), Some(Rule::Finding));

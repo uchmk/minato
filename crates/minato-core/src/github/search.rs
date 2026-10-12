@@ -14,7 +14,7 @@ pub fn items_query() -> String {
     format!(
         "query($q: String!, $n: Int!) {{ search(query: $q, type: ISSUE, first: $n) {{ nodes {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft assignees(first: 5) {{ nodes {{ login }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable assignees(first: 5) {{ nodes {{ login }} }} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}"
     )
 }
@@ -120,6 +120,7 @@ struct RawItem {
     state: Option<String>,
     #[serde(rename = "isDraft", default)]
     is_draft: bool,
+    mergeable: Option<String>,
     assignees: Option<Nodes<Login>>,
     commits: Option<Nodes<CommitNode>>,
 }
@@ -172,6 +173,7 @@ pub fn parse_items(body: &str) -> Result<Vec<Item>, String> {
             updated_at: n.updated_at.unwrap_or_default(),
             draft: n.is_draft,
             merged: n.state.as_deref() == Some("MERGED"),
+            conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
             ci,
         });
     }

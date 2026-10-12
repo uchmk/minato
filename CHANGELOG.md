@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.14.0] - 2026-10-12
+
+### Added
+
+- 設定の「minato」ページで、書き込み箱の項目の並び順を ▲ ▼ で入れ替えられる（`minato-settings.json` の `order`）。書き込み箱の下の一行の `Alt+…` の案内が、この順で、入りの項目だけを並べる。`Alt` キーそのものは変わらない。
+- 受信箱の「マージできる」規則が、マージの競合（`mergeable` が `CONFLICTING`）のある PR を外す（質問 #5 の回答 A）。
+
 ## [0.13.0] - 2026-10-12
 
 ### Added

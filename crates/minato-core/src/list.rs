@@ -55,6 +55,8 @@ pub struct Item {
     pub updated_at: String,
     pub draft: bool,
     pub merged: bool,
+    /// The PR cannot merge as it is (GitHub says CONFLICTING).
+    pub conflict: bool,
     pub ci: Option<Ci>,
 }
 
@@ -334,6 +336,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            conflict: false,
             ci: None,
         }
     }

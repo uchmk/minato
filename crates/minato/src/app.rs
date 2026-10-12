@@ -1301,6 +1301,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            conflict: false,
             ci: None,
         }
     }

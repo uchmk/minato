@@ -80,11 +80,27 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 }
             });
             section(ui, l, tr("settings.fields"), |ui| {
-                for (k, name) in ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"].into_iter().enumerate() {
+                let names = ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"];
+                let mut shift = None;
+                for at in 0..names.len() {
+                    let k = st.order[at];
                     let on = st.fields[k];
-                    if ito_prefs::row(ui, l, tr(name), tr("settings.field_note"), |ui| ito_prefs::switch(ui, l, on)) {
+                    let flipped = ito_prefs::row(ui, l, tr(names[k]), tr("settings.field_note"), |ui| {
+                        let switched = ito_prefs::switch(ui, l, on);
+                        if ui.small_button("▼").on_hover_text(tr("settings.move_down")).clicked() {
+                            shift = Some((at, 1));
+                        }
+                        if ui.small_button("▲").on_hover_text(tr("settings.move_up")).clicked() {
+                            shift = Some((at, -1));
+                        }
+                        switched
+                    });
+                    if flipped {
                         st.fields[k] = !on;
                     }
+                }
+                if let Some((at, step)) = shift {
+                    st.shift(at, step);
                 }
             });
         }
