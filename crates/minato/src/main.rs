@@ -41,10 +41,15 @@ struct Minato {
 impl Minato {
     /// The characters typed and Escape, when no text field has the keys.
     fn keys(&mut self, ctx: &egui::Context) {
-        let (events, palette) = ctx.input_mut(|i| {
+        let (events, palette, settings) = ctx.input_mut(|i| {
             let palette = i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::P);
-            (i.events.clone(), palette)
+            let settings = i.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma);
+            (i.events.clone(), palette, settings)
         });
+        if settings && self.app.compose.is_none() && self.app.confirm.is_none() && self.app.overlay.is_none() {
+            self.app.palette = None;
+            self.app.mode = Mode::Settings;
+        }
         if palette && self.app.compose.is_none() && self.app.confirm.is_none() {
             self.app.palette = self.app.palette.is_none().then(ito_palette::View::new);
         }
@@ -117,8 +122,11 @@ impl eframe::App for Minato {
             if let Some((k, col)) = out.drop {
                 self.app.drop_card(k, col);
             }
-            if out.settings {
-                self.app.mode = Mode::Settings;
+            if out.bell {
+                self.app.mode = Mode::Notes;
+            }
+            if out.palette && self.app.palette.is_none() {
+                self.app.palette = Some(ito_palette::View::new());
             }
             compose_ui::show(ui, &mut self.app);
             overlay_ui::show(ui, &self.app);

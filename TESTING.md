@@ -171,3 +171,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 13.3 | On an issue press `Alt+R` | A toast says reviewers can only be asked on a PR; no picker opens |
 | 13.4 | In the inbox press `d` on a card and `s` on another, quit minato and start it again | Both cards are still hidden; `minato-marks.json` sits beside common.toml |
 | 13.5 | Press `d`, then `u`, quit and start again | The card is back (the undo was saved too) |
+
+## 14. Settings key, palette field and bell
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 14.1 | Look at the title bar | There is no `,` button; the account mark, the bell and the palette field remain |
+| 14.2 | Press `Ctrl+,` | The settings screen opens; `Esc` returns |
+| 14.3 | Click the palette field in the title bar | The command palette opens, the same as `Ctrl+Shift+P` |
+| 14.4 | With no unread notification look at the bell, then with some | Dim cup without a badge; with unread, a gold badge with the count (`9+` past nine), the same look as tsumugi's bell |
+| 14.5 | Click the bell | The notifications panel opens |

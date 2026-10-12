@@ -109,7 +109,7 @@ impl View {
 /// The keys that work in every view.
 pub const GLOBAL_KEYS: [(&str, &str); 6] = [
     ("1 2 3 4", "key.views"),
-    (",", "key.settings"),
+    ("Ctrl+,", "key.settings"),
     ("Ctrl+Shift+P", "key.palette"),
     ("n", "key.notes"),
     ("u", "key.undo"),
@@ -546,7 +546,7 @@ impl App {
         }
         e.push(Entry::new(self.tr("key.notes"), "n", Cmd::Notes));
         e.push(Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll));
-        e.push(Entry::new(self.tr("key.settings"), ",", Cmd::Settings));
+        e.push(Entry::new(self.tr("key.settings"), "Ctrl+,", Cmd::Settings));
         e.push(Entry::new(self.tr("key.help"), "?", Cmd::Help));
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));

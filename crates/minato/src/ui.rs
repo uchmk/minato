@@ -19,7 +19,10 @@ const KEYBAR_KEYS: usize = 5;
 #[derive(Default)]
 pub struct Out {
     pub view: Option<View>,
-    pub settings: bool,
+    /// The bell was clicked.
+    pub bell: bool,
+    /// The palette field was clicked.
+    pub palette: bool,
     /// A card clicked, and a card dropped on a column.
     pub pick: Option<usize>,
     pub drop: Option<(usize, usize)>,
@@ -137,32 +140,25 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     p.text(acct.center(), Align2::CENTER_CENTER, initial, FontId::proportional(12.0), if app.viewer.is_some() { c.fg } else { c.dim });
     resp.on_hover_text(app.viewer.as_deref().unwrap_or(app.tr("account")));
     right = acct.left() - 10.0;
-    // The bell with the unread count.
-    let bell = Rect::from_center_size(pos2(right - 12.0, mid), vec2(26.0, 26.0));
+    // The bell with the unread count, as in tsumugi: 28 by 24, the cup dim
+    // while nothing is unread, a gold badge ("9+" past nine) when something is.
+    let bell = Rect::from_center_size(pos2(right - 14.0, mid), vec2(28.0, 24.0));
     let resp = ui.interact(bell, ui.id().with("bell"), Sense::click());
     if resp.hovered() {
         p.rect_filled(bell, CornerRadius::same(6), c.panel);
     }
-    draw_bell(&p, bell.center(), c.fg);
+    draw_bell(&p, bell.center() + vec2(0.0, -1.0), if app.unread == 0 { c.dim } else { c.fg });
     if app.unread > 0 {
-        let badge = Rect::from_center_size(bell.right_top() + vec2(-3.0, 5.0), vec2(16.0, 14.0));
-        p.rect_filled(badge, CornerRadius::same(7), c.err);
-        p.text(badge.center(), Align2::CENTER_CENTER, app.unread.min(99).to_string(), FontId::proportional(10.0), Color32::WHITE);
+        let at = bell.right_top() + vec2(-5.0, 5.0);
+        p.circle_filled(at, 7.0, c.wait);
+        let text = if app.unread > 9 { "9+".to_string() } else { app.unread.to_string() };
+        p.text(at, Align2::CENTER_CENTER, text, FontId::proportional(10.0), c.bg);
+    }
+    if resp.clicked() {
+        out.bell = true;
     }
     resp.on_hover_text(app.tr("bell"));
-    right = bell.left() - 10.0;
-    // The comma opens the settings.
-    let gear = Rect::from_center_size(pos2(right - 12.0, mid), vec2(26.0, 26.0));
-    let resp = ui.interact(gear, ui.id().with("gear"), Sense::click());
-    if resp.hovered() || app.mode == Mode::Settings {
-        p.rect_filled(gear, CornerRadius::same(6), c.panel);
-    }
-    p.text(gear.center(), Align2::CENTER_CENTER, ",", FontId::monospace(15.0), if app.mode == Mode::Settings { ACCENT } else { c.fg });
-    if resp.clicked() {
-        out.settings = true;
-    }
-    resp.on_hover_text(app.tr("view.settings"));
-    let right_start = gear.left() - 12.0;
+    let right_start = bell.left() - 12.0;
     // The palette field in the middle of what is left.
     let free = Rect::from_min_max(pos2(left_end + 12.0, r.top()), pos2(right_start, r.bottom()));
     let w = (free.width()).clamp(0.0, 420.0);
@@ -173,6 +169,9 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         p.rect_stroke(field, CornerRadius::same(7), Stroke::new(1.0, c.border), StrokeKind::Inside);
         p.text(field.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, app.tr("palette.hint"), FontId::proportional(12.5), c.dim);
         p.text(field.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, "Ctrl+Shift+P", FontId::monospace(11.0), c.dim);
+        if resp.clicked() {
+            out.palette = true;
+        }
     }
 }
 
@@ -204,22 +203,20 @@ fn caption_glyph(p: &egui::Painter, at: Pos2, kind: Caption, ink: Color32, maxim
     }
 }
 
-fn draw_bell(p: &egui::Painter, at: Pos2, ink: Color32) {
-    let s = Stroke::new(1.4, ink);
-    let pts = [
-        at + vec2(-5.5, 4.0),
-        at + vec2(-4.0, 2.5),
-        at + vec2(-4.0, -1.5),
-        at + vec2(-2.5, -4.5),
-        at + vec2(0.0, -5.5),
-        at + vec2(2.5, -4.5),
-        at + vec2(4.0, -1.5),
-        at + vec2(4.0, 2.5),
-        at + vec2(5.5, 4.0),
+fn draw_bell(p: &egui::Painter, c: Pos2, ink: Color32) {
+    let stroke = Stroke::new(1.4, ink);
+    let cup = vec![
+        c + vec2(-5.5, 4.0),
+        c + vec2(-4.5, -1.0),
+        c + vec2(-3.0, -4.5),
+        c + vec2(0.0, -5.5),
+        c + vec2(3.0, -4.5),
+        c + vec2(4.5, -1.0),
+        c + vec2(5.5, 4.0),
     ];
-    p.add(egui::Shape::line(pts.to_vec(), s));
-    p.line_segment([pts[0], pts[8]], s);
-    p.line_segment([at + vec2(-1.5, 6.5), at + vec2(1.5, 6.5)], s);
+    p.add(egui::Shape::line(cup, stroke));
+    p.line_segment([c + vec2(-6.5, 4.0), c + vec2(6.5, 4.0)], stroke);
+    p.circle_filled(c + vec2(0.0, 6.2), 1.4, ink);
 }
 
 /// The logo as a texture, made once from the icon's own drawing.
