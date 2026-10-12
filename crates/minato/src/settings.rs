@@ -10,6 +10,7 @@ use crate::app::App;
 
 const GENERAL: usize = 0;
 const THEME: usize = 1;
+const MINATO: usize = 2;
 
 /// The rows on each page, for the search.
 fn index(w: &'static Words) -> Vec<(usize, &'static str)> {
@@ -40,6 +41,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let pages = [
         (app.tr("settings.general"), app.tr("settings.general_lead")),
         (app.tr("settings.theme"), app.tr("settings.theme_lead")),
+        (app.tr("settings.minato"), app.tr("settings.minato_lead")),
     ];
     let index = index(w);
     let nav = ito_prefs::Nav { pages: &pages, index: &index, words: w, file: "common.toml" };
@@ -47,6 +49,8 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let lang = app.lang.clone();
     let tr = |k: &'static str| crate::i18n::tr(&lang, k);
     let prefs = &mut app.prefs;
+    let before = app.settings;
+    let st = &mut app.settings;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
         GENERAL => {
@@ -66,8 +70,29 @@ pub fn show(ui: &mut Ui, app: &mut App) {
             };
             asked.extend(ito_prefs::theme_page(ui, l, w, themes, (&t, &d, &li), &note, |ui| preview(ui, tr("settings.sample"))));
         }
+        MINATO => {
+            section(ui, l, tr("settings.rules"), |ui| {
+                for r in minato_core::inbox::RULES {
+                    let on = st.rules.0[r.index()];
+                    if ito_prefs::row(ui, l, tr(r.why()), "", |ui| ito_prefs::switch(ui, l, on)) {
+                        st.rules.0[r.index()] = !on;
+                    }
+                }
+            });
+            section(ui, l, tr("settings.fields"), |ui| {
+                for (k, name) in ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"].into_iter().enumerate() {
+                    let on = st.fields[k];
+                    if ito_prefs::row(ui, l, tr(name), tr("settings.field_note"), |ui| ito_prefs::switch(ui, l, on)) {
+                        st.fields[k] = !on;
+                    }
+                }
+            });
+        }
         _ => {}
     });
+    if app.settings != before {
+        app.save_settings();
+    }
     if out.close {
         app.escape();
     }

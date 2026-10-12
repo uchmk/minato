@@ -162,6 +162,12 @@ const EN: &[(&str, &str)] = &[
     ("settings.theme_note", "Your own themes go in"),
     ("settings.no_folder", "This machine has no config folder."),
     ("settings.sample", "A sample in this theme"),
+    ("settings.minato", "minato"),
+    ("settings.minato_lead", "What the inbox collects and which fields the writing box offers."),
+    ("settings.rules", "Inbox rules"),
+    ("settings.fields", "Writing box fields"),
+    ("settings.field_note", "Opened with its Alt key"),
+    ("pick.hidden", "That field is hidden in the settings (Ctrl+,)."),
 ];
 
 const JA: &[(&str, &str)] = &[
@@ -324,6 +330,12 @@ const JA: &[(&str, &str)] = &[
     ("settings.theme_note", "自分のテーマの置き場所:"),
     ("settings.no_folder", "このマシンには設定のフォルダがありません。"),
     ("settings.sample", "このテーマでの見本"),
+    ("settings.minato", "minato"),
+    ("settings.minato_lead", "受信箱に入れるものと、書き込み箱に出す項目。"),
+    ("settings.rules", "受信箱の規則"),
+    ("settings.fields", "書き込み箱の項目"),
+    ("settings.field_note", "Alt キーで開く"),
+    ("pick.hidden", "その項目は設定で隠してあります（Ctrl+,）。"),
 ];
 
 /// The language codes minato has words for.

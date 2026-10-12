@@ -93,6 +93,15 @@ fn compose(ui: &mut Ui, app: &mut App) {
                 i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
+        // A field the settings hide does nothing but say so.
+        let (labels, people, status, priority, mile, review) = (
+            labels && app.field_shown(0),
+            people && app.field_shown(1),
+            status && app.field_shown(2),
+            priority && app.field_shown(4),
+            mile && app.field_shown(3),
+            review && app.field_shown(5),
+        );
         if send_close || send {
             act = Act::Send(send_close);
         } else if esc {

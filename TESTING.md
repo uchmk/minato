@@ -181,3 +181,12 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 14.3 | Click the palette field in the title bar | The command palette opens, the same as `Ctrl+Shift+P` |
 | 14.4 | With no unread notification look at the bell, then with some | Dim cup without a badge; with unread, a gold badge with the count (`9+` past nine), the same look as tsumugi's bell |
 | 14.5 | Click the bell | The notifications panel opens |
+
+## 15. The minato page of the settings
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 15.1 | `Ctrl+,`, open the "minato" page | Two cards: the seven inbox rules and the six writing-box fields, each with a switch; Milestone, Priority, Reviewers and the dependabot rule are off |
+| 15.2 | Switch the dependabot rule on and go to the inbox | A dependabot PR now appears with its reason |
+| 15.3 | Switch Milestone on, press `r` then `Alt+M` on an item | The milestone picker opens; with it off, a toast says the field is hidden |
+| 15.4 | Change a switch, quit and start again | The switches keep their state; `minato-settings.json` sits beside common.toml |

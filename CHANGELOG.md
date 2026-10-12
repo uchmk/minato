@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.12.0] - 2026-10-12
+
+### Added
+
+- 設定の画面に「minato」のページ: 受信箱の規則 7 つと、書き込み箱の項目 6 つ（Labels / Assignees / Status / Milestone / Priority / Reviewers）を入り切りできる。設定は common.toml と同じフォルダの `minato-settings.json` に保存する（書き込みは専用のスレッド）。隠した項目の `Alt` キーは「設定で隠してあります」とトーストを出すだけ。既定は design.md のとおり（Milestone・Priority・Reviewers と dependabot の規則は切）。
+- 項目の並び順は固定のまま（設定では変えられない）。
+
 ## [0.11.0] - 2026-10-12
 
 ### Changed

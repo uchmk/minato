@@ -10,7 +10,8 @@ use minato_core::board::{self, BoardState, Project};
 use minato_core::composer::Picker;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
-use minato_core::inbox::{Card, InboxState, Mark, Rules};
+use minato_core::inbox::{Card, InboxState, Mark};
+use minato_core::prefs::Settings;
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::notes::{self, Note, NotesState};
 
@@ -162,8 +163,9 @@ pub struct App {
     pub marks: HashMap<String, Mark>,
     /// Where changed marks go to be written (see `keep_marks`).
     marks_tx: Option<std::sync::mpsc::Sender<String>>,
-    /// Which inbox rules are on.
-    pub rules: Rules,
+    /// minato's own settings: the inbox rules and the writing box's fields.
+    pub settings: Settings,
+    settings_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The list view's selection.
     pub list: ListState,
     /// The detail of one item (its node id), once fetched.
@@ -236,6 +238,20 @@ pub enum Pick {
     Reviewers,
 }
 
+/// A thread that writes the last text it is sent to `path`.
+fn writer(path: std::path::PathBuf) -> std::sync::mpsc::Sender<String> {
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        while let Ok(mut text) = rx.recv() {
+            while let Ok(newer) = rx.try_recv() {
+                text = newer;
+            }
+            let _ = ito_common::write_atomic(&path, text);
+        }
+    });
+    tx
+}
+
 /// The writing box: a comment on one item, with the labels and the
 /// assignees to change from the same place.
 pub struct Compose {
@@ -269,7 +285,8 @@ impl App {
             inbox: InboxState::default(),
             marks: HashMap::new(),
             marks_tx: None,
-            rules: Rules::default(),
+            settings: Settings::default(),
+            settings_tx: None,
             list: ListState::default(),
             detail: None,
             open_url: None,
@@ -619,7 +636,7 @@ impl App {
     /// Every card of the inbox now, before its filters.
     pub fn inbox_all(&self) -> Vec<Card> {
         let me = self.viewer.as_deref().unwrap_or("");
-        minato_core::inbox::cards(&self.items, me, &self.rules, &self.marks, now_epoch())
+        minato_core::inbox::cards(&self.items, me, &self.settings.rules, &self.marks, now_epoch())
     }
 
     /// A key in the inbox: `d` done, `s` later (tomorrow 9:00), `u` undo,
@@ -666,16 +683,32 @@ impl App {
         if let Ok(text) = std::fs::read_to_string(&path) {
             self.marks = minato_core::inbox::marks_parse(&text);
         }
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-        std::thread::spawn(move || {
-            while let Ok(mut text) = rx.recv() {
-                while let Ok(newer) = rx.try_recv() {
-                    text = newer;
-                }
-                let _ = ito_common::write_atomic(&path, text);
-            }
-        });
-        self.marks_tx = Some(tx);
+        self.marks_tx = Some(writer(path));
+    }
+
+    /// Keep minato's settings in `path`, the same way.
+    pub fn keep_settings(&mut self, path: std::path::PathBuf) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            self.settings = Settings::parse(&text);
+        }
+        self.settings_tx = Some(writer(path));
+    }
+
+    /// Write the settings after the screen changed them.
+    pub fn save_settings(&self) {
+        if let Some(tx) = &self.settings_tx {
+            let _ = tx.send(self.settings.to_json());
+        }
+    }
+
+    /// Whether the writing box offers field `f` (0 Labels .. 5 Reviewers);
+    /// says so in a toast when the settings hide it.
+    pub fn field_shown(&mut self, f: usize) -> bool {
+        let on = self.settings.fields[f];
+        if !on {
+            self.say_key("pick.hidden");
+        }
+        on
     }
 
     fn save_marks(&self) {
@@ -1095,6 +1128,29 @@ mod tests {
         a.apply_pick();
         let Call::Send { path, body, .. } = &a.outbox[1].call else { panic!() };
         assert!(path.ends_with("/pulls/3/requested_reviewers") && body.contains("amy"), "{path} {body}");
+    }
+
+    #[test]
+    fn hidden_fields_say_so_and_settings_are_read_back() {
+        let mut a = app();
+        assert!(a.field_shown(0));
+        assert!(!a.field_shown(3) && a.toast.is_some());
+        let dir = std::env::temp_dir().join(format!("minato-settings-{}", std::process::id()));
+        let file = dir.join("s.json");
+        a.keep_settings(file.clone());
+        a.settings.fields[3] = true;
+        a.settings.rules.0[6] = true;
+        a.save_settings();
+        for _ in 0..100 {
+            if file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let mut b = app();
+        b.keep_settings(file);
+        assert_eq!(b.settings, a.settings);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
