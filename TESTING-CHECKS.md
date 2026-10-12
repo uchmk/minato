@@ -200,3 +200,8 @@
 
 - [ ] **21.1** In the list move to the filter column, choose "Mentions me" under saved → Only items that mention you stay, and the query over the list shows `mentions:@me`
 - [ ] **21.2** Choose "Findings" under saved → Only items with the `finding` label stay, and the query shows `label:finding`
+
+## 22. Discussion answer
+
+- [ ] **22.1** Select a discussion in the list that has a comment from someone other than its author, wait for the detail, press `M` → A toast says it was marked; on GitHub that comment shows as the answer
+- [ ] **22.2** Press `M` on an issue or a PR → A toast says only a discussion can have an answer

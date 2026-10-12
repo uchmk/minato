@@ -77,6 +77,10 @@ pub struct Check {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
+    /// GraphQL node id of the comment.
+    pub id: String,
+    /// A discussion comment already marked as the answer.
+    pub answer: bool,
     pub author: String,
     pub created_at: String,
     pub body: String,

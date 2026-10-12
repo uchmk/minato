@@ -19,6 +19,7 @@
 - [x] 12. New issue (v0.16.0: `N` in the inbox and the list)
 - [x] 13. Repository settings, read only (v0.17.0: `S` in the inbox and the list)
 - [x] 14. Saved filters for mentions and findings (v0.18.0)
+- [x] 15. Discussion answer mark (v0.19.0: `M`)
 - [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 
 ## Owner

@@ -76,6 +76,7 @@ impl View {
                 ("r", "key.write"),
                 ("N", "key.new"),
                 ("S", "key.repo"),
+("M", "key.answer"),
                 ("d", "key.done"),
                 ("s", "key.later"),
                 ("u", "key.undo"),
@@ -353,6 +354,7 @@ impl App {
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
             (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
+            (Mode::Main, 'M') if matches!(self.view, View::Inbox | View::List) => self.mark_answer(),
             (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
@@ -763,6 +765,26 @@ impl App {
         self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
         self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
         self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new() });
+    }
+
+    /// `M`: mark the newest comment of the selected discussion that is not
+    /// the asker's as its answer.
+    fn mark_answer(&mut self) {
+        let Some(item) = self.selected().cloned() else { return };
+        if item.kind != Kind::Discussion || minato_core::mainci::is_stub(&item) {
+            self.say_key("write.not_discussion");
+            return;
+        }
+        let entry = self.detail.as_ref().filter(|(id, _)| *id == item.id).and_then(|(_, d)| d.timeline.iter().rev().find(|e| e.author != item.author && !e.id.is_empty()));
+        match entry {
+            Some(e) if e.answer => self.say_key("write.already_answer"),
+            Some(e) => {
+                let n = self.outbox.len();
+                let call = write::mark_answer(&e.id);
+                self.queue(&format!("write:{n}:answer"), call, Some("write.answered"));
+            }
+            None => self.say_key("write.no_answer"),
+        }
     }
 
     /// `S`: show the settings of the selected item's repository (read only).

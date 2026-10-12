@@ -31,7 +31,7 @@ pub fn discussions_query() -> String {
 pub fn detail_query() -> &'static str {
     "query($id: ID!) { node(id: $id) { __typename \
 ... on Issue { body comments(last: 20) { nodes { author { login } createdAt body } } } \
-... on Discussion { body comments(last: 20) { nodes { author { login } createdAt body } } } \
+... on Discussion { body comments(last: 20) { nodes { id isAnswer author { login } createdAt body } } } \
 ... on PullRequest { body comments(last: 20) { nodes { author { login } createdAt body } } \
 commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 30) { nodes { __typename \
 ... on CheckRun { name conclusion status } ... on StatusContext { context state } } } } } } } } } }"
@@ -183,6 +183,10 @@ pub fn parse_items(body: &str) -> Result<Vec<Item>, String> {
 
 #[derive(Deserialize)]
 struct RawComment {
+    #[serde(default)]
+    id: String,
+    #[serde(default, rename = "isAnswer")]
+    is_answer: bool,
     author: Option<Login>,
     #[serde(rename = "createdAt")]
     created_at: String,
@@ -259,7 +263,7 @@ pub fn parse_detail(body: &str) -> Result<Detail, String> {
         .map(|c| {
             c.nodes
                 .into_iter()
-                .map(|c| Entry { author: c.author.map_or_else(|| "ghost".to_string(), |a| a.login), created_at: c.created_at, body: c.body })
+                .map(|c| Entry { id: c.id, answer: c.is_answer, author: c.author.map_or_else(|| "ghost".to_string(), |a| a.login), created_at: c.created_at, body: c.body })
                 .collect()
         })
         .unwrap_or_default();
@@ -303,6 +307,14 @@ mod tests {
         assert_eq!(d.timeline.len(), 2);
         assert_eq!(d.timeline[0].author, "uchmk");
         assert!(parse_detail("{\"data\":{\"node\":null}}").is_err());
+    }
+
+    #[test]
+    fn discussion_comments_carry_their_id_and_answer_mark() {
+        let body = r#"{"data":{"node":{"body":"q","comments":{"nodes":[{"id":"DC_1","isAnswer":true,"author":{"login":"a"},"createdAt":"2026-01-01T00:00:00Z","body":"x"},{"author":null,"createdAt":"2026-01-02T00:00:00Z","body":"y"}]}}}}"#;
+        let d = parse_detail(body).unwrap();
+        assert_eq!((d.timeline[0].id.as_str(), d.timeline[0].answer), ("DC_1", true));
+        assert_eq!((d.timeline[1].id.as_str(), d.timeline[1].answer), ("", false));
     }
 
     #[test]

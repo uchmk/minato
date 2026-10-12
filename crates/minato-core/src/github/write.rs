@@ -22,6 +22,14 @@ pub fn comment(item: &Item, body: &str) -> Call {
     }
 }
 
+/// Mark a discussion comment as the answer.
+pub fn mark_answer(comment_id: &str) -> Call {
+    Call::Graphql {
+        query: "mutation($id:ID!){markDiscussionCommentAsAnswer(input:{id:$id}){discussion{id}}}".into(),
+        variables: json!({ "id": comment_id }).to_string(),
+    }
+}
+
 /// A new issue; the first line of `text` is the title, the rest the body.
 pub fn create_issue(repo: &str, text: &str) -> Option<Call> {
     let text = text.trim_start();
@@ -174,6 +182,13 @@ more" }));
         let (m, p, b) = parts(comment(&item(Kind::Pr), "hi \"there\"\n"));
         assert_eq!((m, p.as_str()), (Method::Post, "/repos/uchmk/kura/issues/7/comments"));
         assert_eq!(b["body"], "hi \"there\"\n");
+    }
+
+    #[test]
+    fn the_answer_mark_is_a_mutation_on_the_comment() {
+        let Call::Graphql { query, variables } = mark_answer("DC_1") else { panic!() };
+        assert!(query.contains("markDiscussionCommentAsAnswer"));
+        assert_eq!(serde_json::from_str::<Value>(&variables).unwrap()["id"], "DC_1");
     }
 
     #[test]
