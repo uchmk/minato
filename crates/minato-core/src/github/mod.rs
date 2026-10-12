@@ -12,7 +12,7 @@ pub mod types;
 pub mod write;
 pub mod worker;
 
-pub use client::{Client, Fetched};
+pub use client::{Client, Etags, Fetched};
 pub use http::{Method, Request, Response, Transport, UreqTransport};
 pub use rate::Rate;
 pub use token::Token;

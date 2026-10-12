@@ -1,7 +1,10 @@
 //! GET with an ETag cache: a 304 hands back the copy we hold (and GitHub
-//! does not count it against the limit); a 200 replaces the copy.
+//! does not count it against the limit); a 200 replaces the copy. The
+//! clients of one app share the cache, and the app may fill it from disk so
+//! a start's first ask can be a 304 too.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use super::http::{API, Request, Transport};
 use super::rate::Rate;
@@ -13,35 +16,53 @@ pub struct Fetched {
     /// True when GitHub said 304 and the body is our copy.
     pub cached: bool,
     pub rate: Option<Rate>,
+    /// The ETag the body came with (a GET's), to keep beside it.
+    pub etag: Option<String>,
 }
+
+/// The ETag cache: url -> (etag, body).
+pub type Etags = Arc<Mutex<HashMap<String, (String, String)>>>;
 
 pub struct Client<T: Transport> {
     transport: T,
     token: Token,
-    /// url -> (etag, body)
-    cache: HashMap<String, (String, String)>,
+    cache: Etags,
+}
+
+/// The URL of `path` ("/user" or a full URL).
+pub fn url(path: &str) -> String {
+    if path.starts_with("http") { path.to_string() } else { format!("{API}{path}") }
 }
 
 impl<T: Transport> Client<T> {
     pub fn new(transport: T, token: Token) -> Self {
-        Self { transport, token, cache: HashMap::new() }
+        Self::sharing(transport, token, Etags::default())
+    }
+
+    /// A client whose ETag cache is `cache` (shared with others).
+    pub fn sharing(transport: T, token: Token, cache: Etags) -> Self {
+        Self { transport, token, cache }
+    }
+
+    fn held(&self, url: &str) -> Option<(String, String)> {
+        self.cache.lock().unwrap_or_else(PoisonError::into_inner).get(url).cloned()
     }
 
     /// `path` is "/user" or a full URL.
     pub fn get(&mut self, path: &str) -> Result<Fetched, String> {
-        let url = if path.starts_with("http") { path.to_string() } else { format!("{API}{path}") };
-        let etag = self.cache.get(&url).map(|(e, _)| e.clone());
+        let url = url(path);
+        let etag = self.held(&url).map(|(e, _)| e);
         let r = self.transport.send(&self.token, &Request::Get { url: url.clone(), etag })?;
         match r.status {
-            304 => match self.cache.get(&url) {
-                Some((_, body)) => Ok(Fetched { body: body.clone(), cached: true, rate: r.rate }),
+            304 => match self.held(&url) {
+                Some((etag, body)) => Ok(Fetched { body, cached: true, rate: r.rate, etag: Some(etag) }),
                 None => Err("304 without a cached copy".into()),
             },
             200..=299 => {
-                if let Some(e) = r.etag {
-                    self.cache.insert(url, (e, r.body.clone()));
+                if let Some(e) = &r.etag {
+                    self.cache.lock().unwrap_or_else(PoisonError::into_inner).insert(url, (e.clone(), r.body.clone()));
                 }
-                Ok(Fetched { body: r.body, cached: false, rate: r.rate })
+                Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: r.etag })
             }
             401 => Err("GitHub refused the token (401)".into()),
             s => Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
@@ -50,10 +71,9 @@ impl<T: Transport> Client<T> {
 
     /// Change something. `path` is "/repos/..." or a full URL; `body` is JSON.
     pub fn send(&mut self, method: super::http::Method, path: &str, body: &str) -> Result<Fetched, String> {
-        let url = if path.starts_with("http") { path.to_string() } else { format!("{API}{path}") };
-        let r = self.transport.send(&self.token, &Request::Send { method, url, body: body.to_string() })?;
+        let r = self.transport.send(&self.token, &Request::Send { method, url: url(path), body: body.to_string() })?;
         match r.status {
-            200..=299 => Ok(Fetched { body: r.body, cached: false, rate: r.rate }),
+            200..=299 => Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: None }),
             401 => Err("GitHub refused the token (401)".into()),
             403 => Err(format!("GitHub said no (403): {}", first_line(&r.body))),
             s => Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
@@ -68,7 +88,7 @@ impl<T: Transport> Client<T> {
         if !(200..=299).contains(&r.status) {
             return Err(format!("GitHub answered {}: {}", r.status, first_line(&r.body)));
         }
-        Ok(Fetched { body: r.body, cached: false, rate: r.rate })
+        Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: None })
     }
 }
 
@@ -113,6 +133,21 @@ mod tests {
         let asked = asked.lock().unwrap();
         assert_eq!(asked[0], Request::Get { url: "https://api.github.com/user".into(), etag: None });
         assert_eq!(asked[1], Request::Get { url: "https://api.github.com/user".into(), etag: Some("\"a\"".into()) });
+        assert_eq!((first.etag.as_deref(), second.etag.as_deref()), (Some("\"a\""), Some("\"a\"")));
+    }
+
+    #[test]
+    fn a_cache_filled_from_disk_is_shared_and_asked_with() {
+        let etags = Etags::default();
+        etags.lock().unwrap().insert(url("/user"), ("\"d\"".into(), "kept".into()));
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut c = Client::sharing(Fake { answers: vec![resp(304, None, "")], asked: asked.clone() }, Token::new("t").unwrap(), etags.clone());
+        let got = c.get("/user").unwrap();
+        assert_eq!((got.body.as_str(), got.cached), ("kept", true));
+        assert_eq!(asked.lock().unwrap()[0], Request::Get { url: "https://api.github.com/user".into(), etag: Some("\"d\"".into()) });
+        let mut other = Client::sharing(Fake { answers: vec![resp(200, Some("\"e\""), "new")], asked }, Token::new("t").unwrap(), etags.clone());
+        other.get("/user").unwrap();
+        assert_eq!(etags.lock().unwrap()[&url("/user")], ("\"e\"".into(), "new".into()));
     }
 
     #[test]

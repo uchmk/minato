@@ -4,10 +4,12 @@
 //! are kept on disk (`minato_core::cache`), so a start shows the last ones
 //! at once and a detail whose item has not moved is not asked again.
 //!
-//! Two workers, each one request at a time: `worker` for the polls (the
-//! searches, the board, the runs; those of the open view go first), `quick`
-//! for what a key asks for (a detail, a run's jobs, a log, a write), so it
-//! never waits behind a poll.
+//! Three workers, each one request at a time: `worker` for the polls (the
+//! searches, the board, the runs; those of the open view go first, the
+//! others' less often), `quick` for what a key asks for (a detail, a run's
+//! jobs, a log, a write), so it never waits behind a poll, and `back` for
+//! reading the finished runs' jobs ahead. They share one ETag cache, filled
+//! from disk at a start, so an answer that has not changed costs a 304.
 //!
 //! A run's jobs, artifacts and workflow are kept by run with its
 //! `updated_at`: a finished run's are shown from there (and from disk after
@@ -29,12 +31,12 @@ use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
 use minato_core::github::write::parse_names;
-use minato_core::github::{Client, Rate, Token, UreqTransport};
+use minato_core::github::{client, Client, Etags, Rate, Token, UreqTransport};
 
 use minato_core::list::Item;
 use minato_core::mainci;
 
-use crate::app::{App, RunDetail};
+use crate::app::{App, RunDetail, View};
 use crate::overlay::Overlay;
 
 /// How often the rate limit is asked while plenty is left.
@@ -46,6 +48,13 @@ pub struct Net {
     token_rx: Receiver<Found>,
     worker: Option<Worker>,
     quick: Option<Worker>,
+    back: Option<Worker>,
+    /// The ETags and bodies the workers' GETs were last answered with.
+    etags: Etags,
+    /// Jobs sent to `back` and not answered yet.
+    back_busy: usize,
+    /// The runs (id and `updated_at`) `back` has been asked about this start.
+    back_tried: HashSet<(u64, String)>,
     next_poll: Instant,
     rate: Option<Rate>,
     next_search: Instant,
@@ -68,8 +77,9 @@ pub struct Net {
     repos: Vec<String>,
     /// The last runs of each repository.
     run_found: std::collections::HashMap<String, Vec<Run>>,
-    next_runs: Instant,
-    next_board: Instant,
+    /// When the runs and the board were last asked for (`None`: ask now).
+    runs_asked: Option<Instant>,
+    board_asked: Option<Instant>,
     /// The number of the Project the board shows, once `board-pick` has said.
     board_no: Option<u64>,
     next_notes: Instant,
@@ -79,6 +89,9 @@ pub struct Net {
     run_retry: Instant,
     /// What GitHub said about the runs looked at, by run id.
     run_kept: HashMap<u64, RunMemo>,
+    /// The workflows read, by the path they were read from (a file at a
+    /// commit, the same for the runs of one commit).
+    yaml_by: HashMap<String, workflow::Workflow>,
     /// Ask the selected run again even if it is kept (after a write).
     run_refetch: bool,
     /// The board's pages come so far (the board changes once all have).
@@ -94,11 +107,17 @@ pub struct Net {
     live: HashSet<String>,
 }
 
-/// How often the runs are asked again, while the Actions view is open.
+/// How often the runs are asked again, while the Actions view is open, and
+/// while it is not (so it opens on fresh runs).
 const RUNS: Duration = Duration::from_secs(45);
+const RUNS_AWAY: Duration = Duration::from_secs(180);
 
-/// How often the board is asked again, while it is open.
+/// How often the board is asked again, while it is open and while not.
 const BOARD: Duration = Duration::from_secs(60);
+const BOARD_AWAY: Duration = Duration::from_secs(300);
+
+/// Below so many calls left, the runs' jobs are not read ahead.
+const BACK_FLOOR: u32 = 1000;
 
 /// How often the notifications are asked again.
 const NOTES: Duration = Duration::from_secs(90);
@@ -162,7 +181,7 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: now, next_board: now, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default() }
+        Net { token_rx, worker: None, quick: None, back: None, etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default() }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -173,6 +192,10 @@ impl Net {
         let Ok(entries) = rx.try_recv() else { return };
         self.cache_rx = None;
         for e in entries {
+            // A GET kept with its ETag: the first ask may be a 304.
+            if let Some(path) = rest_path(&e.key).filter(|_| !e.stamp.is_empty()) {
+                self.etags.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entry(client::url(&path)).or_insert_with(|| (e.stamp.clone(), e.body.clone()));
+            }
             if let Some(id) = e.key.strip_prefix("detail:") {
                 self.kept.insert(id.to_string(), (e.stamp, e.body));
             } else if self.live.contains(&e.key) {
@@ -289,7 +312,7 @@ impl Net {
             "board-pick" => match board::pick(body) {
                 Ok(n) => {
                     if live && self.board_no != Some(n) {
-                        self.next_board = Instant::now();
+                        self.board_asked = None;
                     }
                     self.board_no = Some(n);
                 }
@@ -309,12 +332,12 @@ impl Net {
                     app.say(words);
                 }
                 // Read the truth back: it undoes a move GitHub refused.
-                self.next_board = Instant::now();
+                self.board_asked = None;
             }
             "a-repos" => match actions::parse_repos(body) {
                 Ok(v) => {
                     self.repos = v.into_iter().take(REPOS).collect();
-                    self.next_runs = Instant::now();
+                    self.runs_asked = None;
                 }
                 Err(e) => app.say(e),
             },
@@ -354,7 +377,7 @@ impl Net {
                 }
                 // Look again at once, and re-ask the detail (not from the cache).
                 self.next_search = Instant::now();
-                self.next_runs = Instant::now();
+                self.runs_asked = None;
                 self.asked = None;
                 self.refetch = true;
                 self.asked_run = None;
@@ -392,7 +415,12 @@ impl Net {
         self.board_pages.push(body.to_string());
         let next = board::next_page(body).filter(|_| self.board_pages.len() < PAGES);
         if let (Some(after), Some(n), Some(w)) = (next, self.board_no, &self.worker) {
-            w.send_first(Job { key: "board-more".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, Some(&after)) } });
+            let job = Job { key: "board-more".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, Some(&after)) } };
+            if app.view == View::Board {
+                w.send_first(job);
+            } else {
+                w.send(job);
+            }
             return;
         }
         let pages = std::mem::take(&mut self.board_pages);
@@ -411,6 +439,7 @@ impl Net {
         let Some((part, id)) = key.split_once(':') else { return };
         let Ok(id) = id.parse::<u64>() else { return };
         let run = app.runs.iter().find(|r| r.id == id);
+        let path = run.and_then(workflow::contents_path);
         let done = run.is_some_and(|r| !r.status.active());
         let stamp = match kept {
             Some(s) => s.to_string(),
@@ -438,7 +467,11 @@ impl Net {
             _ => {
                 // A workflow that cannot be read just has no graph.
                 if let Ok(text) = workflow::parse_contents(body) {
-                    m.detail.workflow = Some(workflow::parse(&text));
+                    let w = workflow::parse(&text);
+                    if let Some(p) = path {
+                        self.yaml_by.insert(p, w.clone());
+                    }
+                    m.detail.workflow = Some(w);
                 }
                 m.got[2] = true;
             }
@@ -448,13 +481,69 @@ impl Net {
         }
     }
 
+    /// Whether the run's workflow is known: kept for it, or read for
+    /// another run of the same file at the same commit (then kept for it).
+    fn known_yaml(&mut self, r: &Run) -> bool {
+        if self.run_kept.get(&r.id).is_some_and(|m| m.got[2]) {
+            return true;
+        }
+        let Some(w) = workflow::contents_path(r).and_then(|p| self.yaml_by.get(&p)) else { return false };
+        let m = self.run_kept.entry(r.id).or_insert_with(|| RunMemo { stamp: r.updated_at.clone(), detail: RunDetail { id: r.id, ..Default::default() }, got: [false; 3] });
+        m.detail.workflow = Some(w.clone());
+        m.got[2] = true;
+        true
+    }
+
+    /// Read a finished run's jobs, artifacts and workflow ahead on `back`,
+    /// one run at a time: the runs near the selected one first, then the
+    /// rest. What is kept is not asked; a run tried is not tried again this
+    /// start (unless it changes); nothing while the calls left are few.
+    fn read_ahead(&mut self, app: &App) {
+        if self.back.is_none() || self.back_busy > 0 || self.rate.is_some_and(|r| r.remaining < BACK_FLOOR) {
+            return;
+        }
+        let order: Vec<Run> = app.acts.near_first(&app.runs).into_iter().filter(|r| !r.status.active()).cloned().collect();
+        for r in order {
+            let tried = (r.id, r.updated_at.clone());
+            if self.back_tried.contains(&tried) {
+                continue;
+            }
+            let yaml = self.known_yaml(&r);
+            let memo = self.run_kept.get(&r.id);
+            let same = memo.is_some_and(|m| m.stamp == r.updated_at);
+            let mut jobs = Vec::new();
+            if !(same && memo.is_some_and(|m| m.got[0])) {
+                jobs.push(Job { key: format!("a-jobs:{}", r.id), call: Call::Get(actions::jobs_path(&r)) });
+            }
+            if !(same && memo.is_some_and(|m| m.got[1])) {
+                jobs.push(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(&r)) });
+            }
+            if let Some(path) = workflow::contents_path(&r).filter(|_| !yaml) {
+                jobs.push(Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
+            }
+            self.back_tried.insert(tried);
+            if jobs.is_empty() {
+                continue;
+            }
+            self.back_busy = jobs.len();
+            if let Some(back) = &self.back {
+                for j in jobs {
+                    back.send(j);
+                }
+            }
+            return;
+        }
+    }
+
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
         if self.worker.is_none() {
             match self.token_rx.try_recv() {
                 Ok(Some((token, _))) => {
-                    let (wake, wake2) = (ctx.clone(), ctx.clone());
-                    self.quick = Some(Worker::spawn(Client::new(UreqTransport::new(), token.clone()), move || wake2.request_repaint()));
-                    let worker = Worker::spawn(Client::new(UreqTransport::new(), token), move || wake.request_repaint());
+                    let (wake, wake2, wake3) = (ctx.clone(), ctx.clone(), ctx.clone());
+                    let client = |token: Token| Client::sharing(UreqTransport::new(), token, self.etags.clone());
+                    self.quick = Some(Worker::spawn(client(token.clone()), move || wake2.request_repaint()));
+                    self.back = Some(Worker::spawn(client(token.clone()), move || wake3.request_repaint()));
+                    let worker = Worker::spawn(client(token), move || wake.request_repaint());
                     worker.send(get("me", "/user"));
                     worker.send(get("rate", "/rate_limit"));
                     self.worker = Some(worker);
@@ -472,8 +561,14 @@ impl Net {
         }
         self.load_cache(app);
         let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
-        let replies: Vec<_> = std::iter::from_fn(|| worker.try_recv().or_else(|| quick.try_recv())).collect();
-        for reply in replies {
+        let mut replies: Vec<_> = std::iter::from_fn(|| worker.try_recv().or_else(|| quick.try_recv())).map(|r| (r, false)).collect();
+        if let Some(back) = &self.back {
+            replies.extend(std::iter::from_fn(|| back.try_recv()).map(|r| (r, true)));
+        }
+        for (reply, ahead) in replies {
+            if ahead {
+                self.back_busy = self.back_busy.saturating_sub(1);
+            }
             match reply.result {
                 Ok(f) => {
                     app.synced = Some(Instant::now());
@@ -482,11 +577,14 @@ impl Net {
                     }
                     let key = reply.key.clone();
                     self.live.insert(key.clone());
-                    if cached(&key, self.searched_custom.is_some() || self.searched_closed) && !f.body.contains("\"errors\"") {
-                        self.keep(&key, "", &f.body);
+                    // A 304's body is the one already kept.
+                    if !f.cached && cached(&key, self.searched_custom.is_some() || self.searched_closed) && !f.body.contains("\"errors\"") {
+                        self.keep(&key, f.etag.as_deref().unwrap_or(""), &f.body);
                     }
                     self.take(app, &key, &f.body, true);
                 }
+                // What is read ahead and does not come is left to a selection.
+                Err(_) if ahead => {}
                 Err(e) => {
                     self.pending.remove(&reply.key);
                     if let Some(id) = reply.key.strip_prefix("a-log:").and_then(|n| n.parse::<u64>().ok()) {
@@ -497,7 +595,7 @@ impl Net {
                         }
                     }
                     if reply.key.starts_with("board:") {
-                        self.next_board = Instant::now();
+                        self.board_asked = None;
                     }
                     if reply.key.starts_with("note:") {
                         self.next_notes = Instant::now();
@@ -526,6 +624,27 @@ impl Net {
                 quick.send_in("peek", &id, Job { key: format!("peek:{id}"), call: Call::Graphql { query: board::peek_query().into(), variables: vars } });
                 self.peek_asked = Some(id);
             }
+        }
+        // A stub for a repository (red main CI) has no thread to read. A
+        // detail kept from when the item was last updated is shown and not
+        // asked again; an older one is shown while the new one comes.
+        let want = app.selected().filter(|i| !minato_core::mainci::is_stub(i)).map(|i| (i.id.clone(), i.updated_at.clone()));
+        if want != self.asked {
+            if let Some((id, stamp)) = &want {
+                let kept = self.kept.get(id).and_then(|(s, b)| parse_detail(b).ok().map(|d| (s == stamp && !stamp.is_empty(), d)));
+                let fresh = kept.as_ref().is_some_and(|(same, _)| *same) && !self.refetch;
+                if let Some((_, d)) = kept {
+                    if app.detail.as_ref().is_none_or(|(i, _)| i != id) || fresh {
+                        app.detail = Some((id.clone(), d));
+                    }
+                }
+                if !fresh {
+                    let vars = format!("{{\"id\":{}}}", json_str(id));
+                    quick.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
+                }
+            }
+            self.asked = want;
+            self.refetch = false;
         }
         app.api = self.rate.map(|r| (r.remaining, r.limit));
         let now = Instant::now();
@@ -569,29 +688,34 @@ impl Net {
             worker.send(get("notes", notes::PATH));
             self.next_notes = now + NOTES;
         }
-        if app.viewer.is_some() && app.view == crate::app::View::Board && now >= self.next_board {
+        // The board and the runs: those of the open view first and often,
+        // the other's behind the searches and less often, so the view opens
+        // on them.
+        let send = |job: Job, open: bool| if open { worker.send_first(job) } else { worker.send(job) };
+        let open = app.view == View::Board;
+        if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }) <= now {
             match self.board_no {
-                None => worker.send_first(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query().into(), variables: "{}".into() } }),
-                Some(n) => worker.send_first(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, None) } }),
+                None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query().into(), variables: "{}".into() } }, open),
+                Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, None) } }, open),
             }
-            self.next_board = now + BOARD;
+            self.board_asked = Some(now);
         }
-        if app.viewer.is_some() && app.view == crate::app::View::Actions {
+        let open = app.view == View::Actions;
+        if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }) <= now {
             if self.repos.is_empty() {
-                if now >= self.next_runs {
-                    worker.send_first(get("a-repos", actions::repos_path()));
-                    self.next_runs = now + RUNS;
-                }
-            } else if now >= self.next_runs {
+                send(get("a-repos", actions::repos_path()), open);
+            } else {
                 for r in &self.repos {
-                    worker.send_first(Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) });
+                    send(Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) }, open);
                 }
-                self.next_runs = now + RUNS;
                 // A running or queued run's jobs are asked again with the runs.
-                if app.run().is_some_and(|r| r.status.active()) {
+                if open && app.run().is_some_and(|r| r.status.active()) {
                     self.asked_run = None;
                 }
             }
+            self.runs_asked = Some(now);
+        }
+        if app.viewer.is_some() && open {
             // The run selected: what is kept shows at once. A finished run's
             // parts kept since it finished are not asked again; the rest are,
             // and those of a run passed over (`j` `k`) are dropped unasked.
@@ -599,6 +723,8 @@ impl Net {
             let want = run.as_ref().map(|r| (r.id, r.updated_at.clone()));
             if want != self.asked_run && now >= self.run_retry {
                 if let Some(r) = &run {
+                    let yaml = !self.run_refetch && self.known_yaml(r);
+                    let Some(quick) = &self.quick else { return };
                     let memo = self.run_kept.get(&r.id);
                     if let Some(m) = memo {
                         app.run_detail = Some(m.detail.clone());
@@ -612,7 +738,7 @@ impl Net {
                     if !(same && got(1)) {
                         quick.send_in("run", &tag, Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
                     }
-                    if let Some(path) = workflow::contents_path(r).filter(|_| !got(2)) {
+                    if let Some(path) = workflow::contents_path(r).filter(|_| !yaml) {
                         quick.send_in("run", &tag, Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
                     }
                 }
@@ -620,32 +746,16 @@ impl Net {
                 self.run_refetch = false;
             }
         }
-        // A stub for a repository (red main CI) has no thread to read. A
-        // detail kept from when the item was last updated is shown and not
-        // asked again; an older one is shown while the new one comes.
-        let want = app.selected().filter(|i| !minato_core::mainci::is_stub(i)).map(|i| (i.id.clone(), i.updated_at.clone()));
-        if want != self.asked {
-            if let Some((id, stamp)) = &want {
-                let kept = self.kept.get(id).and_then(|(s, b)| parse_detail(b).ok().map(|d| (s == stamp && !stamp.is_empty(), d)));
-                let fresh = kept.as_ref().is_some_and(|(same, _)| *same) && !self.refetch;
-                if let Some((_, d)) = kept {
-                    if app.detail.as_ref().is_none_or(|(i, _)| i != id) || fresh {
-                        app.detail = Some((id.clone(), d));
-                    }
-                }
-                if !fresh {
-                    let vars = format!("{{\"id\":{}}}", json_str(id));
-                    quick.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
-                }
-            }
-            self.asked = want;
-            self.refetch = false;
+        if app.viewer.is_some() {
+            self.read_ahead(app);
         }
-        let wake = self.next_poll.min(self.next_search).min(self.next_notes).min(match app.view {
-            crate::app::View::Actions => self.next_runs,
-            crate::app::View::Board => self.next_board,
-            _ => self.next_search,
-        });
+        let wake = self.next_poll.min(self.next_search).min(self.next_notes);
+        let wake = match (&app.viewer, app.view) {
+            (None, _) => wake,
+            (Some(_), View::Board) => wake.min(due(self.board_asked, BOARD)).min(due(self.runs_asked, RUNS_AWAY)),
+            (Some(_), View::Actions) => wake.min(due(self.runs_asked, RUNS)).min(due(self.board_asked, BOARD_AWAY)),
+            (Some(_), _) => wake.min(due(self.runs_asked, RUNS_AWAY)).min(due(self.board_asked, BOARD_AWAY)),
+        };
         let wake = if self.run_retry > now { wake.min(self.run_retry) } else { wake };
         ctx.request_repaint_after(wake.saturating_duration_since(now));
     }
@@ -660,6 +770,22 @@ fn cached(key: &str, narrowed: bool) -> bool {
         "items" => !narrowed,
         "me" | "discussions" | "mentions" | "mainci" | "notes" | "board-pick" | "a-repos" => true,
         k => k.starts_with("a-runs:"),
+    }
+}
+
+/// When a poll last asked at `asked` (`None`: never, or to be asked at once)
+/// is due again, asked every `every`.
+fn due(asked: Option<Instant>, every: Duration) -> Instant {
+    asked.map_or_else(Instant::now, |t| t + every)
+}
+
+/// The path of a kept GET, whose ETag it is kept with.
+fn rest_path(key: &str) -> Option<String> {
+    match key {
+        "me" => Some("/user".into()),
+        "notes" => Some(notes::PATH.into()),
+        "a-repos" => Some(actions::repos_path().into()),
+        k => k.strip_prefix("a-runs:").map(actions::runs_path),
     }
 }
 

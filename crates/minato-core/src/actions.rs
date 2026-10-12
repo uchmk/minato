@@ -342,6 +342,23 @@ impl ActState {
         self.shown(runs).get(self.sel).copied()
     }
 
+    /// Every run, those near the selected one first (the next, the one
+    /// before, and on outward in the view's order), then the hidden ones as
+    /// they are: the order the runs' jobs are read ahead in.
+    pub fn near_first<'a>(&self, runs: &'a [Run]) -> Vec<&'a Run> {
+        let shown = self.shown(runs);
+        let sel = self.sel.min(shown.len().saturating_sub(1));
+        let mut out = Vec::with_capacity(runs.len());
+        for d in 0..shown.len() {
+            out.extend(shown.get(sel + d));
+            if d > 0 && d <= sel {
+                out.push(shown[sel - d]);
+            }
+        }
+        out.extend(runs.iter().filter(|r| !self.matches(r)));
+        out
+    }
+
     pub fn is_chosen(&self, p: &Pick) -> bool {
         match p {
             Pick::Repo(r) => self.repo == *r,
@@ -479,6 +496,23 @@ mod tests {
         let o = options(&runs);
         assert_eq!(o[0].1.len(), 3); // All + two repositories
         assert_eq!(o[2].1.len(), 3);
+    }
+
+    #[test]
+    fn the_runs_near_the_selected_one_come_first() {
+        let runs = runs();
+        let ids = |s: &ActState| s.near_first(&runs).iter().map(|r| r.id).collect::<Vec<_>>();
+        let mut s = ActState::default();
+        assert_eq!(ids(&s), [11, 12, 13]);
+        s.sel = 1;
+        assert_eq!(ids(&s), [12, 13, 11]);
+        s.sel = 2;
+        assert_eq!(ids(&s), [13, 12, 11]);
+        // The hidden run comes last.
+        s.apply(Pick::Workflow(Some("check".into())));
+        s.sel = 1;
+        assert_eq!(ids(&s), [13, 11, 12]);
+        assert!(ActState::default().near_first(&[]).is_empty());
     }
 
     #[test]

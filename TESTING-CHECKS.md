@@ -269,6 +269,9 @@
 - [ ] **28.12** Hold `j` across many runs in Actions, then let go → The detail of the run you stop on comes within a few seconds, not after those of the runs passed
 - [ ] **28.13** Press `4` on a Project with more than 100 cards → Every card shows (up to 500); the cards appear together, not 100 first and the rest later
 - [ ] **28.14** Rest the pointer on a board card for the first time, then again → The first time the box with the body's start comes after a moment; the second time at once
+- [ ] **28.15** Start minato, stay in the inbox for about 30 seconds, then press `3` and `4` → Actions shows its runs and the board its cards at once, with no "loading"
+- [ ] **28.16** Stay in the inbox for a minute after a start, then in Actions select a finished run never selected before → Its jobs, artifacts and graph show at once; the runs next to it too
+- [ ] **28.17** Quit minato and start it again; note the API counter in the status bar, wait two minutes in the inbox → The counter goes down by only a few (the unchanged runs and notifications cost nothing)
 
 ## 29. The built-in browser
 
