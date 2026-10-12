@@ -2,6 +2,14 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.28.1] - 2026-10-13
+
+### Fixed
+
+- 0.28.0 でボードと Actions の runs を 1 度も取りに行かず、ボードが「Project を読んでいます…」のまま、runs が古いままだったのを直した。
+- Priority の欄が無い Project のボードもディスクに残す（前は GitHub がエラーを添えるので残さず、起動のたびに読み直していた）。
+- Project の番号を GitHub から読み直したときは、すぐにボードを取る（前は次の更新まで待つことがあった）。
+
 ## [0.28.0] - 2026-10-13
 
 ### Changed

@@ -311,7 +311,8 @@ impl Net {
             }
             "board-pick" => match board::pick(body) {
                 Ok(n) => {
-                    if live && self.board_no != Some(n) {
+                    // The pick was asked instead of the board: the board now.
+                    if live {
                         self.board_asked = None;
                     }
                     self.board_no = Some(n);
@@ -425,7 +426,9 @@ impl Net {
         }
         let pages = std::mem::take(&mut self.board_pages);
         let all = board::merge(&pages).unwrap_or_else(|_| body.to_string());
-        if !all.contains("\"errors\"") {
+        // An error beside the data (a Project with no Priority field) is
+        // kept; an answer with no Project is not.
+        if board::parse(&all).is_ok() {
             self.keep("board", "", &all);
         }
         self.show_board(app, &all, true);
@@ -693,7 +696,7 @@ impl Net {
         // on them.
         let send = |job: Job, open: bool| if open { worker.send_first(job) } else { worker.send(job) };
         let open = app.view == View::Board;
-        if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }) <= now {
+        if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }, now) <= now {
             match self.board_no {
                 None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query().into(), variables: "{}".into() } }, open),
                 Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, None) } }, open),
@@ -701,7 +704,7 @@ impl Net {
             self.board_asked = Some(now);
         }
         let open = app.view == View::Actions;
-        if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }) <= now {
+        if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }, now) <= now {
             if self.repos.is_empty() {
                 send(get("a-repos", actions::repos_path()), open);
             } else {
@@ -752,9 +755,9 @@ impl Net {
         let wake = self.next_poll.min(self.next_search).min(self.next_notes);
         let wake = match (&app.viewer, app.view) {
             (None, _) => wake,
-            (Some(_), View::Board) => wake.min(due(self.board_asked, BOARD)).min(due(self.runs_asked, RUNS_AWAY)),
-            (Some(_), View::Actions) => wake.min(due(self.runs_asked, RUNS)).min(due(self.board_asked, BOARD_AWAY)),
-            (Some(_), _) => wake.min(due(self.runs_asked, RUNS_AWAY)).min(due(self.board_asked, BOARD_AWAY)),
+            (Some(_), View::Board) => wake.min(due(self.board_asked, BOARD, now)).min(due(self.runs_asked, RUNS_AWAY, now)),
+            (Some(_), View::Actions) => wake.min(due(self.runs_asked, RUNS, now)).min(due(self.board_asked, BOARD_AWAY, now)),
+            (Some(_), _) => wake.min(due(self.runs_asked, RUNS_AWAY, now)).min(due(self.board_asked, BOARD_AWAY, now)),
         };
         let wake = if self.run_retry > now { wake.min(self.run_retry) } else { wake };
         ctx.request_repaint_after(wake.saturating_duration_since(now));
@@ -773,10 +776,10 @@ fn cached(key: &str, narrowed: bool) -> bool {
     }
 }
 
-/// When a poll last asked at `asked` (`None`: never, or to be asked at once)
-/// is due again, asked every `every`.
-fn due(asked: Option<Instant>, every: Duration) -> Instant {
-    asked.map_or_else(Instant::now, |t| t + every)
+/// When a poll last asked at `asked` (`None`: never, or to be asked at once:
+/// `now`) is due again, asked every `every`.
+fn due(asked: Option<Instant>, every: Duration, now: Instant) -> Instant {
+    asked.map_or(now, |t| t + every)
 }
 
 /// The path of a kept GET, whose ETag it is kept with.
@@ -823,4 +826,17 @@ fn json_str(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_poll_never_asked_is_due_at_once() {
+        let now = Instant::now();
+        assert!(due(None, RUNS, now) <= now);
+        assert!(due(Some(now), RUNS, now) > now);
+        assert!(due(Some(now - BOARD), BOARD, now) <= now);
+    }
 }
