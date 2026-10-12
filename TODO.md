@@ -15,6 +15,7 @@
 - [x] 6. Board view (v0.7.0: Project uchmk Status columns, H L and drag write to GitHub, u undo)
 - [x] 6b. Palette (v0.8.0: Ctrl+Shift+P, commands and `#number` items)
 - [x] 7. Writes (comment, close, label, merge) with confirmation (v0.9.1: `x` close and `m` merge ask first, in the list and the inbox; comment and labels were v0.5.0)
+- [x] 11. Closed items in the list (v0.13.0: `C` toggles, `x` opens one again; discussions are not shown while it is on)
 - [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 
 ## Owner

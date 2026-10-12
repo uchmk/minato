@@ -90,6 +90,7 @@ impl View {
                 ("a", "key.assign"),
                 ("m", "key.merge"),
                 ("x", "key.close"),
+                ("C", "key.closed"),
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
             ],
@@ -166,6 +167,8 @@ pub struct App {
     /// minato's own settings: the inbox rules and the writing box's fields.
     pub settings: Settings,
     settings_tx: Option<std::sync::mpsc::Sender<String>>,
+    /// The list shows closed issues and PRs (`C`), so `x` opens them again.
+    pub show_closed: bool,
     /// The list view's selection.
     pub list: ListState,
     /// The detail of one item (its node id), once fetched.
@@ -287,6 +290,7 @@ impl App {
             marks_tx: None,
             settings: Settings::default(),
             settings_tx: None,
+            show_closed: false,
             list: ListState::default(),
             detail: None,
             open_url: None,
@@ -372,8 +376,17 @@ impl App {
                 self.ask_merge();
                 return true;
             }
+            'x' if self.show_closed => {
+                self.reopen();
+                return true;
+            }
             'x' => {
                 self.ask_close();
+                return true;
+            }
+            'C' => {
+                self.show_closed = !self.show_closed;
+                self.say_key(if self.show_closed { "list.closed_on" } else { "list.closed_off" });
                 return true;
             }
             _ => {}
@@ -838,6 +851,18 @@ impl App {
         }
     }
 
+    /// `x` over closed items: open the selected issue or PR again.
+    fn reopen(&mut self) {
+        match self.selected() {
+            Some(i) if i.kind != Kind::Discussion && !i.merged => {
+                let n = self.outbox.len();
+                self.queue(&format!("write:{n}:state"), write::set_state(i, true), Some("write.reopened"));
+            }
+            Some(_) => self.say_key("write.not_closable"),
+            None => {}
+        }
+    }
+
     fn close(&mut self, id: &str) {
         if let Some(item) = self.item(id) {
             let n = self.outbox.len();
@@ -1151,6 +1176,17 @@ mod tests {
         b.keep_settings(file);
         assert_eq!(b.settings, a.settings);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn x_reopens_over_closed_items() {
+        let mut a = with_pr();
+        a.feed('2');
+        assert!(a.feed('C') && a.show_closed);
+        assert!(a.feed('x'));
+        assert!(a.confirm.is_none(), "reopening asks nothing");
+        assert!(a.outbox.last().is_some_and(|o| o.key.ends_with(":state")));
+        assert!(a.feed('C') && !a.show_closed);
     }
 
     #[test]

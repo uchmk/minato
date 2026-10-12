@@ -190,3 +190,12 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 15.2 | Switch the dependabot rule on and go to the inbox | A dependabot PR now appears with its reason |
 | 15.3 | Switch Milestone on, press `r` then `Alt+M` on an item | The milestone picker opens; with it off, a toast says the field is hidden |
 | 15.4 | Change a switch, quit and start again | The switches keep their state; `minato-settings.json` sits beside common.toml |
+
+## 16. Closed items
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 16.1 | In the list view press `C` | A toast says closed items are shown; within a few seconds the list holds closed issues and PRs, no discussions |
+| 16.2 | On a closed issue press `x` | No confirmation; the toast says it was reopened and GitHub shows it open |
+| 16.3 | On a merged PR press `x` | Nothing is sent; a toast says it cannot be closed or reopened |
+| 16.4 | Press `C` again | Open items return, discussions included |

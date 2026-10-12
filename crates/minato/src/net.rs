@@ -32,6 +32,8 @@ pub struct Net {
     next_poll: Instant,
     rate: Option<Rate>,
     next_search: Instant,
+    /// Whether the last search was for closed items.
+    searched_closed: bool,
     /// The last answers of the two searches, merged into `app.items`.
     found: [Vec<Item>; 2],
     /// The detail last asked for (its node id).
@@ -73,7 +75,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -307,11 +309,20 @@ impl Net {
             self.next_poll = now + wait;
         }
         if let Some(me) = app.viewer.clone() {
+            if app.show_closed != self.searched_closed {
+                self.searched_closed = app.show_closed;
+                self.next_search = now;
+            }
             if now >= self.next_search {
-                let q = format!("user:{me} is:open sort:updated-desc");
+                let state = if app.show_closed { "is:closed" } else { "is:open" };
+                let q = format!("user:{me} {state} sort:updated-desc");
                 let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
-                worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
+                if app.show_closed {
+                    self.found[1].clear();
+                } else {
+                    worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
+                }
                 self.next_search = now + SEARCH;
             }
         }
