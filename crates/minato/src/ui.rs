@@ -46,6 +46,11 @@ pub struct Out {
     pub detail_max: Option<f32>,
     /// The search box's field in the keybar, while it has the keys.
     pub find_at: Option<Rect>,
+    /// Where the built-in browser goes (the right of the view), while it is
+    /// open and the help is not shown.
+    pub browser_at: Option<Rect>,
+    /// The browser's width as its edge was dragged to.
+    pub browser_w: Option<f32>,
 }
 
 /// How far apart the columns are: the 1 px line between them, which the
@@ -132,8 +137,17 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     ui.painter().rect_filled(rect, 0.0, c.bg);
     let title = Rect::from_min_size(rect.min, vec2(rect.width(), TITLE_H));
     let keybar = Rect::from_min_max(pos2(rect.left(), rect.bottom() - KEYBAR_H), rect.max);
-    let body = Rect::from_min_max(title.left_bottom(), pos2(rect.right(), keybar.top()));
+    let mut body = Rect::from_min_max(title.left_bottom(), pos2(rect.right(), keybar.top()));
     title_bar(ui, app, title, &mut out);
+    // The built-in browser takes the right of the view.
+    let page = app.browser_w.filter(|_| app.mode != Mode::Help).map(|w| {
+        let w = browser_width(w, body.width());
+        Rect::from_min_max(pos2(body.right() - w, body.top()), body.max)
+    });
+    if let Some(page) = page {
+        body.max.x = page.left() - GAP;
+        out.browser_at = Some(page);
+    }
     match app.mode {
         Mode::Help => help(ui, app, body),
         _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body, &mut out),
@@ -141,6 +155,9 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
+    }
+    if let Some(page) = page {
+        browser_edge(ui, page, &mut out);
     }
     key_bar(ui, app, keybar, &mut out);
     ui.painter().line_segment([title.left_bottom(), title.right_bottom()], Stroke::new(1.0, c.border));
@@ -150,6 +167,29 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         crate::notes_ui::show(ui, app, &mut out);
     }
     out
+}
+
+/// The browser's width in a body `total` wide: at least 320, and the view
+/// keeps 300 while there is room for both.
+pub fn browser_width(asked: f32, total: f32) -> f32 {
+    asked.clamp(320.0, (total - 300.0).max(320.0))
+}
+
+/// The line left of the browser and the strip round it to drag; called after
+/// the view's rows, so it takes the pointer first.
+fn browser_edge(ui: &Ui, page: Rect, out: &mut Out) {
+    let c = ito_theme::colors();
+    let line = Rect::from_min_max(pos2(page.left() - GAP, page.top()), pos2(page.left(), page.bottom()));
+    let strip = Rect::from_center_size(line.center(), vec2(GRAB, page.height()));
+    let resp = ui.interact(strip, ui.id().with("browser-edge"), Sense::drag());
+    let lit = resp.hovered() || resp.dragged();
+    ui.painter().rect_filled(line, 0.0, if lit { ACCENT } else { c.border });
+    if lit {
+        ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
+    }
+    if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.dragged()) {
+        out.browser_w = Some(page.right() - p.x);
+    }
 }
 
 fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
@@ -483,12 +523,13 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
 }
 
 /// The keys over the notifications, for the help.
-const NOTES_KEYS: [(&str, &str); 6] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];
+const NOTES_KEYS: [(&str, &str); 7] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];
 
 /// The message, while its time lasts: at the top right under the title bar,
 /// over everything (the settings, the boxes, the palette), as in kura; a
-/// long one wraps at half the window.
-pub fn toast(ctx: &egui::Context, app: &App) {
+/// long one wraps at half the window. Left of `page`, the built-in browser,
+/// which is over everything egui draws.
+pub fn toast(ctx: &egui::Context, app: &App, page: Option<Rect>) {
     let Some(left) = app.toast_left() else { return };
     let Some((text, _)) = &app.toast else { return };
     let c = ito_theme::colors();
@@ -496,7 +537,8 @@ pub fn toast(ctx: &egui::Context, app: &App) {
     let wrap = (screen.width() / 2.0 - 28.0).max(120.0);
     let galley = ctx.fonts_mut(|f| f.layout(text.clone(), FontId::proportional(12.5), c.fg, wrap));
     let size = galley.size() + vec2(28.0, 14.0);
-    let box_ = Rect::from_min_size(pos2(screen.right() - 12.0 - size.x, screen.top() + TITLE_H + 6.0), size);
+    let right = page.map_or(screen.right(), |p| p.left());
+    let box_ = Rect::from_min_size(pos2(right - 12.0 - size.x, screen.top() + TITLE_H + 6.0), size);
     let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("minato-toast")));
     p.rect_filled(box_, CornerRadius::same(8), c.raised());
     p.rect_stroke(box_, CornerRadius::same(8), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
@@ -570,5 +612,14 @@ mod tests {
         // Under the thin top edge is the title bar.
         assert_eq!(edge_at(r, pos2(400.0, 5.0)), None);
         assert_eq!(edge_at(r, pos2(900.0, 5.0)), None);
+    }
+
+    #[test]
+    fn the_browser_keeps_room_for_the_view() {
+        assert_eq!(browser_width(560.0, 1280.0), 560.0);
+        assert_eq!(browser_width(100.0, 1280.0), 320.0);
+        assert_eq!(browser_width(1200.0, 1280.0), 980.0);
+        // A narrow window: the browser's least comes first.
+        assert_eq!(browser_width(560.0, 500.0), 320.0);
     }
 }

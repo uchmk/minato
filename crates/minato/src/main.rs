@@ -30,6 +30,9 @@ use app::{App, Mode};
 /// The window's icon, in pixels square.
 const ICON_PX: u32 = 128;
 
+/// The built-in browser's width when it opens.
+const BROWSER_W: f32 = 560.0;
+
 const USAGE: &str = "\
 minato — a keyboard-driven GitHub client
 
@@ -39,9 +42,57 @@ usage: minato [--version | --help]
 struct Minato {
     app: App,
     net: net::Net,
+    /// The built-in browser beside the view (Windows and macOS; Linux opens
+    /// the system's, `ito_browser::EMBEDDED`), and where it keeps its
+    /// cookies, so the sign-in to GitHub lasts.
+    browser: Option<ito_browser::Browser>,
+    web_dir: Option<std::path::PathBuf>,
 }
 
 impl Minato {
+    /// A page beside the view, in the browser there or a new one.
+    fn show_page(&mut self, ctx: &egui::Context, url: String) {
+        match &mut self.browser {
+            Some(b) => b.go(url),
+            None => self.browser = Some(ito_browser::Browser::new(url).with_data_dir(self.web_dir.clone())),
+        }
+        self.app.browser_w.get_or_insert(BROWSER_W);
+        // The notifications would hide it.
+        if self.app.mode == Mode::Notes {
+            self.app.mode = Mode::Main;
+        }
+        ctx.request_repaint();
+    }
+
+    fn close_browser(&mut self) {
+        self.browser = None;
+        self.app.browser_w = None;
+    }
+
+    /// The browser in `at`, or out of sight where the frame left it no room
+    /// (the settings, the help). A view of the system is over all egui
+    /// draws, so it is hidden while a box is over the view.
+    fn browser_ui(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame, at: Option<egui::Rect>) {
+        let Some(b) = &mut self.browser else { return };
+        let Some(at) = at else {
+            b.hide();
+            return;
+        };
+        let app = &self.app;
+        let hidden = app.mode == Mode::Notes || app.palette.is_some() || app.overlay.is_some() || app.confirm.is_some() || app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
+        ui.painter().rect_filled(at, 0.0, ito_theme::colors().side);
+        // The right 6 px are the window's edge to resize by.
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(at.shrink(6.0)));
+        let words = ito_browser::Words { back: app.tr("browser.back"), reload: app.tr("browser.reload"), external: app.tr("browser.external"), close: app.tr("browser.close"), failed: app.tr("browser.failed") };
+        let answer = b.show(&mut child, frame, hidden, &words);
+        if let Some(url) = answer.external {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+        }
+        if answer.close {
+            self.close_browser();
+        }
+    }
+
     /// The characters typed and Escape, when no text field has the keys.
     fn keys(&mut self, ctx: &egui::Context) {
         let (events, palette, settings) = ctx.input_mut(|i| {
@@ -80,7 +131,10 @@ impl Minato {
             }
             match e {
                 egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => {
-                    self.app.escape();
+                    // With nothing else to close, the browser.
+                    if !self.app.escape() && self.browser.is_some() {
+                        self.close_browser();
+                    }
                 }
                 egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
                     self.app.enter();
@@ -125,7 +179,7 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
 }
 
 impl eframe::App for Minato {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if let Some(to) = ctx.input_mut(scale_key) {
             self.app.scale(to);
@@ -145,6 +199,7 @@ impl eframe::App for Minato {
         if let Some(e) = self.app.prefs.failed.take() {
             self.app.say(e);
         }
+        let mut page = None;
         if self.app.mode == Mode::Settings {
             settings::show(ui, &mut self.app);
         } else {
@@ -153,6 +208,10 @@ impl eframe::App for Minato {
             let out = ui::frame(ui, &self.app);
             self.app.detail_max = out.detail_max;
             self.app.clamp_scroll();
+            page = out.browser_at;
+            if let Some(w) = out.browser_w {
+                self.app.browser_w = Some(ui::browser_width(w, ui.max_rect().width()));
+            }
             // The box in the detail is left (its text kept as the item's
             // draft) for anything else the mouse does.
             let inline = self.app.compose.as_ref().is_some_and(|c| !c.id.starts_with("new:"));
@@ -195,9 +254,14 @@ impl eframe::App for Minato {
             overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }
-        ui::toast(&ctx, &self.app);
+        self.browser_ui(ui, frame, page);
+        ui::toast(&ctx, &self.app, page.filter(|_| self.browser.is_some()));
         if let Some(url) = self.app.open_url.take() {
-            ctx.open_url(egui::OpenUrl::new_tab(url));
+            if std::mem::take(&mut self.app.open_outside) || !ito_browser::EMBEDDED {
+                ctx.open_url(egui::OpenUrl::new_tab(url));
+            } else {
+                self.show_page(&ctx, url);
+            }
         }
         if self.app.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -336,7 +400,8 @@ fn main() -> eframe::Result {
             if let Some(f) = state_file {
                 app.keep_state(f);
             }
-            Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache"))) }))
+            let net = net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache")));
+            Ok(Box::new(Minato { app, net, browser: None, web_dir: ito_common::state_dir("minato").map(|d| d.join("webview")) }))
         }),
     )
 }

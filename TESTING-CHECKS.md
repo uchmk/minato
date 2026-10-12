@@ -55,7 +55,7 @@
 - [ ] **6.4** Press `h`, then `j` and `Space` on a repository → The list narrows to it and the query line over the list changes; the chosen option is filled
 - [ ] **6.5** Pick "CI is red" → Only PRs with a red mark remain
 - [ ] **6.6** Press `l` twice and `j` → The detail scrolls by lines, with no scrollbar; moving the row resets it
-- [ ] **6.7** Press `o` → The item opens in the browser
+- [ ] **6.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 - [ ] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation
 
 ## 7. Inbox view
@@ -66,7 +66,7 @@
 - [ ] **7.4** Press `s` → The card disappears (back tomorrow 9:00) with a toast; `u` brings it back
 - [ ] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
 - [ ] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide with "⋯" lines; no card is folded to its title and no scrollbar
-- [ ] **7.7** Press `o` → The item opens in the browser
+- [ ] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 
 ## 8. Writing box and fields
 
@@ -98,7 +98,7 @@
 - [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [ ] **9.5** Select a running run and press `X` → A toast says it is stopping; the run turns to cancelled
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` → A toast says the workflow started; a new run appears
-- [ ] **9.7** Press `e` on a failed run → The browser opens the failed job's page
+- [ ] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [ ] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
@@ -112,14 +112,14 @@
 - [ ] **10.5** Drag a card onto another column with the mouse → The card follows the pointer, the column under it is outlined, and on release the card moves and GitHub changes
 - [ ] **10.6** Press `u` after a move → The card goes back and GitHub changes back
 - [ ] **10.7** Press `Enter` on a card that is in the list, then on one that is not → The list opens on it; otherwise a toast says it is not in the list
-- [ ] **10.8** Press `o` on a card → The browser opens the issue or PR
+- [ ] **10.8** Press `o` on a card → The built-in browser shows the issue or PR
 - [ ] **10.9** Use a token without the `project` scope and press `L` → An error toast appears and, after a moment, the card returns to its column
 - [ ] **10.10** Put many cards in one column → No scrollbar; the cards that do not fit hide and "more" shows; none is folded
 
 ## 11. Notifications and palette
 
 - [ ] **11.1** Press `n` with unread GitHub notifications → A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line
-- [ ] **11.2** Press `Enter` on a thread minato has, then on one it does not → The list closes and the inbox (or the list) selects that thread; for the other, the browser opens it. Each time the row goes and the count drops by one
+- [ ] **11.2** Press `Enter` on a thread minato has, then on one it does not → The list closes and the inbox (or the list) selects that thread; for the other, the notifications close and the built-in browser shows it. Each time the row goes and the count drops by one
 - [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
 - [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
 - [ ] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
@@ -264,3 +264,18 @@
 - [ ] **28.7** Press `Tab` five times from the inbox, then `Shift+Tab` → Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open
 - [ ] **28.8** Press `4` on a fresh start (no cache), then again after `1` and back → The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once
 - [ ] **28.9** Select a run in Actions while the network is off for 15 seconds, then turn it on → Its jobs come within about 10 seconds of the network coming back, not after the next refresh
+
+## 29. The built-in browser
+
+- [ ] **29.1** On Windows, press `o` on an inbox card → A panel at the window's right under the title bar, about 560 wide, with ← (address) ⟳ ↗ ✕ and the GitHub page below; the view narrows to its left; the keybar stays across the whole window
+- [ ] **29.2** Press `o` on another card, then in the list, Actions (`o`, `e`, `p`) and the board → The same panel goes to each page; no second panel or window
+- [ ] **29.3** Press `O` on a card → The system's browser opens the page; the panel does not change
+- [ ] **29.4** Sign in to GitHub in the panel, quit minato, start it and press `o` → Still signed in (the cookies are in `%LOCALAPPDATA%\uchmk\minato\webview`, or the state folder of the OS); nothing new beside `minato.exe`
+- [ ] **29.5** Follow a link in the page, then press ← → The address field shows each page's address as it loads; ← goes back; ↗ opens the page shown in the system's browser
+- [ ] **29.6** Click a link that opens a new window (`target="_blank"`, e.g. a file in a PR's "Files changed" opened in a new tab) → It loads in the same panel; no other window appears
+- [ ] **29.7** Click in the page, then click a card in the view and press `j` `k`; click in the address field and type → The keys move the selection again (not the page's); the field takes the typing
+- [ ] **29.8** Drag the line left of the panel left and right; make the window narrow → The panel follows the pointer and the page with it; it stays at least 320 wide and leaves the view 300 while it can; the window's right edge still resizes the window
+- [ ] **29.9** With the panel open press `Ctrl+Shift+P`, `n`, `?`, `,`, `N`, and `m` on a PR → The page hides while the palette, the notifications, the help, the settings, the new-issue box and the merge question are up, and comes back when each closes
+- [ ] **29.10** Press `Esc` with nothing else open, then open the panel again and click ✕ → `Esc` closes the panel and the view takes the whole width; ✕ does the same
+- [ ] **29.11** Make a message show (e.g. `d` then `u`) with the panel open → The message is at the top right of the view, left of the panel, not under it
+- [ ] **29.12** On Linux press `o` → The system's browser opens the page; no panel

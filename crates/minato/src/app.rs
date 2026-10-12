@@ -94,6 +94,7 @@ impl View {
                 ("x", "key.close"),
                 ("a", "key.assign"),
                 ("o", "key.browser"),
+                ("O", "key.outside"),
                 ("f F t", "key.filter"),
                 ("/", "key.find"),
             ],
@@ -109,6 +110,7 @@ impl View {
                 ("C", "key.closed"),
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
+                ("O", "key.outside"),
                 ("/", "key.find"),
             ],
             View::Actions => &[
@@ -119,8 +121,9 @@ impl View {
                 ("e", "key.logs"),
                 ("L", "key.log"),
                 ("o", "key.browser"),
+                ("O", "key.outside"),
             ],
-            View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open"), ("u", "key.undo"), ("o", "key.browser")],
+            View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open"), ("u", "key.undo"), ("o", "key.browser"), ("O", "key.outside")],
         }
     }
 }
@@ -303,8 +306,14 @@ pub struct App {
     pub list: ListState,
     /// The detail of one item (its node id), once fetched.
     pub detail: Option<(String, Detail)>,
-    /// A URL to open in the browser, taken by the window.
+    /// A URL to open in the browser, taken by the window: the built-in one
+    /// beside the view (Windows, macOS), or the system's with `open_outside`
+    /// (`O`) and on Linux.
     pub open_url: Option<String>,
+    pub open_outside: bool,
+    /// The built-in browser's width while it is open, as asked (the frame
+    /// keeps it between its bounds).
+    pub browser_w: Option<f32>,
     /// The writing box, while it is open.
     pub compose: Option<Compose>,
     /// What was written in the box on an item and left there (by a click
@@ -455,6 +464,8 @@ impl App {
             list: ListState::default(),
             detail: None,
             open_url: None,
+            open_outside: false,
+            browser_w: None,
             compose: None,
             drafts: HashMap::new(),
             state_tx: None,
@@ -621,6 +632,12 @@ impl App {
             'G' if free => {
                 self.jump(true);
                 true
+            }
+            // `o`'s page, in the system's browser.
+            'O' if free => {
+                let used = self.feed_key('o');
+                self.open_outside = self.open_url.is_some();
+                used
             }
             _ => self.feed_key(c),
         };
@@ -1607,6 +1624,11 @@ mod tests {
         assert!(a.open_url.take().unwrap().ends_with("/runs/2"));
         assert!(a.feed('p'));
         assert!(a.open_url.is_none(), "no pull request to open");
+        assert!(!a.open_outside);
+        // `O` is `o` in the system's browser.
+        assert!(a.feed('O'));
+        assert!(a.open_url.take().unwrap().ends_with("/runs/2"));
+        assert!(a.open_outside);
     }
 
     #[test]
