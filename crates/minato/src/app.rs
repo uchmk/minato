@@ -77,6 +77,7 @@ impl View {
                 ("s", "key.later"),
                 ("u", "key.undo"),
                 ("m", "key.merge"),
+                ("x", "key.close"),
                 ("a", "key.assign"),
                 ("o", "key.browser"),
                 ("f F t", "key.filter"),
@@ -86,6 +87,8 @@ impl View {
                 ("h l", "key.columns"),
                 ("r", "key.write"),
                 ("a", "key.assign"),
+                ("m", "key.merge"),
+                ("x", "key.close"),
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
             ],
@@ -169,6 +172,8 @@ pub struct App {
     pub compose: Option<Compose>,
     /// The item (node id) a merge waits to be confirmed for.
     pub confirm: Option<String>,
+    /// What the confirmation is for.
+    pub confirm_act: Confirm,
     /// The workflow runs of the repositories, newest first.
     pub runs: Vec<Run>,
     /// The Actions view's selection and filters.
@@ -191,6 +196,13 @@ pub struct App {
     pub ns: NotesState,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
+}
+
+/// What a confirmation box asks about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Confirm {
+    Merge,
+    Close,
 }
 
 /// What GitHub said about one run.
@@ -256,6 +268,7 @@ impl App {
             open_url: None,
             compose: None,
             confirm: None,
+            confirm_act: Confirm::Merge,
             runs: Vec::new(),
             acts: ActState::default(),
             run_detail: None,
@@ -331,6 +344,14 @@ impl App {
                 self.assign_self();
                 return true;
             }
+            'm' => {
+                self.ask_merge();
+                return true;
+            }
+            'x' => {
+                self.ask_close();
+                return true;
+            }
             _ => {}
         }
         if c == 'o' {
@@ -345,7 +366,10 @@ impl App {
     /// Enter: the same as Space (choose a filter).
     pub fn enter(&mut self) -> bool {
         if let Some(id) = self.confirm.take() {
-            self.merge(&id);
+            match self.confirm_act {
+                Confirm::Merge => self.merge(&id),
+                Confirm::Close => self.close(&id),
+            }
             return true;
         }
         if self.mode == Mode::Notes {
@@ -599,6 +623,7 @@ impl App {
         match c {
             'r' => self.open_compose(),
             'm' => self.ask_merge(),
+            'x' => self.ask_close(),
             'a' => self.assign_self(),
             'o' => {
                 if let Some(card) = card {
@@ -701,12 +726,34 @@ impl App {
     /// `m` in the inbox: ask before merging an open PR.
     fn ask_merge(&mut self) {
         match self.selected() {
-            Some(i) if i.kind == Kind::Pr && !i.merged && !i.draft => self.confirm = Some(i.id.clone()),
+            Some(i) if i.kind == Kind::Pr && !i.merged && !i.draft => {
+                self.confirm = Some(i.id.clone());
+                self.confirm_act = Confirm::Merge;
+            }
             Some(_) => {
                 let words = self.tr("write.not_mergeable");
                 self.say(words);
             }
             None => {}
+        }
+    }
+
+    /// `x`: ask before closing the selected issue or PR.
+    fn ask_close(&mut self) {
+        match self.selected() {
+            Some(i) if i.kind != Kind::Discussion && !i.merged => {
+                self.confirm = Some(i.id.clone());
+                self.confirm_act = Confirm::Close;
+            }
+            Some(_) => self.say_key("write.not_closable"),
+            None => {}
+        }
+    }
+
+    fn close(&mut self, id: &str) {
+        if let Some(item) = self.item(id) {
+            let n = self.outbox.len();
+            self.queue(&format!("write:{n}:state"), write::set_state(&item, false), Some("write.closed"));
         }
     }
 
@@ -979,7 +1026,7 @@ mod tests {
             assert_eq!(a.view, v);
         }
         assert!(!a.feed('5'));
-        assert!(!a.feed('x'));
+        assert!(!a.feed('z'));
     }
 
     #[test]
@@ -1178,5 +1225,29 @@ jobs:
         assert_eq!(l.job_id, 11);
         assert_eq!(a.outbox[1].key, "a-log:11");
         assert!(a.escape() && a.overlay.is_none());
+    }
+
+    #[test]
+    fn x_closes_only_after_enter_and_m_works_in_the_list() {
+        let mut a = with_pr();
+        assert!(a.feed('x'));
+        assert_eq!((a.confirm.as_deref(), a.confirm_act), (Some("P1"), Confirm::Close));
+        assert!(a.escape() && a.outbox.is_empty());
+        a.feed('x');
+        assert!(a.enter());
+        assert_eq!(a.outbox.len(), 1);
+        assert!(a.outbox[0].key.ends_with(":state"));
+        a.feed('m');
+        assert_eq!(a.confirm_act, Confirm::Merge);
+        a.enter();
+        assert!(a.outbox[1].key.ends_with(":merge"));
+    }
+
+    #[test]
+    fn a_merged_item_is_not_closed() {
+        let mut a = with_pr();
+        a.items[0].merged = true;
+        a.feed('x');
+        assert!(a.confirm.is_none() && a.toast.is_some());
     }
 }

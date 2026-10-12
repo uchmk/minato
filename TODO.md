@@ -14,7 +14,7 @@
 - [x] 5d. Dispatch inputs from the workflow YAML, logs inside the app, a `needs:` graph of the jobs (v0.9.0: `D` form, `L` log, graph in the run detail)
 - [x] 6. Board view (v0.7.0: Project uchmk Status columns, H L and drag write to GitHub, u undo)
 - [x] 6b. Palette (v0.8.0: Ctrl+Shift+P, commands and `#number` items)
-- [ ] 7. Writes (comment, close, label, merge) with confirmation
+- [x] 7. Writes (comment, close, label, merge) with confirmation (v0.9.1: `x` close and `m` merge ask first, in the list and the inbox; comment and labels were v0.5.0)
 - [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 
 ## Owner

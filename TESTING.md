@@ -91,6 +91,10 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 8.5a | In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` | A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project |
 | 8.5b | Press `Alt+P` the same way | The Priority options show and the choice is written to the Project |
 | 8.5c | Press `Alt+S` on an item that is not in the Project | A toast says the item is not in the Project; nothing is written |
+| 8.6a | In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` | A box asks to close it; `Esc` cancels and nothing changes on GitHub |
+| 8.6b | Press `x`, then `Enter` | The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list |
+| 8.6c | Press `m` in the list on a ready PR, `Enter` | The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead |
+| 8.6d | Press `x` on a merged item or a discussion | A toast says only an open issue or PR can be closed |
 | 8.6 | Type a comment and press `Ctrl+Enter` | The box closes, a toast says it was sent, and the comment appears in the detail |
 | 8.7 | On an open issue press `r`, type, `Ctrl+Shift+Enter` | The comment is sent and the issue is closed |
 | 8.8 | On a Discussion press `r` and send | The comment appears in the Discussion |
