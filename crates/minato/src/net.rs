@@ -9,6 +9,7 @@ use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
+use minato_core::github::write::parse_names;
 use minato_core::github::{Client, Rate, Token, UreqTransport};
 
 use minato_core::list::Item;
@@ -30,6 +31,8 @@ pub struct Net {
     found: [Vec<Item>; 2],
     /// The detail last asked for (its node id).
     asked: Option<String>,
+    /// What to say when a write (by its job key) has gone through.
+    pending: std::collections::HashMap<String, &'static str>,
 }
 
 /// How often the lists are searched again.
@@ -44,7 +47,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default() }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -111,11 +114,46 @@ impl Net {
                                 }
                             }
                         }
+                        k if k.starts_with("labels:") || k.starts_with("people:") => {
+                            let labels = k.starts_with("labels:");
+                            let repo = &k[7..];
+                            let names = parse_names(&f.body, if labels { "name" } else { "login" });
+                            let open = app.compose.as_ref().and_then(|c| app.items.iter().find(|i| i.id == c.id)).is_some_and(|i| i.repo == repo);
+                            match (names, open) {
+                                (Ok(v), true) => {
+                                    if let Some(c) = app.compose.as_mut() {
+                                        *(if labels { &mut c.labels } else { &mut c.people }) = v;
+                                    }
+                                }
+                                (Err(e), true) => app.say(e),
+                                _ => {}
+                            }
+                        }
+                        k if k.starts_with("write:") => {
+                            if f.body.contains("\"errors\"") {
+                                app.say(f.body.chars().take(160).collect::<String>());
+                            } else if let Some(done) = self.pending.remove(k) {
+                                let words = app.tr(done);
+                                app.say(words);
+                            }
+                            // Look again at once, and re-ask the detail.
+                            self.next_search = Instant::now();
+                            self.asked = None;
+                        }
                         _ => {}
                     }
                 }
-                Err(e) => app.say(e),
+                Err(e) => {
+                    self.pending.remove(&reply.key);
+                    app.say(e);
+                }
             }
+        }
+        for o in app.outbox.drain(..) {
+            if let Some(done) = o.done {
+                self.pending.insert(o.key.clone(), done);
+            }
+            worker.send(Job { key: o.key, call: o.call });
         }
         app.api = self.rate.map(|r| (r.remaining, r.limit));
         let now = Instant::now();

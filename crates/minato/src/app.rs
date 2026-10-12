@@ -5,8 +5,11 @@ use std::time::{Duration, Instant};
 
 use std::collections::HashMap;
 
+use minato_core::composer::Picker;
+use minato_core::github::worker::Call;
+use minato_core::github::write;
 use minato_core::inbox::{Card, InboxState, Mark, Rules};
-use minato_core::list::{Detail, Item, ListState};
+use minato_core::list::{Detail, Item, Kind, ListState};
 
 use crate::prefs::Prefs;
 
@@ -68,6 +71,7 @@ impl View {
                 ("s", "key.later"),
                 ("u", "key.undo"),
                 ("m", "key.merge"),
+                ("a", "key.assign"),
                 ("o", "key.browser"),
                 ("f F t", "key.filter"),
             ],
@@ -75,6 +79,7 @@ impl View {
                 ("j k", "key.next"),
                 ("h l", "key.columns"),
                 ("r", "key.write"),
+                ("a", "key.assign"),
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
             ],
@@ -139,7 +144,39 @@ pub struct App {
     pub detail: Option<(String, Detail)>,
     /// A URL to open in the browser, taken by the window.
     pub open_url: Option<String>,
+    /// The writing box, while it is open.
+    pub compose: Option<Compose>,
+    /// The item (node id) a merge waits to be confirmed for.
+    pub confirm: Option<String>,
+    /// Calls the window has asked for; the net takes them.
+    pub outbox: Vec<Outgoing>,
     pub quit: bool,
+}
+
+/// One call for the worker, and the words to say when it has gone through.
+pub struct Outgoing {
+    pub key: String,
+    pub call: Call,
+    pub done: Option<&'static str>,
+}
+
+/// Which list the picker is choosing from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    Labels,
+    Assignees,
+}
+
+/// The writing box: a comment on one item, with the labels and the
+/// assignees to change from the same place.
+pub struct Compose {
+    pub id: String,
+    pub text: String,
+    pub preview: bool,
+    pub picker: Option<(Pick, Picker)>,
+    /// The repository's labels and assignable people, once GitHub has said.
+    pub labels: Vec<String>,
+    pub people: Vec<String>,
 }
 
 impl App {
@@ -161,6 +198,9 @@ impl App {
             list: ListState::default(),
             detail: None,
             open_url: None,
+            compose: None,
+            confirm: None,
+            outbox: Vec::new(),
             quit: false,
         };
         app.set_language();
@@ -194,6 +234,9 @@ impl App {
     /// A character typed (not a key with Ctrl or Alt: those are the
     /// shortcuts). Returns whether it was used.
     pub fn feed(&mut self, c: char) -> bool {
+        if self.compose.is_some() || self.confirm.is_some() {
+            return true;
+        }
         match (self.mode, c) {
             (Mode::Help, '?') => self.mode = Mode::Main,
             (Mode::Settings, _) | (Mode::Help, _) => return false,
@@ -212,6 +255,17 @@ impl App {
     /// A key in the list view: the columns' own, and `o` for the browser.
     fn list_key(&mut self, c: char) -> bool {
         let me = self.viewer.clone().unwrap_or_default();
+        match c {
+            'r' => {
+                self.open_compose();
+                return true;
+            }
+            'a' => {
+                self.assign_self();
+                return true;
+            }
+            _ => {}
+        }
         if c == 'o' {
             if let Some(i) = self.list.selected(&self.items, &me) {
                 self.open_url = Some(i.url.clone());
@@ -223,6 +277,10 @@ impl App {
 
     /// Enter: the same as Space (choose a filter).
     pub fn enter(&mut self) -> bool {
+        if let Some(id) = self.confirm.take() {
+            self.merge(&id);
+            return true;
+        }
         self.mode == Mode::Main && self.view == View::List && self.list_key(' ')
     }
 
@@ -238,6 +296,9 @@ impl App {
         let all = self.inbox_all();
         let card = self.inbox.selected(&all, &self.items);
         match c {
+            'r' => self.open_compose(),
+            'm' => self.ask_merge(),
+            'a' => self.assign_self(),
             'o' => {
                 if let Some(card) = card {
                     self.open_url = Some(self.items[card.at].url.clone());
@@ -264,6 +325,79 @@ impl App {
         true
     }
 
+    fn queue(&mut self, key: &str, call: Call, done: Option<&'static str>) {
+        self.outbox.push(Outgoing { key: key.to_string(), call, done });
+    }
+
+    fn item(&self, id: &str) -> Option<Item> {
+        self.items.iter().find(|i| i.id == id).cloned()
+    }
+
+    /// `r`: open the writing box on the selected item and ask for the
+    /// repository's labels and people.
+    pub fn open_compose(&mut self) {
+        let Some(item) = self.selected().cloned() else { return };
+        self.queue(&format!("labels:{}", item.repo), Call::Get(write::labels_path(&item.repo)), None);
+        self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
+        self.compose = Some(Compose { id: item.id, text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new() });
+    }
+
+    /// Send the comment; `close` also closes the item.
+    pub fn send_comment(&mut self, close: bool) {
+        let Some(c) = self.compose.take() else { return };
+        let Some(item) = self.item(&c.id) else { return };
+        let n = self.outbox.len();
+        if !c.text.trim().is_empty() {
+            self.queue(&format!("write:{n}:comment"), write::comment(&item, &c.text), Some("write.commented"));
+        }
+        if close && item.kind != Kind::Discussion {
+            self.queue(&format!("write:{n}:state"), write::set_state(&item, false), Some("write.closed"));
+        }
+    }
+
+    /// The picker was closed: write what changed.
+    pub fn apply_pick(&mut self) {
+        let Some((kind, picker)) = self.compose.as_mut().and_then(|c| c.picker.take()) else { return };
+        if !picker.changed() {
+            return;
+        }
+        let Some(item) = self.compose.as_ref().and_then(|c| self.item(&c.id)) else { return };
+        let n = self.outbox.len();
+        match kind {
+            Pick::Labels => self.queue(&format!("write:{n}:labels"), write::set_labels(&item, &picker.chosen), Some("write.labels")),
+            Pick::Assignees => self.queue(&format!("write:{n}:people"), write::set_assignees(&item, &picker.chosen), Some("write.assignees")),
+        }
+    }
+
+    /// `m` in the inbox: ask before merging an open PR.
+    fn ask_merge(&mut self) {
+        match self.selected() {
+            Some(i) if i.kind == Kind::Pr && !i.merged && !i.draft => self.confirm = Some(i.id.clone()),
+            Some(_) => {
+                let words = self.tr("write.not_mergeable");
+                self.say(words);
+            }
+            None => {}
+        }
+    }
+
+    fn merge(&mut self, id: &str) {
+        if let Some(item) = self.item(id) {
+            let n = self.outbox.len();
+            self.queue(&format!("write:{n}:merge"), write::merge(&item), Some("write.merged"));
+        }
+    }
+
+    /// `a`: assign the selected item to the viewer.
+    fn assign_self(&mut self) {
+        let (Some(item), Some(me)) = (self.selected().cloned(), self.viewer.clone()) else { return };
+        if item.kind == Kind::Discussion {
+            return;
+        }
+        let n = self.outbox.len();
+        self.queue(&format!("write:{n}:assign"), write::assign(&item, &me), Some("write.assigned"));
+    }
+
     /// The item shown in the detail: the list's or the inbox's selection.
     pub fn selected(&self) -> Option<&Item> {
         if self.view == View::Inbox {
@@ -275,6 +409,9 @@ impl App {
 
     /// Escape: close the help or the settings.
     pub fn escape(&mut self) -> bool {
+        if self.confirm.take().is_some() {
+            return true;
+        }
         let was = self.mode;
         self.mode = Mode::Main;
         was != Mode::Main
@@ -375,5 +512,101 @@ mod tests {
         for (_, w) in GLOBAL_KEYS {
             assert_ne!(crate::i18n::tr("en", w), w, "no words for {w}");
         }
+    }
+
+    fn pr(id: &str) -> Item {
+        Item {
+            id: id.into(),
+            kind: Kind::Pr,
+            repo: "uchmk/kura".into(),
+            number: 3,
+            title: "t".into(),
+            url: String::new(),
+            author: "uchmk".into(),
+            labels: Vec::new(),
+            assignees: Vec::new(),
+            comments: 0,
+            created_at: String::new(),
+            updated_at: String::new(),
+            draft: false,
+            merged: false,
+            ci: None,
+        }
+    }
+
+    fn with_pr() -> App {
+        let mut a = app();
+        a.view = View::List;
+        a.viewer = Some("uchmk".into());
+        a.items = vec![pr("P1")];
+        a
+    }
+
+    #[test]
+    fn r_opens_the_box_and_asks_for_labels_and_people() {
+        let mut a = with_pr();
+        assert!(a.feed('r'));
+        assert!(a.compose.is_some());
+        let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["labels:uchmk/kura", "people:uchmk/kura"]);
+        // Typed characters do not reach the views while the box is open.
+        assert!(a.feed('2'));
+        assert_eq!(a.view, View::List);
+    }
+
+    #[test]
+    fn sending_queues_a_comment_and_close_but_not_an_empty_one() {
+        let mut a = with_pr();
+        a.feed('r');
+        a.outbox.clear();
+        a.compose.as_mut().unwrap().text = "ok".into();
+        a.send_comment(true);
+        let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["write:0:comment", "write:0:state"]);
+        assert!(a.compose.is_none());
+        a.outbox.clear();
+        a.feed('r');
+        a.outbox.clear();
+        a.send_comment(false);
+        assert!(a.outbox.is_empty());
+    }
+
+    #[test]
+    fn merge_waits_for_enter_and_escape_cancels() {
+        let mut a = with_pr();
+        a.view = View::List;
+        a.ask_merge();
+        assert_eq!(a.confirm.as_deref(), Some("P1"));
+        assert!(a.escape());
+        assert!(a.outbox.is_empty());
+        a.ask_merge();
+        assert!(a.enter());
+        assert_eq!(a.outbox.len(), 1);
+        assert!(a.outbox[0].key.ends_with(":merge"));
+    }
+
+    #[test]
+    fn a_draft_or_an_issue_is_not_merged() {
+        let mut a = with_pr();
+        a.items[0].draft = true;
+        a.ask_merge();
+        assert!(a.confirm.is_none() && a.toast.is_some());
+    }
+
+    #[test]
+    fn a_applies_the_picker_only_when_it_changed() {
+        let mut a = with_pr();
+        a.feed('r');
+        a.outbox.clear();
+        let c = a.compose.as_mut().unwrap();
+        c.picker = Some((Pick::Labels, Picker::new(vec!["bug".into()], Vec::new())));
+        a.apply_pick();
+        assert!(a.outbox.is_empty());
+        let c = a.compose.as_mut().unwrap();
+        let mut pk = Picker::new(vec!["bug".into()], Vec::new());
+        pk.toggle();
+        c.picker = Some((Pick::Labels, pk));
+        a.apply_pick();
+        assert!(a.outbox[0].key.ends_with(":labels"));
     }
 }

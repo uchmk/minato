@@ -8,7 +8,9 @@
 - [ ] 2b. Token entry in the settings screen and the OS credential store (今は `GITHUB_TOKEN` と `gh auth token` だけ）（要確認: #3）
 - [x] 3. Inbox view (v0.4.0; rules judged from the list data; marks are not saved to disk yet; m a r R e g wait for stage 5 and 6)（要確認: #5）
 - [x] 4. List view (three columns) (v0.3.0; read only)
-- [ ] 5. Actions view
+- [x] 5. Writing box and fields (v0.5.0: comment, labels, assignees, merge, assign self)
+- [ ] 5b. Pickers for Status / Priority / Milestone / Reviewers (the `updateProjectV2ItemFieldValue` builder exists), and showing / ordering the fields in the settings screen
+- [ ] 5c. Actions view
 - [ ] 6. Board view, palette (Ctrl+Shift+P)
 - [ ] 7. Writes (comment, close, label, merge) with confirmation
 - [ ] 8. Notifications, release workflow

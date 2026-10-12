@@ -9,9 +9,10 @@ pub mod rate;
 pub mod search;
 pub mod token;
 pub mod types;
+pub mod write;
 pub mod worker;
 
 pub use client::{Client, Fetched};
-pub use http::{Request, Response, Transport, UreqTransport};
+pub use http::{Method, Request, Response, Transport, UreqTransport};
 pub use rate::Rate;
 pub use token::Token;

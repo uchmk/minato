@@ -67,3 +67,18 @@
 - [ ] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
 - [ ] **7.6** Shrink the window height → Far cards fold to their title, then hide with "⋯" lines; no scrollbar
 - [ ] **7.7** Press `o` → The item opens in the browser
+
+## 8. Writing box and fields
+
+- [ ] **8.1** Select an item and press `r` → A box opens at the bottom with the item's name on top and the key hints below; the cursor is in the field
+- [ ] **8.2** Type text, press `Ctrl+P`, then `Esc` → The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field
+- [ ] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
+- [ ] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
+- [ ] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
+- [ ] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
+- [ ] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
+- [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
+- [ ] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
+- [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
+- [ ] **8.11** Press `a` on an issue → You are assigned; a toast says so
+- [ ] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change

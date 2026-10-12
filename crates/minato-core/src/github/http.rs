@@ -12,8 +12,18 @@ pub const API: &str = "https://api.github.com";
 pub enum Request {
     /// GET `url`, with the ETag of the copy we hold, if any.
     Get { url: String, etag: Option<String> },
+    /// Change something: `method` `url` with a JSON `body`.
+    Send { method: Method, url: String, body: String },
     /// POST a GraphQL query (`body` is the JSON document).
     Graphql { body: String },
+}
+
+/// The verbs minato writes with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Method {
+    Post,
+    Put,
+    Patch,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,6 +69,16 @@ impl Transport for UreqTransport {
                     r = r.header("If-None-Match", e);
                 }
                 r.call()
+            }
+            Request::Send { method, url, body } => {
+                let json = |r: ureq::RequestBuilder<ureq::typestate::WithBody>| {
+                    r.header("Authorization", &auth).header("Accept", "application/vnd.github+json").header("Content-Type", "application/json").send(body.as_bytes())
+                };
+                json(match method {
+                    Method::Post => self.agent.post(url),
+                    Method::Put => self.agent.put(url),
+                    Method::Patch => self.agent.patch(url),
+                })
             }
             Request::Graphql { body } => self
                 .agent

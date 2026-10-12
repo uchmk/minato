@@ -8,6 +8,7 @@
 mod app;
 mod fonts;
 mod i18n;
+mod compose_ui;
 mod icon;
 mod inbox_ui;
 mod list_ui;
@@ -45,6 +46,9 @@ impl Minato {
             self.app.say(words);
         }
         for e in events {
+            if self.app.compose.is_some() {
+                break;
+            }
             match e {
                 egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => {
                     self.app.escape();
@@ -88,6 +92,7 @@ impl eframe::App for Minato {
             if out.settings {
                 self.app.mode = Mode::Settings;
             }
+            compose_ui::show(ui, &mut self.app);
         }
         if let Some(url) = self.app.open_url.take() {
             ctx.open_url(egui::OpenUrl::new_tab(url));

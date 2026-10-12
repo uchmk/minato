@@ -48,6 +48,18 @@ impl<T: Transport> Client<T> {
         }
     }
 
+    /// Change something. `path` is "/repos/..." or a full URL; `body` is JSON.
+    pub fn send(&mut self, method: super::http::Method, path: &str, body: &str) -> Result<Fetched, String> {
+        let url = if path.starts_with("http") { path.to_string() } else { format!("{API}{path}") };
+        let r = self.transport.send(&self.token, &Request::Send { method, url, body: body.to_string() })?;
+        match r.status {
+            200..=299 => Ok(Fetched { body: r.body, cached: false, rate: r.rate }),
+            401 => Err("GitHub refused the token (401)".into()),
+            403 => Err(format!("GitHub said no (403): {}", first_line(&r.body))),
+            s => Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
+        }
+    }
+
     /// A GraphQL query; `variables` is a JSON object text (`{}` for none).
     pub fn graphql(&mut self, query: &str, variables: &str) -> Result<Fetched, String> {
         let vars: serde_json::Value = serde_json::from_str(variables).map_err(|e| e.to_string())?;

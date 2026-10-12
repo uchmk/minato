@@ -2,6 +2,20 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.5.0] - 2026-10-12
+
+### Added
+
+- 書く欄（`r`、受信箱と一覧）: 選んだ項目へのコメント。`Ctrl+Enter` で送る、`Ctrl+Shift+Enter` で送って閉じる（Issue と PR）、`Ctrl+P` でプレビュー（見出し・箇条書き・引用・コード・段落）、`Ctrl+B` `Ctrl+I` `Ctrl+K` で太字・斜体・リンク、`Esc` でやめる。Discussion へのコメントは GraphQL で送る。
+- 項目の選び（書く欄の中）: `Alt+L` でラベル、`Alt+A` で担当者。入力で絞り込み、`Enter` で選び、`Esc` で反映する（変えたときだけ送る）。リポジトリのラベルと担当できる人は書く欄を開いたときに取る。
+- `m`（受信箱）: マージの確認を出し、`Enter` で merge commit のマージ。下書きの PR・マージ済み・Issue には出さない。`a`: 自分に割り当て。
+- 書き込みの通信（`minato-core::github`）: `Request::Send`・`Client::send`・`Call::Send`（POST / PUT / PATCH）。書いたあとは一覧と詳しくを取り直す。応答に `errors` があれば画面の下に出す。
+- 書き込みの組み立て（`github::write`）と、書く欄の純粋な部分（`composer`: 選択を包む、Markdown の読み、選びの箱）を単体試験。
+
+### Not yet
+
+- Status・Priority・Milestone・Reviewers の選びと、項目の見せ方を設定で変える画面は、まだ。
+
 ## [0.4.0] - 2026-10-12
 
 ### Added

@@ -14,6 +14,8 @@ use super::token::Token;
 pub enum Call {
     Get(String),
     Graphql { query: String, variables: String },
+    /// A write; its key must be its own (same key = dropped as stale).
+    Send { method: super::http::Method, path: String, body: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +71,7 @@ fn run<T: Transport>(mut client: Client<T>, jobs: Receiver<Job>, replies: Sender
             let result = match &job.call {
                 Call::Get(path) => client.get(path),
                 Call::Graphql { query, variables } => client.graphql(query, variables),
+                Call::Send { method, path, body } => client.send(*method, path, body),
             };
             if replies.send(Reply { key: job.key, result }).is_err() {
                 return;
@@ -96,6 +99,7 @@ mod tests {
             let body = match req {
                 Request::Get { url, .. } => url.clone(),
                 Request::Graphql { .. } => "g".into(),
+                Request::Send { url, .. } => url.clone(),
             };
             Ok(Response { status: 200, etag: None, body, rate: None })
         }
