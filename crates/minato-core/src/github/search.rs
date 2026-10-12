@@ -174,6 +174,7 @@ pub fn parse_items(body: &str) -> Result<Vec<Item>, String> {
             draft: n.is_draft,
             merged: n.state.as_deref() == Some("MERGED"),
             conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
+            mentioned: false,
             ci,
         });
     }

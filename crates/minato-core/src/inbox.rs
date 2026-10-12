@@ -23,9 +23,13 @@ pub enum Rule {
     LaneStalled,
     /// A PR from dependabot (off by default).
     Dependabot,
+    /// Someone else's issue or PR that mentions me.
+    Mention,
+    /// A repository whose default branch has a red CI (a stub item, id `main:...`).
+    MainRed,
 }
 
-pub const RULES: [Rule; 7] = [Rule::RedCi, Rule::Mergeable, Rule::Question, Rule::NeedsOwner, Rule::Finding, Rule::LaneStalled, Rule::Dependabot];
+pub const RULES: [Rule; 9] = [Rule::RedCi, Rule::Mergeable, Rule::Question, Rule::NeedsOwner, Rule::Finding, Rule::LaneStalled, Rule::Dependabot, Rule::Mention, Rule::MainRed];
 
 impl Rule {
     pub fn index(self) -> usize {
@@ -42,6 +46,8 @@ impl Rule {
             Rule::Finding => "why.finding",
             Rule::LaneStalled => "why.lane_stalled",
             Rule::Dependabot => "why.dependabot",
+            Rule::Mention => "why.mention",
+            Rule::MainRed => "why.main_red",
         }
     }
 
@@ -55,17 +61,30 @@ impl Rule {
             Rule::Finding => ("a", "next.take"),
             Rule::LaneStalled => ("o", "next.open"),
             Rule::Dependabot => ("o", "next.open"),
+            Rule::Mention => ("r", "next.reply"),
+            Rule::MainRed => ("o", "next.open"),
         }
     }
 }
 
-/// Which rules are on.
+/// Which rules are on (`.0`) and their priority (`.1`: rule indexes, the
+/// first that fits an item is its reason).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rules(pub [bool; 7]);
+pub struct Rules(pub [bool; 9], pub [usize; 9]);
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules([true, true, true, true, true, true, false])
+        Rules([true, true, true, true, true, true, false, true, true], [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    }
+}
+
+impl Rules {
+    /// Move the rule at place `at` of the priority one place (`-1` up, `1` down).
+    pub fn shift(&mut self, at: usize, step: isize) {
+        let to = at as isize + step;
+        if (0..9).contains(&to) {
+            self.1.swap(at, to as usize);
+        }
     }
 }
 
@@ -77,7 +96,7 @@ fn has_label(item: &Item, name: &str) -> bool {
 pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
     let mine = item.author == me;
     let pr = item.kind == Kind::Pr;
-    RULES.iter().copied().filter(|r| rules.0[r.index()]).find(|r| match r {
+    rules.1.iter().map(|&k| RULES[k]).filter(|r| rules.0[r.index()]).find(|r| match r {
         Rule::RedCi => pr && mine && item.ci == Some(Ci::Bad),
         Rule::Mergeable => pr && mine && !item.draft && !item.merged && !item.conflict && item.ci == Some(Ci::Ok),
         Rule::Question => has_label(item, "question") && (mine || item.assignees.iter().any(|a| a == me)),
@@ -85,6 +104,8 @@ pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
         Rule::Finding => has_label(item, "finding") && item.assignees.is_empty(),
         Rule::LaneStalled => has_label(item, "lane-stalled"),
         Rule::Dependabot => pr && item.author.starts_with("dependabot"),
+        Rule::Mention => item.mentioned && !mine && item.kind != Kind::Discussion,
+        Rule::MainRed => item.id.starts_with("main:"),
     })
 }
 
@@ -351,6 +372,7 @@ mod tests {
             draft: false,
             merged: false,
             conflict: false,
+            mentioned: false,
             ci: None,
         }
     }
@@ -382,6 +404,26 @@ mod tests {
         taken.assignees.push("y".into());
         assert_eq!(why(&taken, "me", &r), None);
         assert_eq!(why(&labelled(item("e", Kind::Issue, "x"), "lane-stalled"), "me", &r), Some(Rule::LaneStalled));
+    }
+
+    #[test]
+    fn mentions_and_a_red_main_count_and_the_priority_decides() {
+        let r = Rules::default();
+        let mut m = item("m", Kind::Issue, "x");
+        m.mentioned = true;
+        assert_eq!(why(&m, "me", &r), Some(Rule::Mention));
+        m.author = "me".into();
+        assert_eq!(why(&m, "me", &r), None, "my own item is not a mention");
+        assert_eq!(why(&item("main:uchmk/kura", Kind::Issue, ""), "me", &r), Some(Rule::MainRed));
+        let mut both = labelled(item("b", Kind::Issue, "x"), "finding");
+        both.mentioned = true;
+        assert_eq!(why(&both, "me", &r), Some(Rule::Finding));
+        let mut up = r;
+        for at in (1..=7).rev() {
+            up.shift(at, -1);
+        }
+        assert_eq!(up.1[0], 7);
+        assert_eq!(why(&both, "me", &up), Some(Rule::Mention));
     }
 
     #[test]

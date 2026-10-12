@@ -57,6 +57,8 @@ pub struct Item {
     pub merged: bool,
     /// The PR cannot merge as it is (GitHub says CONFLICTING).
     pub conflict: bool,
+    /// Set by the app: a search for `mentions:` found it.
+    pub mentioned: bool,
     pub ci: Option<Ci>,
 }
 
@@ -337,6 +339,7 @@ mod tests {
             draft: false,
             merged: false,
             conflict: false,
+            mentioned: false,
             ci: None,
         }
     }

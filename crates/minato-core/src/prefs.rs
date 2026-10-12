@@ -25,7 +25,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "rules": self.rules.0, "fields": self.fields, "order": self.order }).to_string()
+        json!({ "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
@@ -43,13 +43,16 @@ impl Settings {
         };
         fill("rules", &mut s.rules.0);
         fill("fields", &mut s.fields);
-        if let Some(list) = v.get("order").and_then(Value::as_array) {
+        let perm = |key: &str, out: &mut [usize]| {
+            let Some(list) = v.get(key).and_then(Value::as_array) else { return };
             let order: Vec<usize> = list.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect();
-            let mut seen = [false; FIELDS];
-            if order.len() == FIELDS && order.iter().all(|&k| k < FIELDS && !std::mem::replace(&mut seen[k], true)) {
-                s.order.copy_from_slice(&order);
+            let mut seen = vec![false; out.len()];
+            if order.len() == out.len() && order.iter().all(|&k| k < out.len() && !std::mem::replace(&mut seen[k], true)) {
+                out.copy_from_slice(&order);
             }
-        }
+        };
+        perm("order", &mut s.order);
+        perm("rule_order", &mut s.rules.1);
         s
     }
 
@@ -85,7 +88,9 @@ mod tests {
         assert_eq!(s.order, [0, 1, 2, 3, 4, 5]);
         s.shift(0, 1);
         assert_eq!(s.order, [1, 0, 2, 3, 4, 5]);
-        assert_eq!(Settings::parse(&s.to_json()).order, s.order);
+        s.rules.shift(0, 1);
+        assert_eq!(Settings::parse(&s.to_json()), s);
+        assert_eq!(Settings::parse(&s.to_json()).rules.1[0], 1);
         assert_eq!(Settings::parse(r#"{"order":[0,0,1,2,3,4]}"#).order, [0, 1, 2, 3, 4, 5]);
         assert_eq!(Settings::parse(r#"{"order":[0,1,2]}"#).order, [0, 1, 2, 3, 4, 5]);
     }

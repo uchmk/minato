@@ -17,6 +17,7 @@ use minato_core::github::write::parse_names;
 use minato_core::github::{Client, Rate, Token, UreqTransport};
 
 use minato_core::list::Item;
+use minato_core::mainci;
 
 use crate::app::App;
 use crate::overlay::Overlay;
@@ -36,6 +37,9 @@ pub struct Net {
     searched_closed: bool,
     /// The last answers of the two searches, merged into `app.items`.
     found: [Vec<Item>; 2],
+    /// Ids the `mentions:` search found, and the repositories whose main CI is red.
+    mentioned: std::collections::HashSet<String>,
+    stubs: Vec<Item>,
     /// The detail last asked for (its node id).
     asked: Option<String>,
     /// What to say when a write (by its job key) has gone through.
@@ -67,6 +71,21 @@ const REPOS: usize = 8;
 const SEARCH: Duration = Duration::from_secs(120);
 
 impl Net {
+    /// Merge what the searches found into `app.items`: mentions marked, stubs
+    /// for red main branches added (not over closed items).
+    fn rebuild(&self, app: &mut App) {
+        let mut all: Vec<Item> = self.found.concat();
+        for i in &mut all {
+            i.mentioned = self.mentioned.contains(&i.id);
+        }
+        all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        if !app.show_closed {
+            all.extend(self.stubs.iter().cloned());
+        }
+        app.items = all;
+        app.list.clamp(&app.items, app.viewer.as_deref().unwrap_or(""));
+    }
+
     /// Start looking for the token (it may run `gh`).
     pub fn start(ctx: &egui::Context) -> Net {
         let (tx, token_rx) = mpsc::channel();
@@ -75,7 +94,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), searched_closed: false, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), next_notes: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -125,12 +144,21 @@ impl Net {
                             match parsed {
                                 Ok(v) => {
                                     self.found[usize::from(k == "discussions")] = v;
-                                    let mut all: Vec<Item> = self.found.concat();
-                                    all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-                                    app.items = all;
-                                    app.list.clamp(&app.items, app.viewer.as_deref().unwrap_or(""));
+                                    self.rebuild(app);
                                 }
                                 Err(e) => app.say(e),
+                            }
+                        }
+                        "mentions" => {
+                            if let Ok(v) = parse_items(&f.body) {
+                                self.mentioned = v.into_iter().map(|i| i.id).collect();
+                                self.rebuild(app);
+                            }
+                        }
+                        "mainci" => {
+                            if let Ok(v) = mainci::parse(&f.body) {
+                                self.stubs = v;
+                                self.rebuild(app);
                             }
                         }
                         k if k.starts_with("detail:") => {
@@ -321,6 +349,10 @@ impl Net {
                 if app.show_closed {
                     self.found[1].clear();
                 } else {
+                    let q = format!("user:{me} is:open mentions:{me} -author:{me} sort:updated-desc");
+                    let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
+                    worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
+                    worker.send(Job { key: "mainci".into(), call: Call::Graphql { query: mainci::query(), variables: "{}".into() } });
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 }
                 self.next_search = now + SEARCH;

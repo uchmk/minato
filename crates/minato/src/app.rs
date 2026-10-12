@@ -738,10 +738,21 @@ impl App {
         self.items.iter().find(|i| i.id == id).cloned()
     }
 
+    /// The selected item, unless it is a stub for a repository (red main CI):
+    /// nothing can be written to that.
+    fn writable(&mut self) -> Option<Item> {
+        let item = self.selected().cloned()?;
+        if minato_core::mainci::is_stub(&item) {
+            self.say(self.tr("write.not_real").to_string());
+            return None;
+        }
+        Some(item)
+    }
+
     /// `r`: open the writing box on the selected item and ask for the
     /// repository's labels and people.
     pub fn open_compose(&mut self) {
-        let Some(item) = self.selected().cloned() else { return };
+        let Some(item) = self.writable() else { return };
         self.queue(&format!("labels:{}", item.repo), Call::Get(write::labels_path(&item.repo)), None);
         self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
         self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
@@ -827,7 +838,7 @@ impl App {
     /// `m` in the inbox: ask before merging an open PR.
     fn ask_merge(&mut self) {
         match self.selected() {
-            Some(i) if i.kind == Kind::Pr && !i.merged && !i.draft => {
+            Some(i) if i.kind == Kind::Pr && !i.merged && !i.draft && !minato_core::mainci::is_stub(i) => {
                 self.confirm = Some(i.id.clone());
                 self.confirm_act = Confirm::Merge;
             }
@@ -842,7 +853,7 @@ impl App {
     /// `x`: ask before closing the selected issue or PR.
     fn ask_close(&mut self) {
         match self.selected() {
-            Some(i) if i.kind != Kind::Discussion && !i.merged => {
+            Some(i) if i.kind != Kind::Discussion && !i.merged && !minato_core::mainci::is_stub(i) => {
                 self.confirm = Some(i.id.clone());
                 self.confirm_act = Confirm::Close;
             }
@@ -854,7 +865,7 @@ impl App {
     /// `x` over closed items: open the selected issue or PR again.
     fn reopen(&mut self) {
         match self.selected() {
-            Some(i) if i.kind != Kind::Discussion && !i.merged => {
+            Some(i) if i.kind != Kind::Discussion && !i.merged && !minato_core::mainci::is_stub(i) => {
                 let n = self.outbox.len();
                 self.queue(&format!("write:{n}:state"), write::set_state(i, true), Some("write.reopened"));
             }
@@ -880,7 +891,7 @@ impl App {
     /// `a`: assign the selected item to the viewer.
     fn assign_self(&mut self) {
         let (Some(item), Some(me)) = (self.selected().cloned(), self.viewer.clone()) else { return };
-        if item.kind == Kind::Discussion {
+        if item.kind == Kind::Discussion || minato_core::mainci::is_stub(&item) {
             return;
         }
         let n = self.outbox.len();
@@ -1302,6 +1313,7 @@ mod tests {
             draft: false,
             merged: false,
             conflict: false,
+            mentioned: false,
             ci: None,
         }
     }

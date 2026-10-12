@@ -122,6 +122,7 @@ mod tests {
             draft: false,
             merged: false,
             conflict: false,
+            mentioned: false,
             ci: None,
         }
     }

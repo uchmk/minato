@@ -66,8 +66,12 @@ fn text(v: &Value, pointer: &str) -> String {
 
 pub fn parse(body: &str) -> Result<Project, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
-    if let Some(e) = v.pointer("/errors/0/message").and_then(Value::as_str) {
-        return Err(e.to_string());
+    // A Project without a Priority field makes GitHub add an error beside
+    // the data; only an answer with no data is a failure.
+    if v.pointer("/data/viewer").is_none() {
+        if let Some(e) = v.pointer("/errors/0/message").and_then(Value::as_str) {
+            return Err(e.to_string());
+        }
     }
     let nodes = v.pointer("/data/viewer/projectsV2/nodes").and_then(Value::as_array).ok_or("no projects in the answer")?;
     let p = nodes.iter().find(|p| text(p, "/title") == TITLE).or_else(|| nodes.first()).ok_or("no Project found")?;

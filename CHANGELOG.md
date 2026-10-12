@@ -2,6 +2,17 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.15.0] - 2026-10-12
+
+### Added
+
+- 受信箱の規則に「メンション」（他の人の open な issue・PR で、自分が `mentions:` されているもの）と「メインの CI」（自分のリポジトリで既定のブランチの CI が赤いもの。行は `main:…` の仮の項目で、Enter / `o` で Actions を開く。書き込みは断る）を足した。どちらも既定は入り。
+- 設定の「minato」ページで、受信箱の規則の優先順位を ▲ ▼ で入れ替えられる（`minato-settings.json` の `rule_order`）。複数に当てはまる項目は、上の規則の理由になる。
+
+### Fixed
+
+- Project に Priority の欄が無いと、ボードの問い合わせが「…FieldConfiguration with the name Priority」で失敗してトーストが出た。データが返っていれば `errors` は無視する。
+
 ## [0.14.0] - 2026-10-12
 
 ### Added

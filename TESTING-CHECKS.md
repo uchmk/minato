@@ -176,3 +176,10 @@
 - [ ] **17.1** In the "minato" page press ▼ on Labels, then open the writing box → The key line lists `Alt+A` before `Alt+L`; hidden fields are not listed
 - [ ] **17.2** Restart minato → The order is kept
 - [ ] **17.3** Have a green PR of yours with merge conflicts → It is not in the inbox as "ready to merge"
+
+## 18. Mentions, red main CI and rule priority
+
+- [ ] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
+- [ ] **18.2** Have someone mention you on their open issue → The issue is in the inbox with "Mentions you"
+- [ ] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
+- [ ] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart

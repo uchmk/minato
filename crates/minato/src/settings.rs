@@ -72,11 +72,26 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         }
         MINATO => {
             section(ui, l, tr("settings.rules"), |ui| {
-                for r in minato_core::inbox::RULES {
+                let mut shift = None;
+                for at in 0..st.rules.1.len() {
+                    let r = minato_core::inbox::RULES[st.rules.1[at]];
                     let on = st.rules.0[r.index()];
-                    if ito_prefs::row(ui, l, tr(r.why()), "", |ui| ito_prefs::switch(ui, l, on)) {
+                    let flipped = ito_prefs::row(ui, l, tr(r.why()), tr("settings.rule_note"), |ui| {
+                        let switched = ito_prefs::switch(ui, l, on);
+                        if ui.small_button("▼").on_hover_text(tr("settings.move_down")).clicked() {
+                            shift = Some((at, 1));
+                        }
+                        if ui.small_button("▲").on_hover_text(tr("settings.move_up")).clicked() {
+                            shift = Some((at, -1));
+                        }
+                        switched
+                    });
+                    if flipped {
                         st.rules.0[r.index()] = !on;
                     }
+                }
+                if let Some((at, step)) = shift {
+                    st.rules.shift(at, step);
                 }
             });
             section(ui, l, tr("settings.fields"), |ui| {
