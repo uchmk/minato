@@ -5,7 +5,9 @@
 use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, ViewportCommand, pos2, vec2};
 use ito_common::Clock;
 
-use crate::app::{App, GLOBAL_KEYS, Mode, View};
+use ito_layout::Node;
+
+use crate::app::{App, Click, GLOBAL_KEYS, Mode, NoteClick, Pane, View};
 
 /// The accent of the tabs, the palette and the best key.
 pub const ACCENT: Color32 = Color32::from_rgb(0x5B, 0x9F, 0xD1);
@@ -26,6 +28,48 @@ pub struct Out {
     /// A card clicked, and a card dropped on a column.
     pub pick: Option<usize>,
     pub drop: Option<(usize, usize)>,
+    /// A row, a chip or a column clicked in the view.
+    pub click: Option<Click>,
+    /// The view's columns as a divider was dragged to.
+    pub split: Option<Node<Pane>>,
+    /// What the mouse did in the notifications.
+    pub note: Option<NoteClick>,
+    /// Where the bell is, for the notifications to hang from.
+    pub bell_at: Option<Rect>,
+}
+
+/// How far apart the columns are: the 1 px line between them, which the
+/// mouse takes from a strip around it.
+const GAP: f32 = 1.0;
+const GRAB: f32 = 8.0;
+
+/// The columns of a view's split in `r`.
+pub fn panes(split: &Node<Pane>, r: Rect) -> Vec<(Pane, Rect)> {
+    split.layout(ito_layout::ui::from_egui(r), GAP).into_iter().map(|(p, r)| (p, ito_layout::ui::to_egui(r))).collect()
+}
+
+/// The lines between the columns, and their dividers (ito-layout) to drag;
+/// called after the columns' rows, so the dividers take the pointer first.
+pub fn dividers(ui: &Ui, split: &Node<Pane>, r: Rect, out: &mut Out) {
+    let c = ito_theme::colors();
+    let area = ito_layout::ui::from_egui(r);
+    for d in split.dividers(area, GAP) {
+        ui.painter().rect_filled(ito_layout::ui::to_egui(d.gap), 0.0, c.border);
+    }
+    let look = ito_layout::ui::Look { gap: GAP, grab: GRAB, line: ACCENT };
+    match ito_layout::ui::dividers(ui, ui.id().with("columns"), split, area, look) {
+        Some(ito_layout::ui::Moved::Dragging(n) | ito_layout::ui::Moved::Halved(n)) => out.split = Some(n),
+        Some(ito_layout::ui::Moved::Released) | None => {}
+    }
+}
+
+/// A rect that takes a click, with the pointing hand over it.
+pub fn hit(ui: &Ui, r: Rect, id: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
+    let resp = ui.interact(r, ui.id().with(id), Sense::click());
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    resp
 }
 
 pub fn frame(ui: &mut Ui, app: &App) -> Out {
@@ -39,10 +83,9 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     title_bar(ui, app, title, &mut out);
     match app.mode {
         Mode::Help => help(ui, app, body),
-        Mode::Notes => crate::notes_ui::draw(ui, app, body),
-        _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body),
-        _ if app.view == View::List => crate::list_ui::draw(ui, app, body),
-        _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body),
+        _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body, &mut out),
+        _ if app.view == View::List => crate::list_ui::draw(ui, app, body, &mut out),
+        _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
     }
@@ -52,6 +95,10 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     if let Some(left) = app.toast_left() {
         toast(ui, app, body);
         ui.ctx().request_repaint_after(left);
+    }
+    // The notifications hang from the bell over the view, as in tsumugi.
+    if app.mode == Mode::Notes {
+        crate::notes_ui::show(ui, app, &mut out);
     }
     out
 }
@@ -157,6 +204,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     if resp.clicked() {
         out.bell = true;
     }
+    out.bell_at = Some(bell);
     resp.on_hover_text(app.tr("bell"));
     let right_start = bell.left() - 12.0;
     // The palette field in the middle of what is left.
@@ -252,7 +300,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect) {
     let keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
         Mode::Help => vec![("?", "key.back"), ("Esc", "key.back")],
-        Mode::Notes => vec![("j k", "key.next"), ("Enter", "key.open"), ("d", "key.read"), ("A", "cmd.mark_all"), ("n", "key.back")],
+        Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
         Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("?", "key.help")]).collect(),
     };
     for (k, (key, word)) in keys.iter().enumerate() {

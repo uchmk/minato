@@ -11,6 +11,7 @@ mod app;
 mod fonts;
 mod i18n;
 mod compose_ui;
+mod detail_ui;
 mod icon;
 mod inbox_ui;
 mod list_ui;
@@ -20,6 +21,7 @@ mod overlay;
 mod overlay_ui;
 mod prefs;
 mod settings;
+mod style;
 mod ui;
 
 use app::{App, Mode};
@@ -70,6 +72,11 @@ impl Minato {
                 egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
                     self.app.enter();
                 }
+                egui::Event::Key { key, pressed: true, modifiers, .. } => {
+                    if let Some(c) = arrow_char(key, &modifiers) {
+                        self.app.feed(c);
+                    }
+                }
                 egui::Event::Text(t) => {
                     for c in t.chars() {
                         self.app.feed(c);
@@ -112,9 +119,20 @@ impl eframe::App for Minato {
         if self.app.mode == Mode::Settings {
             settings::show(ui, &mut self.app);
         } else {
+            let was = self.app.mode;
             let out = ui::frame(ui, &self.app);
             if let Some(v) = out.view {
                 self.app.view = v;
+            }
+            // A click in the view under the notifications only closes them.
+            if let Some(c) = out.click.filter(|_| was == Mode::Main) {
+                self.app.click(c);
+            }
+            if let Some(n) = out.split {
+                self.app.set_split(self.app.view, n);
+            }
+            if let Some(n) = out.note {
+                self.app.note_click(n);
             }
             if let Some(k) = out.pick {
                 self.app.pick_card(k);
@@ -123,7 +141,7 @@ impl eframe::App for Minato {
                 self.app.drop_card(k, col);
             }
             if out.bell {
-                self.app.mode = Mode::Notes;
+                self.app.mode = if was == Mode::Notes { Mode::Main } else { Mode::Notes };
             }
             if out.palette && self.app.palette.is_none() {
                 self.app.palette = Some(ito_palette::View::new());
@@ -144,6 +162,24 @@ impl eframe::App for Minato {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         ito_theme::colors().bg.to_normalized_gamma_f32()
     }
+}
+
+/// The arrows as the letters they stand for (`←↓↑→` are `h j k l`, with
+/// Shift `H J K L`), read through ito-keys; none with Ctrl or Alt held.
+fn arrow_char(key: egui::Key, mods: &egui::Modifiers) -> Option<char> {
+    use ito_keys::{Code, Named};
+    let k = ito_keys::from_egui(key, mods)?;
+    if k.ctrl || k.alt {
+        return None;
+    }
+    let c = match k.code {
+        Code::Named(Named::Left) => 'h',
+        Code::Named(Named::Down) => 'j',
+        Code::Named(Named::Up) => 'k',
+        Code::Named(Named::Right) => 'l',
+        _ => return None,
+    };
+    Some(if k.shift { c.to_ascii_uppercase() } else { c })
 }
 
 /// An input event as the Actions boxes see it.
@@ -236,4 +272,20 @@ fn main() -> eframe::Result {
             Ok(Box::new(Minato { app, net: net::Net::start(&cc.egui_ctx) }))
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_arrows_are_hjkl() {
+        let none = egui::Modifiers::NONE;
+        let got: Vec<_> = [egui::Key::ArrowLeft, egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::ArrowRight].into_iter().map(|k| arrow_char(k, &none)).collect();
+        assert_eq!(got, [Some('h'), Some('j'), Some('k'), Some('l')]);
+        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::SHIFT), Some('J'));
+        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::CTRL), None);
+        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::ALT), None);
+        assert_eq!(arrow_char(egui::Key::A, &none), None);
+    }
 }

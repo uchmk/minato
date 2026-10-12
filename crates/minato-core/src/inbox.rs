@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use crate::list::{Ci, Item, Kind};
+use crate::notes::Tone;
 
 /// The rules that bring an item into the inbox, in the design's order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,6 +64,33 @@ impl Rule {
             Rule::Dependabot => ("o", "next.open"),
             Rule::Mention => ("r", "next.reply"),
             Rule::MainRed => ("o", "next.open"),
+        }
+    }
+
+    /// The i18n key of the note under the next step: what to look at.
+    pub fn note(self) -> &'static str {
+        match self {
+            Rule::RedCi => "note.red_ci",
+            Rule::Mergeable => "note.mergeable",
+            Rule::Question => "note.question",
+            Rule::NeedsOwner => "note.needs_owner",
+            Rule::Finding => "note.finding",
+            Rule::LaneStalled => "note.lane_stalled",
+            Rule::Dependabot => "note.dependabot",
+            Rule::Mention => "note.mention",
+            Rule::MainRed => "note.main_red",
+        }
+    }
+
+    /// The colour of the card's edge and the next box.
+    pub fn tone(self) -> Tone {
+        match self {
+            Rule::RedCi | Rule::MainRed => Tone::Bad,
+            Rule::Mergeable => Tone::Ok,
+            Rule::Question | Rule::NeedsOwner => Tone::Ask,
+            Rule::LaneStalled => Tone::Run,
+            Rule::Dependabot => Tone::Idle,
+            Rule::Finding | Rule::Mention => Tone::Accent,
         }
     }
 }
@@ -231,7 +259,8 @@ impl Status {
         }
     }
 
-    fn takes(self, g: Group) -> bool {
+    /// Whether a card of group `g` passes this filter.
+    pub fn takes(self, g: Group) -> bool {
         matches!((self, g), (Status::All, _) | (Status::Mine, Group::Mine) | (Status::Wait, Group::Wait) | (Status::Done, Group::Done))
     }
 }

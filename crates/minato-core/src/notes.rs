@@ -45,6 +45,42 @@ pub fn web_url(subject_api: &str, repo: &str) -> String {
     }
 }
 
+/// The colour a line is drawn in, by what it is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tone {
+    Bad,
+    Ok,
+    Ask,
+    Run,
+    Idle,
+    Accent,
+}
+
+/// What happened, as an i18n key, and its tone: why GitHub sent the thread.
+pub fn event(reason: &str) -> (&'static str, Tone) {
+    match reason {
+        "ci_activity" => ("event.ci", Tone::Run),
+        "review_requested" => ("event.review", Tone::Ask),
+        "mention" | "team_mention" => ("event.mention", Tone::Accent),
+        "comment" => ("event.comment", Tone::Accent),
+        "assign" => ("event.assign", Tone::Accent),
+        "state_change" => ("event.state", Tone::Ok),
+        "author" => ("event.author", Tone::Accent),
+        _ => ("event.other", Tone::Idle),
+    }
+}
+
+/// The number at the end of a thread's page (`/pull/5`, `/issues/5`,
+/// `/discussions/5`), if it has one.
+pub fn number(url: &str) -> Option<u64> {
+    let (head, n) = url.rsplit_once('/')?;
+    let kind = head.rsplit('/').next()?;
+    if !matches!(kind, "pull" | "issues" | "discussions") {
+        return None;
+    }
+    n.parse().ok()
+}
+
 pub fn parse(body: &str) -> Result<Vec<Note>, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
     if let Some(m) = v.get("message").and_then(Value::as_str) {
@@ -135,6 +171,18 @@ mod tests {
     fn the_writes_name_the_thread_or_everything() {
         assert!(matches!(mark_read("9"), Call::Send { method: Method::Patch, path, .. } if path == "/notifications/threads/9"));
         assert!(matches!(mark_all(), Call::Send { method: Method::Put, path, .. } if path == "/notifications"));
+    }
+
+    #[test]
+    fn events_have_words_and_numbers_come_from_the_page() {
+        assert_eq!(event("review_requested"), ("event.review", Tone::Ask));
+        assert_eq!(event("ci_activity").1, Tone::Run);
+        assert_eq!(event("something_new"), ("event.other", Tone::Idle));
+        assert_eq!(number("https://github.com/uchmk/kura/pull/5"), Some(5));
+        assert_eq!(number("https://github.com/uchmk/kura/issues/12"), Some(12));
+        assert_eq!(number("https://github.com/uchmk/kura/discussions/3"), Some(3));
+        assert_eq!(number("https://github.com/uchmk/kura/commit/abc"), None);
+        assert_eq!(number("https://github.com/uchmk/tsumugi"), None);
     }
 
     #[test]

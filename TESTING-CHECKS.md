@@ -92,9 +92,9 @@
 
 ## 9. Actions
 
-- [ ] **9.1** Press `3` → The runs of your repositories appear, newest first, each with a mark (✓ ✗ ◐ ◷ ⊘), its workflow, event, branch, repository, number, actor and age
+- [ ] **9.1** Press `3` → The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others fold to mark, title and duration
 - [ ] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
-- [ ] **9.3** Select a run → The detail shows the status, the title, the meta line, the next step, the jobs with durations, the last 10 results and artifacts
+- [ ] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [ ] **9.5** Select a running run and press `X` → A toast says it is stopping; the run turns to cancelled
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` → A toast says the workflow started; a new run appears
@@ -118,11 +118,12 @@
 
 ## 11. Notifications and palette
 
-- [ ] **11.1** Press `n` with unread GitHub notifications → Unread threads list with repo, kind, reason, age and title; the bell count matches
-- [ ] **11.2** Press `Enter` on a thread → The browser opens its issue, PR or commit; the row goes and the count drops by one
+- [ ] **11.1** Press `n` with unread GitHub notifications → A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; far rows fold to one line with the title
+- [ ] **11.2** Press `Enter` on a thread minato has, then on one it does not → The list closes and the inbox (or the list) selects that thread; for the other, the browser opens it. Each time the row goes and the count drops by one
 - [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
 - [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
-- [ ] **11.5** Press `n` again → The view comes back
+- [ ] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
+- [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the button marks every row read
 - [ ] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field
 - [ ] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
 - [ ] **11.8** Type `board`, press `Enter` → The Board view opens
@@ -155,7 +156,7 @@
 - [ ] **14.2** Press `Ctrl+,` → The settings screen opens; `Esc` returns
 - [ ] **14.3** Click the palette field in the title bar → The command palette opens, the same as `Ctrl+Shift+P`
 - [ ] **14.4** With no unread notification look at the bell, then with some → Dim cup without a badge; with unread, a gold badge with the count (`9+` past nine), the same look as tsumugi's bell
-- [ ] **14.5** Click the bell → The notifications panel opens
+- [ ] **14.5** Click the bell → The notifications list opens under it, its right edge under the bell
 
 ## 15. The minato page of the settings
 
@@ -211,3 +212,12 @@
 - [ ] **23.1** In the settings (`,`), minato page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
 - [ ] **23.2** In the list move to the filter column and choose that search under saved → The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds
 - [ ] **23.3** Choose "All" under saved, or switch to the inbox → The ordinary list comes back
+
+## 24. Columns, mouse and arrows
+
+- [ ] **24.1** In the inbox, list and Actions, drag the line between two columns → The pointer turns to a resize arrow over the line and the columns follow; nothing scrolls; each column keeps a usable width
+- [ ] **24.2** Click a row in each column (filter, item, run, card) → The row is selected and that column gets the focus (a lit line on top); the detail follows
+- [ ] **24.3** In each view press `←` `↓` `↑` `→` instead of `h j k l` → They do the same as `h j k l`, also in the notifications list and the filters
+- [ ] **24.4** Open the palette and look at the commands tsumugi also has → They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き)
+- [ ] **24.5** Compare the inbox, list, Actions and notifications with `docs/mock/minato.html` → The same layout: the inbox's tag chips, "Your turn" / "Waiting" / "Done today" with their hints, the detail's "Next" box and keys, the list's filter column with counts, the Actions run rows and detail
+- [ ] **24.6** Select an item that is a stub for a red main CI (no thread) → The detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…"

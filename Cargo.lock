@@ -1602,6 +1602,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ito-layout"
+version = "0.26.0"
+source = "git+https://github.com/uchmk/ito?rev=45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f#45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "ito-palette"
 version = "0.26.0"
 source = "git+https://github.com/uchmk/ito?rev=45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f#45c4e79349df8aa0324a6f5fbd8c8f6f45f3365f"
@@ -1856,7 +1864,7 @@ dependencies = [
 
 [[package]]
 name = "minato"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "chrono",
  "eframe",
@@ -1864,6 +1872,7 @@ dependencies = [
  "ito-common",
  "ito-i18n",
  "ito-keys",
+ "ito-layout",
  "ito-palette",
  "ito-prefs",
  "ito-theme",
@@ -1874,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "minato-core"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "serde_json",

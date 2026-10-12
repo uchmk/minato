@@ -3,50 +3,65 @@
 //! next step, jobs, the last ten results and artifacts. Painted on rects; no
 //! scrollbar anywhere.
 
-use egui::{Align2, Color32, CornerRadius, FontId, Rect, Stroke, Ui, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
 use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
 use minato_core::fold::{Show, fold};
 use minato_core::list::{age, epoch};
 
-use crate::app::{App, now_epoch};
-use crate::list_ui::{BAD, LINE, OK, PENDING};
-use crate::ui::ACCENT;
+use crate::app::{App, Click, Pane, now_epoch};
+use crate::list_ui::LINE;
+use crate::style::{self, ACCENT, Next};
+use crate::ui::{self, Out};
 
-const FILTER_W: f32 = 210.0;
-const ROW_FULL: f32 = 64.0;
-const ROW_FOLDED: f32 = 24.0;
+/// A run, and one folded to its title.
+const ROW_FULL: f32 = 76.0;
+const ROW_FOLDED: f32 = 28.0;
 const MORE_H: f32 = 22.0;
-const HEAD_H: f32 = 30.0;
+/// The bar with the query.
+const HEAD_H: f32 = 40.0;
+/// A filter group's heading, and a filter's row.
+const GROUP_H: f32 = 30.0;
+const ENT_H: f32 = 24.0;
 
 fn tone(s: Status) -> Color32 {
-    let c = ito_theme::colors();
     match s {
-        Status::Ok => OK,
-        Status::Bad => BAD,
-        Status::Running | Status::Queued => PENDING,
-        Status::Idle => c.dim,
+        Status::Ok => style::OK,
+        Status::Bad => style::BAD,
+        Status::Running | Status::Queued => style::RUN,
+        Status::Idle => style::IDLE,
     }
 }
 
-pub fn draw(ui: &mut Ui, app: &App, r: Rect) {
-    let c = ito_theme::colors();
-    let detail_w = ((r.width() - FILTER_W) * 0.44).max(280.0);
-    let filters = Rect::from_min_size(r.min, vec2(FILTER_W, r.height()));
-    let detail = Rect::from_min_max(pos2(r.right() - detail_w, r.top()), r.max);
-    let runs = Rect::from_min_max(filters.right_top(), detail.left_bottom());
-    filter_col(ui, app, filters);
-    runs_col(ui, app, runs);
-    detail_col(ui, app, detail);
-    let p = ui.painter();
-    for x in [filters.right(), detail.left()] {
-        p.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], Stroke::new(1.0, c.border));
+/// A state filter's mark and colour, as its runs show it.
+fn bucket_mark(b: Bucket) -> (&'static str, Color32) {
+    match b {
+        Bucket::Bad => (Status::Bad.mark(), style::BAD),
+        Bucket::Active => (Status::Running.mark(), style::RUN),
+        Bucket::Ok => (Status::Ok.mark(), style::OK),
+        Bucket::Idle => (Status::Idle.mark(), style::IDLE),
     }
-    let on = match app.acts.col {
-        Col::Filters => filters,
-        Col::Runs => runs,
-        Col::Detail => detail,
-    };
-    p.line_segment([on.left_top(), on.right_top()], Stroke::new(2.0, ACCENT));
+}
+
+pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
+    for (pane, rect) in ui::panes(&app.acts_split, r) {
+        let col = match pane {
+            Pane::Left => Col::Filters,
+            Pane::Mid => Col::Runs,
+            Pane::Right => Col::Detail,
+        };
+        if ui::hit(ui, rect, ("acts-col", pane)).clicked() {
+            out.click = Some(Click::ActCol(col));
+        }
+        match pane {
+            Pane::Left => filter_col(ui, app, rect, out),
+            Pane::Mid => runs_col(ui, app, rect, out),
+            Pane::Right => detail_col(ui, app, rect),
+        }
+        if app.acts.col == col {
+            ui.painter().line_segment([rect.left_top(), rect.right_top()], Stroke::new(2.0, ACCENT));
+        }
+    }
+    ui::dividers(ui, &app.acts_split, r, out);
 }
 
 fn pick_label(app: &App, p: &Pick) -> String {
@@ -58,26 +73,28 @@ fn pick_label(app: &App, p: &Pick) -> String {
     }
 }
 
-fn filter_col(ui: &mut Ui, app: &App, r: Rect) {
+/// The filters, as the list's: a heading per group, a row per choice with
+/// its ● when chosen, the state's mark, and how many runs it has.
+fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
+    p.rect_filled(r, 0.0, c.side);
     let groups = actions::options(&app.runs);
     let focus = app.acts.col == Col::Filters;
     // The cursor's row stays in view.
-    let mut cursor_y = 10.0;
-    let (mut y, mut k) = (10.0, 0);
+    let mut cursor_y = 0.0;
+    let (mut yy, mut k) = (6.0, 0);
     for (_, picks) in &groups {
-        y += LINE + 6.0;
+        yy += GROUP_H;
         for _ in picks {
             if k == app.acts.cursor {
-                cursor_y = y;
+                cursor_y = yy;
             }
-            y += LINE;
+            yy += ENT_H;
             k += 1;
         }
-        y += 6.0;
     }
-    let mut y = r.top() + 10.0 - (cursor_y + LINE - r.height()).max(0.0);
+    let mut y = r.top() + 6.0 - (cursor_y + ENT_H + 16.0 - r.height()).max(0.0);
     let mut flat = 0;
     for (name, picks) in &groups {
         let word = match *name {
@@ -85,23 +102,35 @@ fn filter_col(ui: &mut Ui, app: &App, r: Rect) {
             "state" => "run.state",
             _ => "run.workflow",
         };
-        p.text(pos2(r.left() + 12.0, y + 9.0), Align2::LEFT_CENTER, app.tr(word), FontId::proportional(11.0), c.dim);
-        y += LINE + 6.0;
+        style::bold(&p, pos2(r.left() + 14.0, y + 12.0 + 7.0), Align2::LEFT_CENTER, app.tr(word), FontId::proportional(11.0), c.dim);
+        y += GROUP_H;
         for pick in picks {
-            let row = Rect::from_min_size(pos2(r.left() + 4.0, y), vec2(r.width() - 8.0, LINE));
-            if focus && flat == app.acts.cursor {
-                p.rect_filled(row, CornerRadius::same(4), ACCENT.gamma_multiply(0.18));
+            let row = Rect::from_min_size(pos2(r.left(), y), vec2(r.width(), ENT_H));
+            let resp = ui::hit(ui, row, ("acts-filter", flat));
+            if resp.clicked() {
+                out.click = Some(Click::ActFilter(flat));
             }
-            let chosen = app.acts.is_chosen(pick);
-            let color = if chosen { ACCENT } else { c.fg };
-            p.text(pos2(row.left() + 8.0, row.center().y), Align2::LEFT_CENTER, if chosen { "●" } else { "○" }, FontId::proportional(10.0), color);
-            let count = count(app, pick);
-            let t = p.text(pos2(row.right() - 8.0, row.center().y), Align2::RIGHT_CENTER, count.to_string(), FontId::proportional(11.0), c.dim);
-            p.with_clip_rect(Rect::from_min_max(row.min, pos2(t.left() - 4.0, row.bottom()))).text(pos2(row.left() + 24.0, row.center().y), Align2::LEFT_CENTER, pick_label(app, pick), FontId::proportional(12.5), color);
-            y += LINE;
+            if focus && flat == app.acts.cursor {
+                p.rect_filled(row, 0.0, style::sel());
+                p.rect_filled(Rect::from_min_size(row.min, vec2(3.0, ENT_H)), 0.0, ACCENT);
+            } else if resp.hovered() {
+                p.rect_filled(row, 0.0, c.hover());
+            }
+            let cy = row.center().y;
+            if app.acts.is_chosen(pick) {
+                p.text(pos2(row.left() + 14.0, cy), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), ACCENT);
+            }
+            let t = p.text(pos2(row.right() - 14.0, cy), Align2::RIGHT_CENTER, count(app, pick).to_string(), FontId::monospace(11.5), c.dim);
+            let mut x = row.left() + 14.0 + 18.0;
+            if let Pick::State(Some(b)) = pick {
+                let (m, col) = bucket_mark(*b);
+                x = p.text(pos2(x, cy), Align2::LEFT_CENTER, m, FontId::proportional(12.5), col).right() + 6.0;
+            }
+            let g = style::truncated(&p, pick_label(app, pick), FontId::proportional(13.0), c.fg, t.left() - 6.0 - x);
+            p.galley(pos2(x, cy - g.size().y / 2.0), g, c.fg);
+            y += ENT_H;
             flat += 1;
         }
-        y += 6.0;
     }
 }
 
@@ -112,25 +141,29 @@ fn count(app: &App, pick: &Pick) -> usize {
     only.shown(&app.runs).len()
 }
 
-fn runs_col(ui: &mut Ui, app: &App, r: Rect) {
+/// The query and the count over the runs, each folded to fit.
+fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let shown = app.acts.shown(&app.runs);
-    let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));
     let p = ui.painter().with_clip_rect(r);
-    p.text(pos2(head.left() + 12.0, head.center().y), Align2::LEFT_CENTER, query(app), FontId::monospace(11.5), c.dim);
-    let n = if app.ja() { format!("{} 件", shown.len()) } else { shown.len().to_string() };
-    p.text(pos2(head.right() - 12.0, head.center().y), Align2::RIGHT_CENTER, n, FontId::monospace(11.5), c.fg);
+    p.rect_filled(r, 0.0, c.side);
+    let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));
+    let n = p.text(pos2(head.right() - 12.0, head.center().y), Align2::RIGHT_CENTER, app.tr("list.count").replace("{}", &shown.len().to_string()), FontId::proportional(12.0), c.dim);
+    let q = Rect::from_min_max(pos2(head.left() + 12.0, head.center().y - 11.0), pos2(n.left() - 8.0, head.center().y + 11.0));
+    p.rect_filled(q, CornerRadius::same(6), c.bg);
+    p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
+    let g = style::truncated(&p, query(app), FontId::monospace(12.0), c.fg, q.width() - 18.0);
+    p.galley(pos2(q.left() + 9.0, q.center().y - g.size().y / 2.0), g, c.fg);
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));
     let body = Rect::from_min_max(head.left_bottom(), r.max);
     if shown.is_empty() {
         let words = if app.viewer.is_none() || app.runs.is_empty() { "list.loading" } else { "list.none" };
-        p.text(body.center(), Align2::CENTER_CENTER, app.tr(words), FontId::proportional(13.0), c.dim);
+        p.text(pos2(body.left() + 14.0, body.top() + 20.0), Align2::LEFT_CENTER, app.tr(words), FontId::proportional(12.5), c.dim);
         return;
     }
     let sel = app.acts.sel.min(shown.len() - 1);
     let f = fold(&vec![ROW_FULL; shown.len()], ROW_FOLDED, MORE_H, body.height(), sel);
     let now = now_epoch();
-    let focus = app.acts.col == Col::Runs;
     let mut y = body.top();
     if f.above > 0 {
         more(&p, app, body, y, f.above, "list.above");
@@ -143,7 +176,11 @@ fn runs_col(ui: &mut Ui, app: &App, r: Rect) {
             Show::Folded => ROW_FOLDED,
         };
         let row = Rect::from_min_size(pos2(body.left(), y), vec2(body.width(), h));
-        run_row(&p, run, row, f.rows[k] == Show::Full, k == sel, focus, now);
+        let resp = ui::hit(ui, row, ("acts-run", k));
+        if resp.clicked() {
+            out.click = Some(Click::ActRun(k));
+        }
+        run_row(&p, run, row, f.rows[k] == Show::Full, k == sel, resp.hovered(), now);
         y += h;
     }
     if f.below > 0 {
@@ -169,127 +206,144 @@ fn query(app: &App) -> String {
     q.join(" ")
 }
 
-fn more(p: &egui::Painter, app: &App, body: Rect, y: f32, n: usize, side: &'static str) {
-    let c = ito_theme::colors();
-    let words = if app.ja() { format!("⋯ {}{} 件", app.tr(side), n) } else { format!("⋯ {} {}", n, app.tr(side)) };
-    p.text(pos2(body.left() + 14.0, y + MORE_H / 2.0), Align2::LEFT_CENTER, words, FontId::proportional(11.5), c.dim);
+fn more(p: &Painter, app: &App, body: Rect, y: f32, n: usize, side: &'static str) {
+    style::more(p, app.ja(), app.tr(side), body.left() + 14.0, y + MORE_H / 2.0, n);
 }
 
 fn ago(iso: &str, now: i64) -> String {
     epoch(iso).map(|t| age(iso, now.max(t))).unwrap_or_default()
 }
 
-fn run_row(p: &egui::Painter, run: &Run, row: Rect, full: bool, selected: bool, focus: bool, now: i64) {
+/// One run: its state's mark; the title; the workflow, the event and the
+/// branch; where, who and when; the duration at the right.
+fn run_row(p: &Painter, run: &Run, row: Rect, full: bool, on: bool, hover: bool, now: i64) {
     let c = ito_theme::colors();
-    if selected {
-        p.rect_filled(row, 0.0, ACCENT.gamma_multiply(if focus { 0.16 } else { 0.08 }));
+    if on {
+        p.rect_filled(row, 0.0, style::sel());
         p.rect_filled(Rect::from_min_size(row.min, vec2(3.0, row.height())), 0.0, ACCENT);
+    } else if hover {
+        p.rect_filled(row, 0.0, c.hover());
     }
+    p.line_segment([row.left_bottom(), row.right_bottom()], Stroke::new(1.0, c.border));
     let p = p.with_clip_rect(row);
-    let x = row.left() + 14.0;
-    let color = tone(run.status);
-    p.text(pos2(x, row.top() + 16.0), Align2::LEFT_CENTER, run.status.mark(), FontId::proportional(14.0), color);
+    let y1 = row.top() + if full { 8.0 } else { 5.0 } + 9.0;
+    p.text(pos2(row.left() + 14.0 + 8.0, y1), Align2::CENTER_CENTER, run.status.mark(), FontId::proportional(13.0), tone(run.status));
+    let x = row.left() + 14.0 + 16.0 + 10.0;
+    let right = row.right() - 14.0;
     let dur = run.seconds(now).map(actions::duration).unwrap_or_default();
-    let t = p.text(pos2(row.right() - 12.0, row.top() + 16.0), Align2::RIGHT_CENTER, dur, FontId::monospace(11.0), c.dim);
-    let clip = Rect::from_min_max(row.min, pos2(t.left() - 8.0, row.bottom()));
-    p.with_clip_rect(clip).text(pos2(x + 20.0, row.top() + 16.0), Align2::LEFT_CENTER, &run.title, FontId::proportional(13.5), c.fg);
+    let t = p.text(pos2(right, y1), Align2::RIGHT_CENTER, dur, FontId::proportional(12.0), c.dim);
+    let rx = t.left() - 10.0;
+    let g = style::truncated(&p, run.title.clone(), FontId::proportional(13.0), c.fg, rx - x);
+    let ty = y1 - g.size().y / 2.0;
+    p.galley(pos2(x + 0.45, ty), g.clone(), c.fg);
+    p.galley(pos2(x, ty), g, c.fg);
     if !full {
         return;
     }
-    let line2 = format!("{}  {}  · {}", run.workflow, run.event, run.branch);
-    p.with_clip_rect(clip).text(pos2(x + 20.0, row.top() + 34.0), Align2::LEFT_CENTER, line2, FontId::proportional(11.5), color);
-    let line3 = format!("{} · #{} · {} · {}", run.repo, run.number, run.actor, ago(&run.started_at, now));
-    p.text(pos2(x + 20.0, row.top() + 51.0), Align2::LEFT_CENTER, line3, FontId::proportional(11.5), c.dim);
+    let y2 = y1 + 9.0 + 4.0 + 9.0;
+    let wx = style::chip(&p, x, y2, &run.workflow, FontId::monospace(11.0), 6.0, 17.0, 4, c.border, style::head(), c.fg) + 6.0;
+    let g = style::truncated(&p, format!("{}  · {}", run.event, run.branch), FontId::monospace(11.0), c.dim, rx - wx);
+    p.galley(pos2(wx, y2 - g.size().y / 2.0), g, c.dim);
+    let y3 = y2 + 9.0 + 3.0 + 8.0;
+    let g = style::truncated(&p, format!("{} · #{} · {} · {}", run.repo, run.number, run.actor, ago(&run.started_at, now)), FontId::proportional(12.0), c.dim, right - x);
+    p.galley(pos2(x, y3 - g.size().y / 2.0), g, c.dim);
 }
 
-fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
+/// The run as the mock's detail draws it: where and what state; the title
+/// and how it went; the next step and the other keys; the jobs, the last ten
+/// results and the artifacts.
+fn detail_col(ui: &Ui, app: &App, r: Rect) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
+    p.rect_filled(r, 0.0, c.bg);
     let Some(run) = app.run() else {
         p.text(r.center(), Align2::CENTER_CENTER, app.tr("detail.pick"), FontId::proportional(13.0), c.dim);
         return;
     };
     let now = now_epoch();
-    let w = r.width() - 28.0;
-    let x = r.left() + 14.0;
-    let mut y = r.top() + 14.0 - app.acts.scroll * LINE;
-    let block = |y: &mut f32, text: String, font: FontId, color: Color32| {
-        let g = ui.fonts_mut(|f| f.layout(text, font, color, w));
-        let h = g.size().y;
-        p.galley(pos2(x, *y), g, color);
-        *y += h;
-    };
+    let x = r.left() + 26.0;
+    let w = (r.width() - 52.0).min(900.0);
+    let mut y = r.top() + 18.0 - app.acts.scroll * LINE + 10.0;
+    // The head: the repository, Run, the workflow and its number, the state.
+    let mut hx = style::tag(&p, x, y, &run.repo, &run.repo) + 8.0;
+    hx = style::run_chip(&p, hx, y, "▶ Run", ACCENT) + 8.0;
+    hx = p.text(pos2(hx, y), Align2::LEFT_CENTER, format!("{} #{}", run.workflow, run.number), FontId::monospace(12.5), c.fg).right() + 8.0;
     let color = tone(run.status);
-    block(&mut y, format!("{} #{}   {} {}", run.workflow, run.number, run.status.mark(), app.tr(run.status.word())), FontId::proportional(12.5), color);
-    y += 6.0;
-    block(&mut y, run.title.clone(), FontId::proportional(16.0), c.fg);
-    y += 6.0;
+    let words = format!("{} {}", run.status.mark(), app.tr(run.status.word()));
+    style::chip(&p, hx, y, &words, FontId::proportional(11.5), 7.0, 18.0, 9, color, color.gamma_multiply(0.14), color);
+    y += 10.0 + 10.0;
+    let title = p.layout(run.title.clone(), FontId::proportional(19.0), c.fg, w);
+    let th = title.size().y;
+    p.galley(pos2(x + 0.5, y), title.clone(), c.fg);
+    p.galley(pos2(x, y), title, c.fg);
+    y += th + 8.0;
     let dur = run.seconds(now).map(actions::duration).unwrap_or_default();
-    block(&mut y, format!("{} · {} · {} · {} · {} · {}", run.event, run.branch, run.sha, run.actor, dur, ago(&run.started_at, now)), FontId::proportional(11.5), c.dim);
-    y += 6.0;
-    block(&mut y, run.repo.clone(), FontId::monospace(11.0), c.dim);
-    y += 14.0;
-    // What to do next.
-    let (key, why) = match run.status {
-        Status::Bad => ("R", "run.next_bad"),
-        Status::Running | Status::Queued => ("X", "run.next_active"),
-        Status::Ok | Status::Idle => ("D", "run.next_ok"),
+    let branch = if run.pr.is_some() { format!("{} → main", run.branch) } else { run.branch.clone() };
+    let mut mx = x;
+    for m in [run.event.clone(), branch, run.sha.clone(), run.actor.clone(), dur, ago(&run.started_at, now)] {
+        if !m.is_empty() {
+            mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(12.0), c.dim).right() + 14.0;
+        }
+    }
+    y += 16.0;
+    // What to do next: re-run a failure, stop a run that goes.
+    let hist = actions::history(&app.runs, run, 10);
+    let bad = hist.iter().filter(|h| h.status == Status::Bad).count();
+    let note = if app.ja() { format!("このワークフローは最近 10 回で {bad} 回落ちている") } else { format!("{bad} of the last 10 runs of this workflow failed") };
+    let next = match run.status {
+        Status::Bad => Some(Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some("R") }),
+        Status::Running | Status::Queued => Some(Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some("X") }),
+        Status::Ok | Status::Idle => None,
     };
-    block(&mut y, format!("[{key}] {}", app.tr(why)), FontId::proportional(12.5), ACCENT);
-    y += 4.0;
-    if run.status == Status::Bad {
-        let bad = actions::history(&app.runs, run, 10).iter().filter(|h| h.status == Status::Bad).count();
-        block(&mut y, if app.ja() { format!("直近 10 回のうち失敗は {bad} 回") } else { format!("{bad} of the last 10 runs failed") }, FontId::proportional(11.5), c.dim);
-        y += 4.0;
+    if let Some(n) = next {
+        y = style::next_box(&p, x, y, w, &n);
+    } else {
+        y += 12.0;
     }
-    let mut alt = format!("e {}   o {}   D {}", app.tr("key.logs"), app.tr("key.browser"), app.tr("key.dispatch"));
+    let mut keys = vec![("e", app.tr("key.logs"))];
     if run.pr.is_some() {
-        alt.push_str(&format!("   p {}", app.tr("run.open_pr")));
+        keys.push(("p", app.tr("run.open_pr")));
     }
-    block(&mut y, alt, FontId::proportional(11.5), c.dim);
-    y += 14.0;
+    keys.extend([("D", app.tr("key.dispatch")), ("o", app.tr("key.browser"))]);
+    y = style::alt_keys(&p, x, y, x + w, &keys);
     let have = app.run_detail.as_ref().filter(|d| d.id == run.id);
-    block(&mut y, app.tr("run.jobs").to_string(), FontId::proportional(11.0), c.dim);
-    y += 4.0;
+    y = style::heading(&p, x, y, app.tr("run.jobs"));
     match have.and_then(|d| d.jobs.as_ref()) {
-        None => block(&mut y, app.tr("detail.fetching").to_string(), FontId::proportional(12.0), c.dim),
+        None => {
+            p.text(pos2(x, y + 9.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(12.5), c.dim);
+            y += 18.0;
+        }
         Some(jobs) => match have.and_then(|d| d.workflow.as_ref()).filter(|w| w.layers().iter().all(|&l| l < MAX_COLS) && w.jobs.iter().any(|j| !j.needs.is_empty())) {
             Some(wf) => y += graph(&p, jobs, wf, pos2(x, y), w, now),
             None => {
                 for j in jobs {
                     let d = j.seconds(now).map(actions::duration).unwrap_or_default();
-                    let after = have.and_then(|d| d.workflow.as_ref()).and_then(|wf| wf.source_of(j).map(|k| wf.jobs[k].needs.join(", "))).filter(|n| !n.is_empty());
-                    let needs = after.map(|n| format!("   ← {n}")).unwrap_or_default();
-                    block(&mut y, format!("{} {}   {d}{needs}", j.status.mark(), j.name), FontId::proportional(12.5), tone(j.status));
-                    y += 2.0;
+                    y = style::check_row(&p, x, y, w, j.status.mark(), tone(j.status), &j.name, &d) + 2.0;
                 }
             }
         },
     }
-    y += 12.0;
     // The last ten results, newest at the left.
-    block(&mut y, app.tr("run.history").to_string(), FontId::proportional(11.0), c.dim);
-    y += 4.0;
-    let hist = actions::history(&app.runs, run, 10);
-    let top = y;
+    y = style::heading(&p, x, y, app.tr("run.history"));
     for (k, h) in hist.iter().enumerate() {
-        let sq = Rect::from_min_size(pos2(x + k as f32 * 18.0, top), vec2(14.0, 14.0));
+        let sq = Rect::from_min_size(pos2(x + 10.0 + k as f32 * 18.0, y), vec2(14.0, 14.0));
         p.rect_filled(sq, CornerRadius::same(3), tone(h.status));
     }
-    y += 22.0;
-    if hist.iter().any(|h| h.status == Status::Bad) {
-        let bad = hist.iter().filter(|h| h.status == Status::Bad).count();
-        block(&mut y, if app.ja() { format!("落ちたのは {bad} 回") } else { format!("{bad} failed") }, FontId::proportional(11.5), BAD);
+    let hx = x + 10.0 + hist.len() as f32 * 18.0 + 8.0;
+    if bad > 0 {
+        p.text(pos2(hx, y + 7.0), Align2::LEFT_CENTER, if app.ja() { format!("落ちたのは {bad} 回") } else { format!("{bad} failed") }, FontId::proportional(12.0), c.dim);
     } else if !hist.is_empty() {
-        block(&mut y, app.tr("run.all_ok").to_string(), FontId::proportional(11.5), OK);
+        p.text(pos2(hx, y + 7.0), Align2::LEFT_CENTER, app.tr("run.all_ok"), FontId::proportional(12.0), c.dim);
     }
     y += 14.0;
     if let Some(arts) = have.and_then(|d| d.artifacts.as_ref()).filter(|a| !a.is_empty()) {
-        block(&mut y, app.tr("run.artifacts").to_string(), FontId::proportional(11.0), c.dim);
-        y += 4.0;
+        y = style::heading(&p, x, y, app.tr("run.artifacts"));
         for a in arts {
-            block(&mut y, format!("{}   {}", a.name, actions::size(a.bytes)), FontId::proportional(12.5), c.fg);
-            y += 2.0;
+            let cy = y + 10.0;
+            let m = p.text(pos2(x + 10.0, cy), Align2::LEFT_CENTER, "▤", FontId::monospace(12.0), c.fg);
+            p.text(pos2(m.right() + 10.0, cy), Align2::LEFT_CENTER, &a.name, FontId::monospace(12.0), c.fg);
+            p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(a.bytes), FontId::monospace(12.0), c.dim);
+            y += 20.0;
         }
     }
 }
@@ -302,7 +356,7 @@ const COL_GAP: f32 = 18.0;
 
 /// The jobs as boxes in columns by how deep their `needs:` go, joined by
 /// lines. Returns the height used.
-fn graph(p: &egui::Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::workflow::Workflow, at: egui::Pos2, w: f32, now: i64) -> f32 {
+fn graph(p: &Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::workflow::Workflow, at: egui::Pos2, w: f32, now: i64) -> f32 {
     let c = ito_theme::colors();
     let layers = wf.layers();
     let src: Vec<Option<usize>> = jobs.iter().map(|j| wf.source_of(j)).collect();

@@ -409,7 +409,8 @@ impl Net {
                 self.asked_run = want;
             }
         }
-        let want = app.selected().map(|i| i.id.clone());
+        // A stub for a repository (red main CI) has no thread to read.
+        let want = app.selected().filter(|i| !minato_core::mainci::is_stub(i)).map(|i| i.id.clone());
         if want != self.asked {
             if let Some(id) = &want {
                 let vars = format!("{{\"id\":{}}}", json_str(id));

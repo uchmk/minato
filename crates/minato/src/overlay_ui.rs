@@ -67,7 +67,7 @@ fn log(p: &egui::Painter, app: &App, l: &LogView, r: Rect) {
     let p = p.with_clip_rect(body);
     let fit = ((body.height() / ROW) as usize).max(1);
     for (k, line) in lines.iter().enumerate().skip(l.scroll).take(fit) {
-        let color = if line.starts_with("##[error]") { crate::list_ui::BAD } else if line.starts_with("##[") { c.dim } else { c.fg };
+        let color = if line.starts_with("##[error]") { crate::style::BAD } else if line.starts_with("##[") { c.dim } else { c.fg };
         p.text(pos2(body.left(), body.top() + (k - l.scroll) as f32 * ROW + ROW / 2.0), Align2::LEFT_CENTER, line, FontId::monospace(11.5), color);
     }
     let pos = if app.ja() { format!("{} / {} 行", l.scroll + 1, lines.len()) } else { format!("{} / {}", l.scroll + 1, lines.len()) };

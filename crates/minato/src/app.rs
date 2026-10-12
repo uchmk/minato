@@ -10,12 +10,14 @@ use minato_core::board::{self, BoardState, Project};
 use minato_core::composer::Picker;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
-use minato_core::inbox::{Card, InboxState, Mark};
+use minato_core::inbox::{Card, Group, InboxState, Mark, Status};
 use minato_core::prefs::Settings;
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::notes::{self, Note, NotesState};
 
 use minato_core::workflow::{self, Workflow};
+
+use ito_layout::{Dir, Node};
 
 use crate::overlay::{Form, K, LogView, Out, Overlay};
 use crate::prefs::Prefs;
@@ -76,7 +78,7 @@ impl View {
                 ("r", "key.write"),
                 ("N", "key.new"),
                 ("S", "key.repo"),
-("M", "key.answer"),
+                ("M", "key.answer"),
                 ("d", "key.done"),
                 ("s", "key.later"),
                 ("u", "key.undo"),
@@ -131,6 +133,53 @@ pub enum Mode {
     Help,
     /// The notifications, over the view.
     Notes,
+}
+
+/// A column of a view, for the dividers the mouse drags (ito-layout).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Pane {
+    Left,
+    Mid,
+    Right,
+}
+
+/// Two columns: the left one's share of the width.
+pub fn two(left: f32) -> Node<Pane> {
+    Node::Split { dir: Dir::Right, ratio: left, first: Box::new(Node::Leaf(Pane::Left)), second: Box::new(Node::Leaf(Pane::Right)) }
+}
+
+/// Three columns: the left one's share, then the middle one's of the rest.
+pub fn three(left: f32, mid: f32) -> Node<Pane> {
+    let rest = Node::Split { dir: Dir::Right, ratio: mid, first: Box::new(Node::Leaf(Pane::Mid)), second: Box::new(Node::Leaf(Pane::Right)) };
+    Node::Split { dir: Dir::Right, ratio: left, first: Box::new(Node::Leaf(Pane::Left)), second: Box::new(rest) }
+}
+
+/// What the mouse clicked in a view: it does what the keys that get there do.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Click {
+    /// A line of the list's filters (its place among all of them).
+    ListFilter(usize),
+    /// A row of the list (its place among those shown).
+    ListItem(usize),
+    /// Somewhere else in a column of the list.
+    ListCol(minato_core::list::Col),
+    InboxCard(usize),
+    InboxStatus(Status),
+    InboxRepo(Option<String>),
+    InboxTag(Option<String>),
+    ActFilter(usize),
+    ActRun(usize),
+    ActCol(actions::Col),
+    /// The writing box's strip under the detail.
+    Write,
+}
+
+/// What the mouse did in the notifications.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoteClick {
+    Open(usize),
+    ReadAll,
+    Close,
 }
 
 /// What picking a line of the palette does.
@@ -211,6 +260,10 @@ pub struct App {
     pub ns: NotesState,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
+    /// The columns of the inbox, the list and the Actions view, as the mouse left them.
+    pub inbox_split: Node<Pane>,
+    pub list_split: Node<Pane>,
+    pub acts_split: Node<Pane>,
 }
 
 /// What a confirmation box asks about.
@@ -316,6 +369,10 @@ impl App {
             board_undo: Vec::new(),
             outbox: Vec::new(),
             quit: false,
+            // The mock's widths at 1280 px: 400 | rest, and 210 | 470 | rest.
+            inbox_split: two(0.31),
+            list_split: three(0.165, 0.44),
+            acts_split: three(0.165, 0.44),
         };
         app.set_language();
         app
@@ -548,26 +605,129 @@ impl App {
         true
     }
 
-    /// A key over the notifications: `j k` move, `Enter` opens the thread and
-    /// marks it read, `d` marks it read, `A` marks all, `n` closes.
+    /// A key over the notifications: `j k` move, `Enter` opens the thread in
+    /// minato (in the browser if minato does not have it) and marks it read,
+    /// `o` opens it in the browser, `d` only marks it read, `A` marks all,
+    /// `n` closes.
     fn notes_key(&mut self, c: char) -> bool {
         match c {
             'n' => self.mode = Mode::Main,
             'A' => self.mark_all_read(),
             'd' | 'o' | '\n' => {
                 if self.ns.sel < self.notes.len() {
-                    let note = self.notes.remove(self.ns.sel);
-                    if c != 'd' {
-                        self.open_url = Some(note.url);
-                    }
-                    self.queue(&format!("note:{}", note.id), notes::mark_read(&note.id), None);
-                    self.unread = self.notes.len() as u32;
-                    self.ns.clamp(self.notes.len());
+                    self.read_note(self.ns.sel, c);
                 }
             }
             _ => return self.ns.key(c, self.notes.len()),
         }
         true
+    }
+
+    /// A row of the notifications clicked, or the header's button.
+    pub fn note_click(&mut self, c: NoteClick) {
+        match c {
+            NoteClick::Open(k) if k < self.notes.len() => self.read_note(k, '\n'),
+            NoteClick::Open(_) => {}
+            NoteClick::ReadAll => self.mark_all_read(),
+            NoteClick::Close => self.mode = Mode::Main,
+        }
+    }
+
+    /// Mark the notification at `k` read; `how` is the key (`d` `o` `Enter`).
+    fn read_note(&mut self, k: usize, how: char) {
+        let note = self.notes.remove(k);
+        self.queue(&format!("note:{}", note.id), notes::mark_read(&note.id), None);
+        self.unread = self.notes.len() as u32;
+        self.ns.clamp(self.notes.len());
+        match how {
+            'o' => self.open_url = Some(note.url),
+            '\n' => {
+                self.mode = Mode::Main;
+                if !self.open_item(&note.url) {
+                    self.open_url = Some(note.url);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Where a notification's thread is in minato, by the page it opens:
+    /// its row in the items, and its inbox card unless that is done.
+    pub fn note_place(&self, url: &str) -> (Option<usize>, Option<Card>) {
+        let at = self.items.iter().position(|i| i.url == url);
+        let card = at.and_then(|at| self.inbox_all().into_iter().find(|c| c.at == at && c.group != Group::Done));
+        (at, card)
+    }
+
+    /// Open the item whose page is `url`: in the inbox if it is a card
+    /// there, else in the list. False if minato does not have it.
+    fn open_item(&mut self, url: &str) -> bool {
+        let (Some(at), card) = self.note_place(url) else { return false };
+        if let Some(card) = card {
+            self.inbox = InboxState { undo: std::mem::take(&mut self.inbox.undo), ..InboxState::default() };
+            let all = self.inbox_all();
+            self.inbox.sel = self.inbox.shown(&all, &self.items).iter().position(|c| *c == card).unwrap_or(0);
+            self.view = View::Inbox;
+            return true;
+        }
+        let id = self.items[at].id.clone();
+        self.show_in_list(&id);
+        self.view == View::List
+    }
+
+    /// A click in a view.
+    pub fn click(&mut self, c: Click) {
+        use minato_core::list::Col;
+        let me = self.viewer.clone().unwrap_or_default();
+        match c {
+            Click::ListFilter(k) => {
+                self.list.col = Col::Filters;
+                self.list.cursor = k;
+                self.list.key(' ', &self.items, &me);
+            }
+            Click::ListItem(k) => {
+                self.list.col = Col::Items;
+                if self.list.sel != k {
+                    self.list.sel = k;
+                    self.list.scroll = 0.0;
+                }
+            }
+            Click::ListCol(col) => self.list.col = col,
+            Click::InboxCard(k) => {
+                if self.inbox.sel != k {
+                    self.inbox.sel = k;
+                    self.inbox.scroll = 0.0;
+                }
+            }
+            Click::InboxStatus(s) => self.inbox.status = s,
+            Click::InboxRepo(r) => self.inbox.repo = r,
+            Click::InboxTag(t) => self.inbox.tag = if self.inbox.tag == t { None } else { t },
+            Click::ActFilter(k) => {
+                self.acts.col = actions::Col::Filters;
+                self.acts.cursor = k;
+                self.acts.key(' ', &self.runs);
+            }
+            Click::ActRun(k) => {
+                self.acts.col = actions::Col::Runs;
+                if self.acts.sel != k {
+                    self.acts.sel = k;
+                    self.acts.scroll = 0.0;
+                }
+            }
+            Click::ActCol(col) => self.acts.col = col,
+            Click::Write => self.open_compose(),
+        }
+        let all = self.inbox_all();
+        self.inbox.clamp(&all, &self.items);
+    }
+
+    pub fn set_split(&mut self, v: View, n: Node<Pane>) {
+        match v {
+            View::Inbox => self.inbox_split = n,
+            View::List => self.list_split = n,
+            View::Actions => self.acts_split = n,
+            View::Board => {}
+        }
     }
 
     pub fn mark_all_read(&mut self) {
@@ -587,10 +747,11 @@ impl App {
         for v in View::ALL {
             e.push(Entry::new(format!("{} {}", self.tr("cmd.go"), self.tr(v.label())), v.digit().to_string(), Cmd::Go(v)));
         }
-        e.push(Entry::new(self.tr("key.notes"), "n", Cmd::Notes));
+        // tsumugi's words for the same commands.
+        e.push(Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes));
         e.push(Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll));
-        e.push(Entry::new(self.tr("key.settings"), "Ctrl+,", Cmd::Settings));
-        e.push(Entry::new(self.tr("key.help"), "?", Cmd::Help));
+        e.push(Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings));
+        e.push(Entry::new(self.tr("cmd.help"), "?", Cmd::Help));
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
             x.detail = i.repo.clone();
@@ -1005,9 +1166,10 @@ impl App {
         was != Mode::Main
     }
 
-    /// Whether the bar's tab for `v` is the one in force.
+    /// Whether the bar's tab for `v` is the one in force (also with the
+    /// notifications open over it).
     pub fn is_on(&self, v: View) -> bool {
-        self.mode == Mode::Main && self.view == v
+        matches!(self.mode, Mode::Main | Mode::Notes) && self.view == v
     }
 
     /// Seconds since the last sync.
@@ -1169,8 +1331,43 @@ mod tests {
         assert_eq!(a.open_url.as_deref(), Some("https://example.test/2"));
         assert_eq!((a.notes.len(), a.unread), (1, 1));
         assert!(a.outbox[0].key.ends_with("note:2"));
-        assert!(a.feed('n'));
+        // Enter closes the list, as a click on a row does.
         assert_eq!(a.mode, Mode::Main);
+        assert!(a.feed('n'));
+        a.note_click(NoteClick::Close);
+        assert_eq!(a.mode, Mode::Main);
+    }
+
+    #[test]
+    fn a_note_on_a_thread_minato_has_opens_it_there() {
+        let mut a = with_pr();
+        a.items[0].url = "https://example.test/P1".into();
+        a.view = View::Board;
+        a.notes = vec![Note { url: "https://example.test/P1".into(), ..note("1") }];
+        a.unread = 1;
+        a.feed('n');
+        assert!(a.is_on(View::Board));
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.open_url, None);
+        assert_eq!(a.mode, Mode::Main);
+        assert!(matches!(a.view, View::Inbox | View::List));
+        assert_eq!(a.selected().map(|i| i.id.as_str()), Some("P1"));
+        assert!(a.notes.is_empty());
+    }
+
+    #[test]
+    fn clicks_pick_rows_and_columns() {
+        let mut a = with_pr();
+        a.items.push(Item { id: "P2".into(), number: 4, ..pr("P2") });
+        a.click(Click::ListItem(1));
+        assert_eq!((a.list.col, a.list.sel), (minato_core::list::Col::Items, 1));
+        a.click(Click::ListCol(minato_core::list::Col::Detail));
+        assert_eq!(a.list.col, minato_core::list::Col::Detail);
+        a.runs = vec![run(1, actions::Status::Ok, None), run(2, actions::Status::Bad, None)];
+        a.click(Click::ActRun(1));
+        assert_eq!((a.acts.col, a.acts.sel), (actions::Col::Runs, 1));
+        a.click(Click::ActCol(actions::Col::Detail));
+        assert_eq!(a.acts.col, actions::Col::Detail);
     }
 
     #[test]
@@ -1190,6 +1387,11 @@ mod tests {
         let mut a = app();
         let e = a.palette_entries();
         assert!(e.iter().any(|x| x.pick == Cmd::Go(View::Board)));
+        // The names of the commands tsumugi has too are tsumugi's.
+        let name = |c: Cmd| e.iter().find(|x| x.pick == c).map(|x| x.title.clone());
+        assert_eq!(name(Cmd::Settings).as_deref(), Some(a.tr("cmd.settings")));
+        assert_eq!(name(Cmd::Notes).as_deref(), Some(a.tr("cmd.notes")));
+        assert_eq!(name(Cmd::Help).as_deref(), Some(a.tr("cmd.help")));
         a.run_cmd(Cmd::Go(View::Board));
         assert_eq!(a.view, View::Board);
         a.run_cmd(Cmd::Notes);

@@ -25,6 +25,15 @@ const EN: &[(&str, &str)] = &[
     ("why.dependabot", "A dependabot PR"),
     ("why.mention", "Mentions you"),
     ("why.main_red", "CI is red on a main branch"),
+    ("note.red_ci", "Open the failed check and read its log"),
+    ("note.mergeable", "Merged with a merge commit"),
+    ("note.question", "Someone asks you; answer in a comment"),
+    ("note.needs_owner", "The votes split: write 回答: …"),
+    ("note.finding", "Take it, or hand it to a session"),
+    ("note.lane_stalled", "The lane has not reported for a while"),
+    ("note.dependabot", "Merge it when the CI is green"),
+    ("note.mention", "Read what they said and reply"),
+    ("note.main_red", "Open the failed run on main"),
     ("settings.rule_note", "Higher rules win when several fit"),
     ("write.not_real", "This row stands for a repository, not an item"),
     ("next.open", "Open it"),
@@ -119,7 +128,7 @@ const EN: &[(&str, &str)] = &[
 ("run.not_failed", "Only a failed run can be re-run."),
 ("run.not_active", "This run is not going."),
 ("cmd.go", "Go to"),
-("cmd.mark_all", "Mark all notifications read"),
+("cmd.mark_all", "Notifications: mark all read"),
 ("palette.none", "Nothing matches."),
 ("notes.all_read", "Marked all notifications read."),
 ("notes.empty", "No unread notifications."),
@@ -193,6 +202,42 @@ const EN: &[(&str, &str)] = &[
     ("settings.fields", "Writing box fields"),
     ("settings.field_note", "Opened with its Alt key"),
     ("pick.hidden", "That field is hidden in the settings (Ctrl+,)."),
+    ("inbox.sort", "⇅ by turn"),
+    ("inbox.mine_hint", "clear from the top"),
+    ("inbox.wait_hint", "back to the top when it moves"),
+    ("inbox.none", "None"),
+    ("inbox.done_chip", "Done"),
+    ("inbox.all_repos", "All repositories"),
+    ("why.waiting", "Waiting for someone else"),
+    ("detail.opened", "{who} opened {when} ago"),
+    ("detail.next", "Next"),
+    ("detail.wait", "Only waiting for now"),
+    ("detail.done", "Done"),
+    ("detail.back", "It comes back to Your turn when it moves"),
+    ("detail.body", "Body"),
+    ("detail.timeline", "Timeline"),
+    ("compose.gear", "⚙ Choose the fields in Settings (,)"),
+    ("compose.placeholder", "r to write (Markdown)"),
+    ("list.count", "{} items"),
+    ("notes.title", "Notifications"),
+    ("notes.unread", "{} unread"),
+    ("notes.hint", "Marked when in the inbox"),
+    ("notes.mark_read", "Mark all read"),
+    ("notes.inbox", "Inbox"),
+    ("notes.pick", "Pick"),
+    ("notes.read_all", "Mark all read"),
+    ("notes.close", "Close"),
+    ("event.ci", "A CI run finished"),
+    ("event.review", "Your review is requested"),
+    ("event.mention", "You were mentioned"),
+    ("event.comment", "A new comment"),
+    ("event.assign", "Assigned to you"),
+    ("event.state", "Closed or merged"),
+    ("event.author", "Activity on your thread"),
+    ("event.other", "Something changed"),
+    ("cmd.notes", "Notifications"),
+    ("cmd.settings", "Settings"),
+    ("cmd.help", "Keys: every key and what it does"),
 ];
 
 const JA: &[(&str, &str)] = &[
@@ -218,6 +263,15 @@ const JA: &[(&str, &str)] = &[
     ("why.dependabot", "dependabot の PR です"),
     ("why.mention", "あなた宛てのメンションです"),
     ("why.main_red", "main の CI が赤です"),
+    ("note.red_ci", "落ちた検査を開いてログを読む"),
+    ("note.mergeable", "merge コミットでマージする"),
+    ("note.question", "あなたへの質問 — コメントで答える"),
+    ("note.needs_owner", "票が割れた — 「回答: …」を書く"),
+    ("note.finding", "自分で取るか、セッションに回す"),
+    ("note.lane_stalled", "レーンがしばらく報告していない"),
+    ("note.dependabot", "CI が緑ならマージしてよい"),
+    ("note.mention", "何を言われたかを読んで返す"),
+    ("note.main_red", "main で落ちた実行を開く"),
     ("settings.rule_note", "複数に当てはまるときは上の規則が先に効きます"),
     ("write.not_real", "この行はリポジトリを表すので、書き込みできません"),
     ("next.open", "開く"),
@@ -249,7 +303,7 @@ const JA: &[(&str, &str)] = &[
     ("list.none", "当てはまるものがありません。"),
     ("list.above", "上に"),
     ("list.below", "下に"),
-    ("detail.checks", "チェック"),
+    ("detail.checks", "検査"),
     ("detail.talk", "会話"),
     ("detail.pick", "項目を選んでください。"),
     ("detail.fetching", "取得中…"),
@@ -312,7 +366,7 @@ const JA: &[(&str, &str)] = &[
 ("run.not_failed", "再実行できるのは失敗した実行だけです。"),
 ("run.not_active", "この実行は動いていません。"),
 ("cmd.go", "開く:"),
-("cmd.mark_all", "通知をすべて既読にする"),
+("cmd.mark_all", "通知: すべて既読にする"),
 ("palette.none", "合うものがありません。"),
 ("notes.all_read", "通知をすべて既読にしました。"),
 ("notes.empty", "未読の通知はありません。"),
@@ -386,6 +440,42 @@ const JA: &[(&str, &str)] = &[
     ("settings.fields", "書き込み箱の項目"),
     ("settings.field_note", "Alt キーで開く"),
     ("pick.hidden", "その項目は設定で隠してあります（Ctrl+,）。"),
+    ("inbox.sort", "⇅ 番の順"),
+    ("inbox.mine_hint", "上から片づける"),
+    ("inbox.wait_hint", "動いたら上に戻る"),
+    ("inbox.none", "なし"),
+    ("inbox.done_chip", "済んだ"),
+    ("inbox.all_repos", "すべてのリポジトリ"),
+    ("why.waiting", "ほかの人の番"),
+    ("detail.opened", "{who} が {when} 前に開いた"),
+    ("detail.next", "次にやること"),
+    ("detail.wait", "いまは待つだけ"),
+    ("detail.done", "済み"),
+    ("detail.back", "動きがあれば「あなたの番」に戻ります"),
+    ("detail.body", "本文"),
+    ("detail.timeline", "経過"),
+    ("compose.gear", "⚙ 出す項目は設定（,）で選ぶ"),
+    ("compose.placeholder", "r で書く（Markdown）"),
+    ("list.count", "{} 件"),
+    ("notes.title", "通知"),
+    ("notes.unread", "{} 件が未読"),
+    ("notes.hint", "受信箱に入ったものには印"),
+    ("notes.mark_read", "すべて既読"),
+    ("notes.inbox", "受信箱"),
+    ("notes.pick", "選ぶ"),
+    ("notes.read_all", "全部を既読"),
+    ("notes.close", "閉じる"),
+    ("event.ci", "CI の実行が終わった"),
+    ("event.review", "レビューを頼まれた"),
+    ("event.mention", "メンションされた"),
+    ("event.comment", "新しいコメント"),
+    ("event.assign", "担当になった"),
+    ("event.state", "閉じた・マージされた"),
+    ("event.author", "あなたのスレッドに動き"),
+    ("event.other", "何かが変わった"),
+    ("cmd.notes", "通知"),
+    ("cmd.settings", "設定"),
+    ("cmd.help", "キー: すべてのキーとその働き"),
 ];
 
 /// The language codes minato has words for.
@@ -415,5 +505,19 @@ mod tests {
         assert_eq!(tr("ja", "nope"), "nope");
         assert_eq!(tr("ja", "view.inbox"), "受信箱");
         assert_eq!(tr("fr", "view.inbox"), "Inbox");
+    }
+
+    #[test]
+    fn the_rules_and_the_notifications_have_words() {
+        let has = |k: &str| EN.iter().any(|(key, _)| *key == k);
+        for rule in minato_core::inbox::RULES {
+            for k in [rule.why(), rule.note(), rule.next().1] {
+                assert!(has(k), "{k}");
+            }
+        }
+        for reason in ["ci_activity", "review_requested", "mention", "comment", "assign", "state_change", "author", "other"] {
+            let k = minato_core::notes::event(reason).0;
+            assert!(has(k), "{k}");
+        }
     }
 }
