@@ -5,7 +5,7 @@
 ## Next stages (docs/dev-prompt.md)
 
 - [x] 2. GitHub client in `minato-core` (v0.2.0)
-- [ ] 2b. Token entry in the settings screen and the OS credential store (今は `GITHUB_TOKEN` と `gh auth token` だけ)
+- [ ] 2b. Token entry in the settings screen and the OS credential store (今は `GITHUB_TOKEN` と `gh auth token` だけ）（要確認: #3）
 - [ ] 3. Inbox view
 - [ ] 4. List view (three columns)
 - [ ] 5. Actions view
