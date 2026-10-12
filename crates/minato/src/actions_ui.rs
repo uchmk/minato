@@ -8,7 +8,7 @@ use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
 use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::list::{age, epoch};
 
-use crate::app::{App, Click, Pane, now_epoch};
+use crate::app::{App, Click, Pane, Wheel, now_epoch};
 use crate::list_ui::LINE;
 use crate::style::{self, ACCENT, Next};
 use crate::ui::{self, Out};
@@ -52,6 +52,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         if ui::hit(ui, rect, ("acts-col", pane)).clicked() {
             out.click = Some(Click::ActCol(col));
         }
+        ui::wheel(ui.ctx(), ui.layer_id(), rect, Wheel::Acts(col), out);
         match pane {
             Pane::Left => filter_col(ui, app, rect, out),
             Pane::Mid => runs_col(ui, app, rect, out),

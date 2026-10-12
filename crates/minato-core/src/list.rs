@@ -60,6 +60,15 @@ pub struct Item {
     /// Set by the app: a search for `mentions:` found it.
     pub mentioned: bool,
     pub ci: Option<Ci>,
+    /// The start of its body as plain text, for the card's hover ([`peek_of`]).
+    pub peek: String,
+}
+
+/// The start of a body as GitHub's plain text gives it: no blank lines, at
+/// most 1200 characters (the hover shows a dozen lines of it).
+pub fn peek_of(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).collect();
+    lines.join("\n").chars().take(1200).collect()
 }
 
 impl Item {
@@ -384,6 +393,7 @@ mod tests {
             merged: false,
             conflict: false,
             mentioned: false,
+            peek: String::new(),
             ci: None,
         }
     }

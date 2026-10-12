@@ -14,6 +14,7 @@
           "repository": { "nameWithOwner": "uchmk/tsumugi" },
           "labels": { "nodes": [ { "name": "lane:win", "color": "1D76DB" } ] },
           "comments": { "totalCount": 2 },
+          "bodyText": "Fixes the font.\n\n\nThe UI now reads it from common.toml.",
           "state": "OPEN",
           "isDraft": false,
           "assignees": { "nodes": [ { "login": "uchmk" } ] },

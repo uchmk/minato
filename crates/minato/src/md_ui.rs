@@ -50,6 +50,8 @@ enum Deco {
     /// A table's cells (each at its offset) and its size.
     Table(Vec<(f32, f32, Text)>, f32, f32),
     Rule(f32),
+    /// A `<summary>`'s open triangle and its ground, `w` by `h`.
+    Summary(f32, f32),
 }
 
 /// `text` as Markdown laid out to `w`; `size` is the body's font size.
@@ -100,6 +102,14 @@ pub fn layout(p: &Painter, text: &str, w: f32, size: f32) -> Md {
             Block::Rule => {
                 parts.push(Part { x: 0.0, y: y + 4.0, text: None, deco: Deco::Rule(w) });
                 y += 9.0;
+            }
+            Block::Summary(s) => {
+                let s = if s.is_empty() { "Details".to_string() } else { s };
+                let t = inline(p, &s, w - GUTTER - 8.0, size, c.fg, true);
+                let h = t.galley.size().y + 8.0;
+                parts.push(Part { x: 0.0, y, text: None, deco: Deco::Summary(w, h) });
+                parts.push(Part { x: GUTTER, y: y + 4.0, text: Some(t), deco: Deco::None });
+                y += h;
             }
             Block::Para(s) => {
                 let t = body(&s, w);
@@ -236,6 +246,13 @@ impl Md {
                 }
                 Deco::Rule(w) => {
                     p.line_segment([at, pos2(at.x + w, at.y)], Stroke::new(1.0, c.border));
+                }
+                Deco::Summary(w, h) => {
+                    p.rect_filled(Rect::from_min_size(at, vec2(*w, *h)), CornerRadius::same(4), style::head());
+                    // Pointing down: what the details hold is shown under it.
+                    let m = pos2(at.x + 11.0, at.y + h / 2.0);
+                    let tri = vec![m + vec2(-4.0, -2.5), m + vec2(4.0, -2.5), m + vec2(0.0, 3.0)];
+                    p.add(egui::Shape::convex_polygon(tri, c.dim, Stroke::NONE));
                 }
             }
             if let Some(t) = &part.text {

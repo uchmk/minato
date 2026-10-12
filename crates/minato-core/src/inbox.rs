@@ -402,6 +402,7 @@ mod tests {
             merged: false,
             conflict: false,
             mentioned: false,
+            peek: String::new(),
             ci: None,
         }
     }

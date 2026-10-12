@@ -105,6 +105,9 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
 impl eframe::App for Minato {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if let Some(to) = ctx.input_mut(scale_key) {
+            self.app.scale(to);
+        }
         if self.app.mode != Mode::Settings {
             self.keys(&ctx);
         }
@@ -148,6 +151,11 @@ impl eframe::App for Minato {
             if let Some((k, col)) = out.drop {
                 self.app.drop_card(k, col);
             }
+            // Not under a box that is over the view.
+            let boxed = self.app.palette.is_some() || self.app.overlay.is_some() || self.app.confirm.is_some() || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
+            if let Some((at, n)) = out.wheel.filter(|_| !boxed) {
+                self.app.wheel(at, n, out.detail_max);
+            }
             if out.bell {
                 self.app.mode = if was == Mode::Notes { Mode::Main } else { Mode::Notes };
             }
@@ -158,6 +166,7 @@ impl eframe::App for Minato {
             overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }
+        ui::toast(&ctx, &self.app);
         if let Some(url) = self.app.open_url.take() {
             ctx.open_url(egui::OpenUrl::new_tab(url));
         }
@@ -170,6 +179,23 @@ impl eframe::App for Minato {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         ito_theme::colors().bg.to_normalized_gamma_f32()
     }
+}
+
+/// Ctrl+= (or Ctrl++), Ctrl+- and Ctrl+0: the common scale, taken out of
+/// the input so a text field does not get them. Shift is ignored, so `+` on
+/// a keyboard that needs it for the key still counts.
+fn scale_key(i: &mut egui::InputState) -> Option<ito_common::ScaleTo> {
+    use ito_common::ScaleTo;
+    let keys = [(egui::Key::Plus, ScaleTo::In), (egui::Key::Equals, ScaleTo::In), (egui::Key::Minus, ScaleTo::Out), (egui::Key::Num0, ScaleTo::Reset)];
+    let mut got = None;
+    for (key, to) in keys {
+        for m in [egui::Modifiers::COMMAND, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT] {
+            if i.consume_key(m, key) {
+                got = Some(to);
+            }
+        }
+    }
+    got
 }
 
 /// The arrows as the letters they stand for (`←↓↑→` are `h j k l`, with

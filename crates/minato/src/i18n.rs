@@ -75,6 +75,7 @@ const EN: &[(&str, &str)] = &[
     ("help.close", "Press ? or Esc to close"),
     ("key.views", "Open a view"),
     ("key.settings", "Settings"),
+    ("key.scale", "Scale up, down, back to 100%"),
     ("key.help", "This list"),
     ("key.palette", "Command palette"),
     ("key.notes", "Notifications"),
@@ -253,6 +254,9 @@ const EN: &[(&str, &str)] = &[
     ("event.other", "Something changed"),
     ("cmd.notes", "Notifications"),
     ("cmd.settings", "Settings"),
+    ("cmd.zoom_in", "Zoom in"),
+    ("cmd.zoom_out", "Zoom out"),
+    ("cmd.zoom_reset", "Zoom back to 100%"),
     ("cmd.help", "Keys: every key and what it does"),
 ];
 
@@ -329,6 +333,7 @@ const JA: &[(&str, &str)] = &[
     ("help.close", "? か Esc で閉じる"),
     ("key.views", "ビューを開く"),
     ("key.settings", "設定"),
+    ("key.scale", "拡大・縮小・100% に戻す"),
     ("key.help", "この一覧"),
     ("key.palette", "コマンドパレット"),
     ("key.notes", "通知"),
@@ -507,6 +512,9 @@ const JA: &[(&str, &str)] = &[
     ("event.other", "何かが変わった"),
     ("cmd.notes", "通知"),
     ("cmd.settings", "設定"),
+    ("cmd.zoom_in", "拡大"),
+    ("cmd.zoom_out", "縮小"),
+    ("cmd.zoom_reset", "100% に戻す"),
     ("cmd.help", "キー: すべてのキーとその働き"),
 ];
 

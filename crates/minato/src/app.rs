@@ -116,9 +116,10 @@ impl View {
 }
 
 /// The keys that work in every view.
-pub const GLOBAL_KEYS: [(&str, &str); 6] = [
+pub const GLOBAL_KEYS: [(&str, &str); 7] = [
     ("1 2 3 4", "key.views"),
     ("Ctrl+,", "key.settings"),
+    ("Ctrl+= - 0", "key.scale"),
     ("Ctrl+Shift+P", "key.palette"),
     ("n", "key.notes"),
     ("u", "key.undo"),
@@ -217,6 +218,22 @@ impl Click {
     }
 }
 
+/// What the mouse wheel turned over: a list moves its selection (as `j k`),
+/// a detail scrolls.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Wheel {
+    /// A column of the list view (not its detail).
+    List(minato_core::list::Col),
+    /// The inbox's cards.
+    Inbox,
+    /// The detail of the inbox or the list.
+    Detail,
+    Acts(actions::Col),
+    /// A column of the board.
+    Board(usize),
+    Notes,
+}
+
 /// What the mouse did in the notifications.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoteClick {
@@ -233,6 +250,8 @@ pub enum Cmd {
     Help,
     Notes,
     MarkAll,
+    /// The common scale (Ctrl+= Ctrl+- Ctrl+0).
+    Scale(ito_common::ScaleTo),
     /// An issue, PR or discussion (its node id).
     Item(String),
 }
@@ -249,7 +268,7 @@ pub struct App {
     pub synced: Option<Instant>,
     /// The rate limit's remaining and total, from the last answer.
     pub api: Option<(u32, u32)>,
-    /// One line at the foot, until `toast_until`.
+    /// A message at the top right, until the time with it.
     pub toast: Option<(String, Instant)>,
     /// The login the token belongs to, once GitHub has said.
     pub viewer: Option<String>,
@@ -305,6 +324,8 @@ pub struct App {
     /// The unread notifications.
     pub notes: Vec<Note>,
     pub ns: NotesState,
+    /// The wheel's turn not yet a whole step (a touchpad's small ones).
+    pub wheel_acc: f32,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
     /// The columns of the inbox, the list and the Actions view, as the mouse left them.
@@ -393,6 +414,7 @@ impl App {
             synced: None,
             api: None,
             toast: None,
+            wheel_acc: 0.0,
             viewer: None,
             items: Vec::new(),
             inbox: InboxState::default(),
@@ -448,9 +470,69 @@ impl App {
         self.toast = Some((text.into(), Instant::now() + Duration::from_secs(4)));
     }
 
-    /// How long until the toast goes, if there is one.
+    /// How long until the toast goes; `None` when there is none or its
+    /// time is up.
     pub fn toast_left(&self) -> Option<Duration> {
-        self.toast.as_ref().map(|(_, until)| until.saturating_duration_since(Instant::now()))
+        self.toast.as_ref().map(|(_, until)| until.saturating_duration_since(Instant::now())).filter(|d| !d.is_zero())
+    }
+
+    /// The common scale a step up or down, or back to 100%, written to
+    /// common.toml and said in a toast (as kura does).
+    pub fn scale(&mut self, to: ito_common::ScaleTo) {
+        let next = ito_common::scale_step(self.prefs.common.scale_or_one(), to);
+        let no_folder = self.tr("settings.no_folder");
+        self.prefs.set_scale(next, no_folder);
+        let said = ito_common::scale_text(next, &self.lang);
+        self.say(said);
+    }
+
+    /// The wheel turned `notches` (up is plus) over `at`: a step a notch,
+    /// `j` down and `k` up in a list (the column under the pointer takes the
+    /// focus), three lines a notch in a detail, which stops at `max` lines.
+    pub fn wheel(&mut self, at: Wheel, notches: f32, max: Option<f32>) {
+        if self.wheel_acc * notches > 0.0 {
+            self.wheel_acc = 0.0;
+        }
+        self.wheel_acc -= notches;
+        let steps = self.wheel_acc.trunc();
+        self.wheel_acc -= steps;
+        if steps == 0.0 {
+            return;
+        }
+        let key = if steps > 0.0 { 'j' } else { 'k' };
+        let me = self.viewer.clone().unwrap_or_default();
+        let detail = matches!(at, Wheel::Acts(actions::Col::Detail));
+        if at == Wheel::Detail {
+            let s = if self.view == View::Inbox { &mut self.inbox.scroll } else { &mut self.list.scroll };
+            *s = (*s + steps * 3.0).min(max.unwrap_or(f32::MAX)).max(0.0);
+            return;
+        }
+        for _ in 0..steps.abs() as usize * if detail { 3 } else { 1 } {
+            match at {
+                Wheel::List(col) => {
+                    self.list.col = col;
+                    self.list.key(key, &self.items, &me);
+                }
+                Wheel::Inbox => {
+                    let all = self.inbox_all();
+                    self.inbox.key(key, &all, &self.items);
+                }
+                Wheel::Acts(col) => {
+                    self.acts.col = col;
+                    self.acts.key(key, &self.runs);
+                }
+                Wheel::Board(col) => {
+                    if let Some(p) = self.board.as_ref() {
+                        self.bs.col = col;
+                        self.bs.key(key, p);
+                    }
+                }
+                Wheel::Notes => {
+                    self.ns.key(key, self.notes.len());
+                }
+                Wheel::Detail => {}
+            }
+        }
     }
 
     /// A character typed (not a key with Ctrl or Alt: those are the
@@ -836,6 +918,9 @@ impl App {
         e.push(Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes));
         e.push(Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll));
         e.push(Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings));
+        e.push(Entry::new(self.tr("cmd.zoom_in"), "Ctrl+=", Cmd::Scale(ito_common::ScaleTo::In)));
+        e.push(Entry::new(self.tr("cmd.zoom_out"), "Ctrl+-", Cmd::Scale(ito_common::ScaleTo::Out)));
+        e.push(Entry::new(self.tr("cmd.zoom_reset"), "Ctrl+0", Cmd::Scale(ito_common::ScaleTo::Reset)));
         e.push(Entry::new(self.tr("cmd.help"), "?", Cmd::Help));
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
@@ -856,6 +941,7 @@ impl App {
             Cmd::Help => self.mode = Mode::Help,
             Cmd::Notes => self.mode = Mode::Notes,
             Cmd::MarkAll => self.mark_all_read(),
+            Cmd::Scale(to) => self.scale(to),
             Cmd::Item(id) => {
                 self.mode = Mode::Main;
                 self.show_in_list(&id);
@@ -1389,6 +1475,7 @@ mod tests {
             labels: Vec::new(),
             option: Some(option.into()),
             priority: None,
+            peek: String::new(),
         };
         board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], priority_field: "PF".into(), priority_options: vec![col("p1", "High")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
     }
@@ -1720,6 +1807,7 @@ mod tests {
             merged: false,
             conflict: false,
             mentioned: false,
+            peek: String::new(),
             ci: None,
         }
     }
@@ -1943,5 +2031,53 @@ jobs:
         a.items[0].merged = true;
         a.feed('x');
         assert!(a.confirm.is_none() && a.toast.is_some());
+    }
+
+    #[test]
+    fn a_toast_goes_when_its_time_is_up() {
+        let mut a = app();
+        a.say("Assigned to you");
+        assert!(a.toast_left().is_some());
+        a.toast = Some(("Assigned to you".into(), Instant::now()));
+        assert_eq!(a.toast_left(), None, "an expired toast is not drawn");
+    }
+
+    #[test]
+    fn the_scale_keys_step_and_reset() {
+        use ito_common::ScaleTo;
+        let mut a = app();
+        a.scale(ScaleTo::In);
+        let up = a.prefs.common.scale_or_one();
+        assert!(up > 1.0);
+        assert!(a.toast.as_ref().is_some_and(|(t, _)| t.contains('%')));
+        a.scale(ScaleTo::Out);
+        a.scale(ScaleTo::Out);
+        assert!(a.prefs.common.scale_or_one() < 1.0);
+        a.scale(ScaleTo::Reset);
+        assert_eq!(a.prefs.common.scale_or_one(), 1.0);
+    }
+
+    #[test]
+    fn the_wheel_moves_a_list_and_scrolls_a_detail() {
+        let mut a = with_pr();
+        a.items.push(pr("P2"));
+        a.items.push(pr("P3"));
+        // Down a notch: the next row, and the column under the pointer.
+        a.wheel(Wheel::List(minato_core::list::Col::Items), -1.0, None);
+        assert_eq!((a.list.col, a.list.sel), (minato_core::list::Col::Items, 1));
+        // A touchpad's small turns add up to a step.
+        a.wheel(Wheel::List(minato_core::list::Col::Items), -0.5, None);
+        assert_eq!(a.list.sel, 1);
+        a.wheel(Wheel::List(minato_core::list::Col::Items), -0.5, None);
+        assert_eq!(a.list.sel, 2);
+        a.wheel(Wheel::List(minato_core::list::Col::Items), 2.0, None);
+        assert_eq!(a.list.sel, 0);
+        // The detail: three lines a notch, stopping at its end and the top.
+        a.wheel(Wheel::Detail, -1.0, Some(10.0));
+        assert_eq!(a.list.scroll, 3.0);
+        a.wheel(Wheel::Detail, -5.0, Some(10.0));
+        assert_eq!(a.list.scroll, 10.0);
+        a.wheel(Wheel::Detail, 9.0, Some(10.0));
+        assert_eq!(a.list.scroll, 0.0);
     }
 }

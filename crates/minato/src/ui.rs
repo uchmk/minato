@@ -7,7 +7,7 @@ use ito_common::Clock;
 
 use ito_layout::Node;
 
-use crate::app::{App, Click, GLOBAL_KEYS, Mode, NoteClick, Pane, View};
+use crate::app::{App, Click, GLOBAL_KEYS, Mode, NoteClick, Pane, View, Wheel};
 
 /// The accent of the tabs, the palette and the best key.
 pub const ACCENT: Color32 = Color32::from_rgb(0x5B, 0x9F, 0xD1);
@@ -39,6 +39,11 @@ pub struct Out {
     /// The field the detail's strip left for the writing box, while the box
     /// is open on the item it shows.
     pub compose_at: Option<Rect>,
+    /// The wheel turned over a list or a detail, by so many notches (up is
+    /// plus).
+    pub wheel: Option<(Wheel, f32)>,
+    /// How far the detail scrolls, in lines, before its end shows.
+    pub detail_max: Option<f32>,
 }
 
 /// How far apart the columns are: the 1 px line between them, which the
@@ -64,6 +69,49 @@ pub fn dividers(ui: &Ui, split: &Node<Pane>, r: Rect, out: &mut Out) {
         Some(ito_layout::ui::Moved::Dragging(n) | ito_layout::ui::Moved::Halved(n)) => out.split = Some(n),
         Some(ito_layout::ui::Moved::Released) | None => {}
     }
+}
+
+/// The wheel over `r` on `layer`, into `out.wheel` as notches (a touchpad's
+/// points are 40 a notch). Not with Ctrl: that is the zoom's.
+pub fn wheel(ctx: &egui::Context, layer: egui::LayerId, r: Rect, at: Wheel, out: &mut Out) {
+    if !ctx.rect_contains_pointer(layer, r) {
+        return;
+    }
+    let notches: f32 = ctx.input(|i| {
+        i.events
+            .iter()
+            .map(|e| match e {
+                egui::Event::MouseWheel { unit, delta, modifiers, .. } if !modifiers.command => match unit {
+                    egui::MouseWheelUnit::Line => delta.y,
+                    egui::MouseWheelUnit::Point => delta.y / 40.0,
+                    egui::MouseWheelUnit::Page => delta.y * 5.0,
+                },
+                _ => 0.0,
+            })
+            .sum()
+    });
+    if notches != 0.0 {
+        out.wheel = Some((at, notches));
+    }
+}
+
+/// An item's body while the pointer rests on its card or row, as tsumugi's
+/// peek draws a session's last lines: monospace on the ground, 520 wide, a
+/// dozen lines at most. Nothing for an item without a body.
+pub fn peek(resp: &egui::Response, text: &str) {
+    if text.is_empty() || !resp.hovered() {
+        return;
+    }
+    resp.clone().on_hover_ui(|ui| {
+        let c = ito_theme::colors();
+        let mut job = egui::text::LayoutJob::simple(text.to_owned(), FontId::monospace(11.0), c.fg, 520.0);
+        job.wrap.max_rows = 12;
+        job.wrap.overflow_character = Some('…');
+        let g = ui.fonts_mut(|f| f.layout_job(job));
+        let (rect, _) = ui.allocate_exact_size(g.size() + vec2(16.0, 12.0), Sense::hover());
+        ui.painter().rect_filled(rect, 6.0, c.bg);
+        ui.painter().galley(rect.min + vec2(8.0, 6.0), g, c.fg);
+    });
 }
 
 /// A rect that takes a click, with the pointing hand over it.
@@ -95,10 +143,6 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     key_bar(ui, app, keybar);
     ui.painter().line_segment([title.left_bottom(), title.right_bottom()], Stroke::new(1.0, c.border));
     ui.painter().line_segment([keybar.left_top(), keybar.right_top()], Stroke::new(1.0, c.border));
-    if let Some(left) = app.toast_left() {
-        toast(ui, app, body);
-        ui.ctx().request_repaint_after(left);
-    }
     // The notifications hang from the bell over the view, as in tsumugi.
     if app.mode == Mode::Notes {
         crate::notes_ui::show(ui, app, &mut out);
@@ -374,15 +418,23 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
 }
 
-fn toast(ui: &mut Ui, app: &App, r: Rect) {
+/// The message, while its time lasts: at the top right under the title bar,
+/// over everything (the settings, the boxes, the palette), as in kura; a
+/// long one wraps at half the window.
+pub fn toast(ctx: &egui::Context, app: &App) {
+    let Some(left) = app.toast_left() else { return };
     let Some((text, _)) = &app.toast else { return };
     let c = ito_theme::colors();
-    let p = ui.painter().clone();
-    let galley = ui.fonts_mut(|f| f.layout_no_wrap(text.clone(), FontId::proportional(12.5), c.fg));
-    let box_ = Rect::from_center_size(pos2(r.center().x, r.bottom() - 24.0), galley.size() + vec2(28.0, 14.0));
+    let screen = ctx.content_rect();
+    let wrap = (screen.width() / 2.0 - 28.0).max(120.0);
+    let galley = ctx.fonts_mut(|f| f.layout(text.clone(), FontId::proportional(12.5), c.fg, wrap));
+    let size = galley.size() + vec2(28.0, 14.0);
+    let box_ = Rect::from_min_size(pos2(screen.right() - 12.0 - size.x, screen.top() + TITLE_H + 6.0), size);
+    let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("minato-toast")));
     p.rect_filled(box_, CornerRadius::same(8), c.raised());
     p.rect_stroke(box_, CornerRadius::same(8), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
     p.galley(box_.min + vec2(14.0, 7.0), galley, c.fg);
+    ctx.request_repaint_after(left);
 }
 
 /// A window without the system's frame is resized by its edges: a strip

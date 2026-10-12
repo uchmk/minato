@@ -9,7 +9,7 @@ use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::inbox::{Card, Group, InboxState, Status};
 use minato_core::list::{Label, age, epoch};
 
-use crate::app::{App, Click, Pane, now_epoch};
+use crate::app::{App, Click, Pane, Wheel, now_epoch};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
@@ -29,6 +29,8 @@ const CHIP_ON: Color32 = Color32::from_rgb(0x57, 0x55, 0x7A);
 
 pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     for (pane, rect) in ui::panes(&app.inbox_split, r) {
+        let at = if pane == Pane::Left { Wheel::Inbox } else { Wheel::Detail };
+        ui::wheel(ui.ctx(), ui.layer_id(), rect, at, out);
         match pane {
             Pane::Left => queue(ui, app, rect, out),
             _ => crate::detail_ui::draw(ui, app, rect, app.inbox.scroll, out),
@@ -149,6 +151,7 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
                 out.click = Some(Click::InboxCard(k));
             }
             draw_card(p, app, card, rect, full, k == sel, resp.hovered(), now);
+            ui::peek(&resp, &app.items[card.at].peek);
             y = rect.bottom() + CARD_GAP;
         }
     }

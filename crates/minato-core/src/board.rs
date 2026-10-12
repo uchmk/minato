@@ -13,8 +13,8 @@ pub const TITLE: &str = "uchmk";
 
 /// The Project, its Status field and the cards. No variables.
 pub fn query() -> String {
-    let content = "__typename ... on Issue { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
-... on PullRequest { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
+    let content = "__typename ... on Issue { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
+... on PullRequest { id title number url bodyText repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
     format!(
         "query {{ viewer {{ projectsV2(first: 20) {{ nodes {{ id title \
 field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} priority: field(name: \"Priority\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
@@ -39,6 +39,8 @@ pub struct Card {
     pub option: Option<String>,
     /// The Priority option it stands in, if the Project has that field.
     pub priority: Option<String>,
+    /// The start of its body, for the hover.
+    pub peek: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +112,7 @@ pub fn parse(body: &str) -> Result<Project, String> {
                         .unwrap_or_default(),
                     option: Some(text(i, "/fieldValueByName/optionId")).filter(|s| !s.is_empty()),
                     priority: Some(text(i, "/priority/optionId")).filter(|s| !s.is_empty()),
+                    peek: crate::list::peek_of(&text(i, "/content/bodyText")),
                 })
                 .collect()
         })

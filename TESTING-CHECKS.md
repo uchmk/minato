@@ -234,3 +234,12 @@
 - [ ] **25.8** Drag a column line in the inbox, list and Actions, close minato and start it again → The columns come back at the widths they were left at (state.toml in minato's state folder)
 - [ ] **25.9** Start minato while offline after a run with the connection up → The inbox, list, Actions and Board show the last answers at once; a selected item shows its last detail
 - [ ] **25.10** Online, select an item, another, and the first again → The first detail shows at once and is not asked again unless the item changed on GitHub
+
+## 26. HTML in Markdown, the wheel, the scale, the hover and the messages
+
+- [ ] **26.1** Look at an item whose body has `<details><summary>…</summary>` and `<b>`, `<code>`, `<br>`, `<a href>` → The summary is a bar with a triangle pointing down and what the details hold under it; bold, code, the line break and the link show as Markdown does; no raw tags are left
+- [ ] **26.2** Turn the wheel over the inbox cards, the list's filters and rows, the Actions runs, a board column and the notifications → The selection (or the filter cursor) moves one a notch, down for down; the column under the pointer takes the focus
+- [ ] **26.3** Turn the wheel over a long detail in the inbox, the list and Actions → It scrolls about three lines a notch; in the inbox and the list it stops once its end shows, and at the top
+- [ ] **26.4** Press Ctrl+=, Ctrl++ (with Shift), Ctrl+- and Ctrl+0, also on the settings screen, and pick "Zoom in" in the palette → The window grows or shrinks a step, a message says the size (as kura's), Ctrl+0 brings it back to 100%; kura and tsumugi take the same size from common.toml
+- [ ] **26.5** Rest the pointer on an inbox card, a list row and a board card → A box with the first lines of the item's body in monospace shows, as tsumugi's peek of a session; none for an item without a body or while a card is dragged
+- [ ] **26.6** Press `a` on an item, then do other things that leave a message (`d`, Ctrl+=) → Each message shows at the top right under the title bar, over the palette and the settings too, and goes after about four seconds

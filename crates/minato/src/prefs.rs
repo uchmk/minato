@@ -40,6 +40,11 @@ pub struct Prefs {
     tx: Sender<Reload>,
     rx: Receiver<Reload>,
     wake: Option<egui::Context>,
+    /// The scale the keys asked for, until common.toml has it: an older
+    /// read coming back meanwhile does not undo it.
+    scale_wanted: Option<f32>,
+    /// The thread that writes the scale, the newest one of a burst.
+    scale_tx: Option<Sender<f32>>,
     /// The OS's light or dark, for `system` (egui's lags a switch on Windows).
     os_light: ito_common::OsLight,
 }
@@ -60,6 +65,8 @@ impl Prefs {
             tx,
             rx,
             wake: None,
+            scale_wanted: None,
+            scale_tx: None,
             os_light: ito_common::OsLight::default(),
         }
     }
@@ -114,10 +121,22 @@ impl Prefs {
     pub fn pump(&mut self) {
         while let Ok(r) = self.rx.try_recv() {
             match r {
-                Reload::Common(Ok((c, w))) => (self.common, self.common_warn) = (c, w),
+                Reload::Common(Ok((mut c, w))) => {
+                    if let Some(s) = self.scale_wanted {
+                        if c.scale == Some(s) {
+                            self.scale_wanted = None;
+                        } else {
+                            c.scale = Some(s);
+                        }
+                    }
+                    (self.common, self.common_warn) = (c, w);
+                }
                 Reload::Common(Err(e)) => self.common_warn = vec![e],
                 Reload::Themes(t, w) => (self.themes, self.theme_warn) = (t, w),
-                Reload::Failed(e) => self.failed = Some(e),
+                Reload::Failed(e) => {
+                    self.scale_wanted = None;
+                    self.failed = Some(e);
+                }
             }
         }
     }
@@ -147,6 +166,35 @@ impl Prefs {
             };
             Self::send_back(&tx, &wake, r);
         });
+    }
+
+    /// The scale at once, and into common.toml on a thread of its own that
+    /// writes only the newest of a burst of keys (kura's way).
+    pub fn set_scale(&mut self, s: f32, no_folder: &str) {
+        self.common.scale = Some(s);
+        let Some(base) = self.base.clone() else {
+            Self::send_back(&self.tx, &self.wake, Reload::Failed(no_folder.into()));
+            return;
+        };
+        self.scale_wanted = Some(s);
+        let tx = self.scale_tx.get_or_insert_with(|| {
+            let (tx, rx) = channel::<f32>();
+            let (back, wake) = (self.tx.clone(), self.wake.clone());
+            std::thread::spawn(move || {
+                while let Ok(mut s) = rx.recv() {
+                    while let Ok(newer) = rx.try_recv() {
+                        s = newer;
+                    }
+                    let r = match edit_common(&base, |t| ito_common::scale_change(s).apply(t)) {
+                        Ok(()) => Reload::Common(Common::read(&base)),
+                        Err(e) => Reload::Failed(e),
+                    };
+                    Self::send_back(&back, &wake, r);
+                }
+            });
+            tx
+        });
+        let _ = tx.send(s);
     }
 
     /// Open common.toml (made empty first when there is none) with what the

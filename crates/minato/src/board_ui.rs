@@ -6,7 +6,7 @@ use egui::{Align2, CornerRadius, FontId, Id, Rect, Sense, Stroke, StrokeKind, Ui
 use minato_core::fold::{Show, fold};
 use minato_core::list::{age, epoch};
 
-use crate::app::{App, now_epoch};
+use crate::app::{App, Wheel, now_epoch};
 use crate::list_ui::parse_hex;
 use crate::ui::{ACCENT, Out};
 
@@ -49,6 +49,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let mut dragged: Option<usize> = None;
     for &(col, rect) in &rects {
         let focus = col == app.bs.col;
+        crate::ui::wheel(ui.ctx(), ui.layer_id(), rect, Wheel::Board(col), out);
         p.rect_filled(rect, CornerRadius::same(8), c.panel);
         if focus {
             p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, ACCENT.gamma_multiply(0.6)), StrokeKind::Inside);
@@ -93,6 +94,9 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
                 if let Some(&(to, _)) = rects.iter().find(|(_, rc)| rc.x_range().contains(at.x)) {
                     out.drop = Some((ci, to));
                 }
+            }
+            if dragged.is_none() {
+                crate::ui::peek(&resp, &card.peek);
             }
             let picked = focus && k == app.bs.row;
             card_box(&p, app, cr, ci, picked, f.rows[k] == Show::Full, now);

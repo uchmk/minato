@@ -9,7 +9,7 @@ use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::list::{age, epoch};
 use minato_core::notes::{self, Note};
 
-use crate::app::{App, NoteClick, now_epoch};
+use crate::app::{App, NoteClick, Wheel, now_epoch};
 use crate::style;
 use crate::ui::Out;
 
@@ -78,6 +78,7 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
             }
         });
     });
+    crate::ui::wheel(&ctx, resp.response.layer_id, resp.response.rect, Wheel::Notes, out);
     // A click outside closes the list, but not the bell's own: it toggles.
     if resp.response.clicked_elsewhere() && action.is_none() && !out.bell {
         action = Some(NoteClick::Close);

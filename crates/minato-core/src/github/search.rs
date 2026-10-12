@@ -4,10 +4,10 @@
 
 use serde::Deserialize;
 
-use crate::list::{Check, Ci, Detail, Entry, Item, Kind, Label};
+use crate::list::{Check, Ci, Detail, Entry, Item, Kind, Label, peek_of};
 
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
-labels(first: 10) { nodes { name color } } comments { totalCount }";
+labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
 
 /// The search for issues and PRs. Variables: `q` (the query text), `n`.
 pub fn items_query() -> String {
@@ -123,6 +123,8 @@ struct RawItem {
     mergeable: Option<String>,
     assignees: Option<Nodes<Login>>,
     commits: Option<Nodes<CommitNode>>,
+    #[serde(rename = "bodyText")]
+    body_text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -176,6 +178,7 @@ pub fn parse_items(body: &str) -> Result<Vec<Item>, String> {
             conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
             mentioned: false,
             ci,
+            peek: n.body_text.as_deref().map(peek_of).unwrap_or_default(),
         });
     }
     Ok(out)
@@ -284,9 +287,11 @@ mod tests {
         assert_eq!(pr.labels[0].name, "lane:win");
         assert_eq!(pr.assignees, vec!["uchmk".to_string()]);
         assert_eq!(pr.comments, 2);
+        assert_eq!(pr.peek, "Fixes the font.\nThe UI now reads it from common.toml.");
         let issue = &items[1];
         assert_eq!((issue.kind, issue.ci, issue.author.as_str()), (Kind::Issue, None, "ghost"));
         assert_eq!(items[2].kind, Kind::Discussion);
+        assert_eq!(items[2].peek, "");
     }
 
     #[test]

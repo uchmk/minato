@@ -7,7 +7,7 @@ use minato_core::fold::{HEAD, Show, fold_head};
 use minato_core::inbox::Group;
 use minato_core::list::{Ci, Col, Item, Kind, Pick, Saved, age, epoch, options};
 
-use crate::app::{App, Click, Pane, now_epoch};
+use crate::app::{App, Click, Pane, Wheel, now_epoch};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
@@ -57,6 +57,8 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         if ui::hit(ui, rect, ("list-col", pane)).clicked() {
             out.click = Some(Click::ListCol(col));
         }
+        let at = if col == Col::Detail { Wheel::Detail } else { Wheel::List(col) };
+        ui::wheel(ui.ctx(), ui.layer_id(), rect, at, out);
         match pane {
             Pane::Left => filter_col(ui, app, rect, out),
             Pane::Mid => items_col(ui, app, rect, out),
@@ -176,6 +178,7 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             out.click = Some(Click::ListItem(k));
         }
         item_row(&p, app, item, row, f.rows[k] == Show::Full, k == sel, resp.hovered(), marked.contains(&item.id.as_str()), now);
+        ui::peek(&resp, &item.peek);
         y += h;
     }
     if f.below > 0 {

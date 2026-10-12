@@ -109,12 +109,16 @@ pub enum Block {
     Table(Vec<Vec<String>>),
     /// `---`.
     Rule,
+    /// The `<summary>` of a `<details>`: what follows is shown open under it.
+    Summary(String),
     Para(String),
 }
 
 /// A small reading of Markdown: headings, bullets, numbered items, tasks,
 /// quotes, fenced code, tables, rules and paragraphs. HTML comments (issue
-/// templates leave them) and lines that are only a tag are dropped. Inline
+/// templates leave them) and lines that are only a tag are dropped; a
+/// `<summary>` is a block of its own, and the tags GitHub draws inline
+/// (`<b>`, `<code>`, `<a href>`, `<br>` …) become their Markdown. Inline
 /// marks stay as typed; [`spans`] reads them.
 pub fn blocks(text: &str) -> Vec<Block> {
     let mut out = Vec::new();
@@ -130,7 +134,7 @@ pub fn blocks(text: &str) -> Vec<Block> {
             out.push(Block::Table(std::mem::take(table)));
         }
     }
-    let text = without_comments(text);
+    let text = without_html(&without_comments(text));
     for line in text.lines() {
         if let Some(buf) = &mut code {
             if line.trim_start().starts_with("```") {
@@ -154,7 +158,10 @@ pub fn blocks(text: &str) -> Vec<Block> {
             }
             continue;
         }
-        if t.starts_with("```") {
+        if let Some(s) = t.strip_prefix("<summary>").and_then(|r| r.strip_suffix("</summary>")) {
+            flush(&mut para, &mut table, &mut out);
+            out.push(Block::Summary(s.trim().to_string()));
+        } else if t.starts_with("```") {
             flush(&mut para, &mut table, &mut out);
             code = Some(Vec::new());
         } else if t.is_empty() || is_tag(t) {
@@ -190,6 +197,15 @@ pub fn blocks(text: &str) -> Vec<Block> {
         out.push(Block::Code(buf.join("\n")));
     }
     flush(&mut para, &mut table, &mut out);
+    for b in &mut out {
+        match b {
+            Block::Heading(_, s) | Block::Bullet(s) | Block::Numbered(_, s) | Block::Task(_, s) | Block::Quote(s) | Block::Summary(s) | Block::Para(s) => {
+                *s = s.replace(BR, "\n");
+            }
+            Block::Table(rows) => rows.iter_mut().flatten().for_each(|s| *s = s.replace(BR, "\n")),
+            Block::Code(_) | Block::Rule => {}
+        }
+    }
     out
 }
 
@@ -206,6 +222,137 @@ fn without_comments(text: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// `text` with each `<summary>…</summary>` on a line of its own (whatever
+/// was around it on the line goes on lines before and after) and the inline
+/// tags made Markdown; fenced code is left as it is.
+fn without_html(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut fenced = false;
+    for line in text.lines() {
+        let fence = line.trim_start().starts_with("```");
+        fenced ^= fence;
+        if fence || fenced {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        let low = line.to_ascii_lowercase();
+        let open = low.find("<summary").and_then(|i| low[i..].find('>').map(|j| (i, i + j + 1)));
+        match open {
+            Some((i, a)) => {
+                let (inner, after) = match low[a..].find("</summary>") {
+                    Some(j) => (&line[a..a + j], &line[a + j + "</summary>".len()..]),
+                    None => (&line[a..], ""),
+                };
+                let inner = html_inline(inner).replace(BR, " ");
+                for l in [html_inline(&line[..i]), format!("<summary>{}</summary>", inner.trim()), html_inline(after)] {
+                    out.push_str(&l);
+                    out.push('\n');
+                }
+            }
+            None => {
+                out.push_str(&html_inline(line));
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
+/// One line's inline HTML as Markdown: `<b>` `<strong>` bold, `<i>` `<em>`
+/// italic, `<code>` `<kbd>` code, `<s>` `<del>` struck, `<a href>` a link,
+/// `<img alt>` its alt, `<br>` a new line; the tags that only shape the page
+/// (`<details>`, `<p>`, `<div>`, `<sub>` …) go. Other `<…>` (`Vec<T>`) and
+/// what is in backticks stay as typed.
+fn html_inline(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut code = false;
+    let mut href: Vec<Option<String>> = Vec::new();
+    let mut rest = line;
+    while let Some(ch) = rest.chars().next() {
+        if ch == '`' {
+            code = !code;
+        }
+        if ch == '<' && !code {
+            if let Some((len, close, name, tag)) = tag_at(rest) {
+                let md = match name.as_str() {
+                    "b" | "strong" => "**".to_string(),
+                    "i" | "em" => "*".to_string(),
+                    "code" | "kbd" | "samp" | "tt" => "`".to_string(),
+                    "s" | "del" | "strike" => "~~".to_string(),
+                    "br" => BR.to_string(),
+                    "img" => attr(tag, "alt").unwrap_or_default(),
+                    "a" if !close => {
+                        let h = attr(tag, "href");
+                        let open = if h.is_some() { "[" } else { "" };
+                        href.push(h);
+                        open.to_string()
+                    }
+                    "a" => match href.pop().flatten() {
+                        Some(h) => format!("]({h})"),
+                        None => String::new(),
+                    },
+                    _ => String::new(),
+                };
+                out.push_str(&md);
+                rest = &rest[len..];
+                continue;
+            }
+        }
+        out.push(ch);
+        rest = &rest[ch.len_utf8()..];
+    }
+    out
+}
+
+/// A `<br>` until the lines are read, then a new line in its block.
+const BR: char = '\u{2028}';
+
+/// The tags [`html_inline`] knows.
+const TAGS: [&str; 31] = [
+    "a", "b", "strong", "i", "em", "code", "kbd", "samp", "tt", "s", "del", "strike", "br", "img", "details", "summary", "p", "div", "span", "sub", "sup",
+    "ins", "u", "small", "picture", "source", "center", "ul", "ol", "li", "hr",
+];
+
+/// A known tag at the start of `s`: its length in bytes, whether it closes,
+/// its name in lower case, and the whole tag.
+fn tag_at(s: &str) -> Option<(usize, bool, String, &str)> {
+    let end = s.find('>')?;
+    let tag = &s[..=end];
+    let inner = tag[1..end].trim_end_matches('/').trim();
+    let (close, inner) = match inner.strip_prefix('/') {
+        Some(r) => (true, r),
+        None => (false, inner),
+    };
+    let name: String = inner.chars().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+    let after = &inner[name.len()..];
+    let known = TAGS.contains(&name.as_str()) && (after.is_empty() || after.starts_with(char::is_whitespace));
+    known.then_some((end + 1, close, name, tag))
+}
+
+/// The value of `name="…"` (or `'…'`) in a tag.
+fn attr(tag: &str, name: &str) -> Option<String> {
+    let low = tag.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = low[from..].find(name).map(|i| i + from) {
+        from = i + name.len();
+        let before_ok = low[..i].ends_with(char::is_whitespace);
+        let rest = low[from..].trim_start();
+        if !before_ok || !rest.starts_with('=') {
+            continue;
+        }
+        let at = tag.len() - rest.len() + 1;
+        let v = tag[at..].trim_start();
+        let q = v.chars().next()?;
+        return if q == '"' || q == '\'' {
+            v[1..].find(q).map(|j| v[1..1 + j].to_string())
+        } else {
+            Some(v.chars().take_while(|c| !c.is_whitespace() && *c != '>').collect())
+        };
+    }
+    None
 }
 
 /// A line that is only an HTML tag (`<details>`, `</summary>`, `<br/>`).
@@ -455,6 +602,17 @@ mod tests {
             ]
         );
         assert_eq!(blocks("a <!-- open"), vec![Block::Para("a".into())]);
+    }
+
+    #[test]
+    fn details_and_inline_html() {
+        let got = blocks("<details><summary>Last <b>24</b> runs</summary>\n\n- one\n</details>\n<p align=\"center\">a<br>b <code>x<y</code></p>\n");
+        assert_eq!(got, vec![Block::Summary("Last **24** runs".into()), Block::Bullet("one".into()), Block::Para("a\nb `x<y`".into())]);
+        let got = blocks("<details>\n<summary>Log</summary>\n\n```\n<b>kept</b>\n```\n</details>");
+        assert_eq!(got, vec![Block::Summary("Log".into()), Block::Code("<b>kept</b>".into())]);
+        assert_eq!(html_inline("see <a href=\"https://x/1\">#1</a> and <img src=x alt='logo'>"), "see [#1](https://x/1) and logo");
+        assert_eq!(html_inline("Vec<T> and `<b>` stay"), "Vec<T> and `<b>` stay");
+        assert_eq!(html_inline("a <unknown> <a>plain</a>"), "a <unknown> plain");
     }
 
     #[test]

@@ -40,15 +40,17 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let p = ui.painter().with_clip_rect(body);
     let x = body.left() + 26.0;
     let w = (body.width() - 52.0).min(MAX_W);
-    let y = body.top() + 18.0 - scroll * LINE;
-    let y = head(&p, app, item, x, y, w);
+    let top = body.top() + 18.0 - scroll * LINE;
+    let y = head(&p, app, item, x, top, w);
     let card = card_of(app, item);
     let y = next(&p, app, card.as_ref(), x, y, w);
-    let y = keys(&p, app, item, card.as_ref(), x, y, w);
+    let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
-        sections(&p, app, item, x, y, w);
+        y = sections(&p, app, item, x, y, w);
         strip(ui, app, item, Rect::from_min_max(pos2(r.left(), body.bottom()), r.max), out);
     }
+    // The wheel stops when the end is a little above the strip.
+    out.detail_max = Some(((y - top + 36.0 - body.height()) / LINE).ceil().max(0.0));
 }
 
 /// How high the box's field is: five lines, or three in a short window.
@@ -154,11 +156,11 @@ fn keys(p: &Painter, app: &App, item: &Item, card: Option<&Card>, x: f32, y: f32
 }
 
 /// 検査, 本文 and 経過, once the detail has come.
-fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) {
+fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
     let c = ito_theme::colors();
     let Some((_, d)) = app.detail.as_ref().filter(|(id, _)| *id == item.id) else {
         p.text(pos2(x, y + 20.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(12.5), c.dim);
-        return;
+        return y + 40.0;
     };
     let mut y = y;
     if !d.checks.is_empty() {
@@ -179,7 +181,7 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) {
         y += md.height;
     }
     if d.timeline.is_empty() {
-        return;
+        return y;
     }
     y = style::heading(p, x, y, app.tr("detail.timeline"));
     let now = now_epoch();
@@ -205,6 +207,7 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) {
         y += 12.0;
     }
     p.set(line, egui::Shape::rect_filled(Rect::from_min_max(pos2(x + 5.0, top + 8.0), pos2(x + 7.0, last)), 0.0, c.border));
+    y
 }
 
 /// The composer at the foot: the fields to set as chips, then the box to
