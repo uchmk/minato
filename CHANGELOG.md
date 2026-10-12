@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.18.0] - 2026-10-12
+
+### Added
+
+- 一覧の「保存した絞り込み」に「自分への言及」（`mentions:@me`）と「所見」（ラベル `finding`）を足した。
+
 ## [0.17.0] - 2026-10-12
 
 ### Added

@@ -98,6 +98,10 @@ pub enum Saved {
     Assigned,
     /// A PR whose CI is red.
     Red,
+    /// Mentions me (set by the app from a `mentions:` search).
+    Mentioned,
+    /// Carries the `finding` label.
+    Finding,
 }
 
 /// What the filter column has chosen.
@@ -125,6 +129,8 @@ impl Filter {
                 Saved::None => true,
                 Saved::Assigned => item.assignees.iter().any(|a| a == me),
                 Saved::Red => item.kind == Kind::Pr && item.ci == Some(Ci::Bad),
+                Saved::Mentioned => item.mentioned,
+                Saved::Finding => item.labels.iter().any(|l| l.name == "finding"),
             }
     }
 
@@ -144,6 +150,8 @@ impl Filter {
         match self.saved {
             Saved::None => {}
             Saved::Assigned => q.push("assignee:@me".into()),
+            Saved::Mentioned => q.push("mentions:@me".into()),
+            Saved::Finding => q.push("label:finding".into()),
             Saved::Red => {
                 q.push("is:pr".into());
                 q.push("status:failure".into());
@@ -178,7 +186,7 @@ pub fn options(items: &[Item]) -> Vec<(&'static str, Vec<Pick>)> {
         ("repo", repos),
         ("kind", vec![Pick::Kind(None), Pick::Kind(Some(Kind::Issue)), Pick::Kind(Some(Kind::Pr)), Pick::Kind(Some(Kind::Discussion))]),
         ("author", authors),
-        ("saved", vec![Pick::Saved(Saved::None), Pick::Saved(Saved::Assigned), Pick::Saved(Saved::Red)]),
+        ("saved", vec![Pick::Saved(Saved::None), Pick::Saved(Saved::Assigned), Pick::Saved(Saved::Red), Pick::Saved(Saved::Mentioned), Pick::Saved(Saved::Finding)]),
     ]
 }
 

@@ -53,6 +53,8 @@ fn pick_label(app: &App, p: &Pick) -> String {
         Pick::Saved(Saved::None) => app.tr("list.all").into(),
         Pick::Saved(Saved::Assigned) => app.tr("saved.assigned").into(),
         Pick::Saved(Saved::Red) => app.tr("saved.red").into(),
+        Pick::Saved(Saved::Mentioned) => app.tr("saved.mentioned").into(),
+        Pick::Saved(Saved::Finding) => app.tr("saved.finding").into(),
     }
 }
 

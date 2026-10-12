@@ -232,3 +232,10 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 20.1 | In the inbox or the list press `S` | A box titled with the repository shows description, visibility, default branch, topics, the three merge methods, delete-branch-after-merge, issues, discussions and archived |
 | 20.2 | Press `Esc` | The box closes |
+
+## 21. More saved filters
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 21.1 | In the list move to the filter column, choose "Mentions me" under saved | Only items that mention you stay, and the query over the list shows `mentions:@me` |
+| 21.2 | Choose "Findings" under saved | Only items with the `finding` label stay, and the query shows `label:finding` |
