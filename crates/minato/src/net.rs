@@ -6,6 +6,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use minato_core::actions::{self, Run};
+use minato_core::board;
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
@@ -39,12 +40,16 @@ pub struct Net {
     /// The last runs of each repository.
     run_found: std::collections::HashMap<String, Vec<Run>>,
     next_runs: Instant,
+    next_board: Instant,
     /// The run whose jobs and artifacts were last asked for.
     asked_run: Option<u64>,
 }
 
 /// How often the runs are asked again, while the Actions view is open.
 const RUNS: Duration = Duration::from_secs(45);
+
+/// How often the board is asked again, while it is open.
+const BOARD: Duration = Duration::from_secs(60);
 
 /// How many repositories' runs are shown.
 const REPOS: usize = 8;
@@ -61,7 +66,7 @@ impl Net {
             let _ = tx.send(found);
             ctx.request_repaint();
         });
-        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), asked_run: None }
+        Net { token_rx, worker: None, next_poll: Instant::now(), rate: None, next_search: Instant::now(), found: [Vec::new(), Vec::new()], asked: None, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), next_runs: Instant::now(), next_board: Instant::now(), asked_run: None }
     }
 
     pub fn pump(&mut self, app: &mut App, ctx: &egui::Context) {
@@ -143,6 +148,24 @@ impl Net {
                                 _ => {}
                             }
                         }
+                        "board" => match board::parse(&f.body) {
+                            Ok(p) => {
+                                app.bs.clamp(&p);
+                                app.board = Some(p);
+                            }
+                            Err(e) => app.say(e),
+                        },
+                        k if k.starts_with("board:") => {
+                            if f.body.contains("\"errors\"") {
+                                app.say(f.body.chars().take(160).collect::<String>());
+                                self.pending.remove(k);
+                            } else if let Some(done) = self.pending.remove(k) {
+                                let words = app.tr(done);
+                                app.say(words);
+                            }
+                            // Read the truth back: it undoes a move GitHub refused.
+                            self.next_board = Instant::now();
+                        }
                         "a-repos" => match actions::parse_repos(&f.body) {
                             Ok(v) => {
                                 self.repos = v.into_iter().take(REPOS).collect();
@@ -197,6 +220,9 @@ impl Net {
                 }
                 Err(e) => {
                     self.pending.remove(&reply.key);
+                    if reply.key.starts_with("board:") {
+                        self.next_board = Instant::now();
+                    }
                     app.say(e);
                 }
             }
@@ -223,6 +249,10 @@ impl Net {
                 worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 self.next_search = now + SEARCH;
             }
+        }
+        if app.viewer.is_some() && app.view == crate::app::View::Board && now >= self.next_board {
+            worker.send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: "{}".into() } });
+            self.next_board = now + BOARD;
         }
         if app.viewer.is_some() && app.view == crate::app::View::Actions {
             if self.repos.is_empty() {
@@ -255,7 +285,11 @@ impl Net {
             }
             self.asked = want;
         }
-        let wake = self.next_poll.min(self.next_search).min(if app.view == crate::app::View::Actions { self.next_runs } else { self.next_search });
+        let wake = self.next_poll.min(self.next_search).min(match app.view {
+            crate::app::View::Actions => self.next_runs,
+            crate::app::View::Board => self.next_board,
+            _ => self.next_search,
+        });
         ctx.request_repaint_after(wake.saturating_duration_since(now));
     }
 }

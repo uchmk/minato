@@ -12,7 +12,8 @@
 - [ ] 5b. Pickers for Status / Priority / Milestone / Reviewers (the `updateProjectV2ItemFieldValue` builder exists), and showing / ordering the fields in the settings screen
 - [x] 5c. Actions view (v0.6.0: runs, filters, jobs, last 10, artifacts, R X D e p o; `D` sends no inputs; logs open in the browser)
 - [ ] 5d. Dispatch inputs from the workflow YAML, logs inside the app, a `needs:` graph of the jobs
-- [ ] 6. Board view, palette (Ctrl+Shift+P)
+- [x] 6. Board view (v0.7.0: Project uchmk Status columns, H L and drag write to GitHub, u undo)
+- [ ] 6b. Palette (Ctrl+Shift+P)
 - [ ] 7. Writes (comment, close, label, merge) with confirmation
 - [ ] 8. Notifications, release workflow
 

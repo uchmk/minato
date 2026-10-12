@@ -6,6 +6,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod actions_ui;
+mod board_ui;
 mod app;
 mod fonts;
 mod i18n;
@@ -89,6 +90,12 @@ impl eframe::App for Minato {
             let out = ui::frame(ui, &self.app);
             if let Some(v) = out.view {
                 self.app.view = v;
+            }
+            if let Some(k) = out.pick {
+                self.app.pick_card(k);
+            }
+            if let Some((k, col)) = out.drop {
+                self.app.drop_card(k, col);
             }
             if out.settings {
                 self.app.mode = Mode::Settings;

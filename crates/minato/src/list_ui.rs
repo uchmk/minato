@@ -283,7 +283,7 @@ pub fn detail_col(ui: &mut Ui, app: &App, r: Rect, scroll: f32, lead: Option<(St
     }
 }
 
-fn parse_hex(s: &str) -> Option<Color32> {
+pub fn parse_hex(s: &str) -> Option<Color32> {
     if s.len() != 6 {
         return None;
     }

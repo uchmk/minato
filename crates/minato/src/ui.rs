@@ -20,6 +20,9 @@ const KEYBAR_KEYS: usize = 5;
 pub struct Out {
     pub view: Option<View>,
     pub settings: bool,
+    /// A card clicked, and a card dropped on a column.
+    pub pick: Option<usize>,
+    pub drop: Option<(usize, usize)>,
 }
 
 pub fn frame(ui: &mut Ui, app: &App) -> Out {
@@ -36,6 +39,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         _ if app.view == View::Inbox => crate::inbox_ui::draw(ui, app, body),
         _ if app.view == View::List => crate::list_ui::draw(ui, app, body),
         _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body),
+        _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
     }
     key_bar(ui, app, keybar);

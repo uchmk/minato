@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use std::collections::HashMap;
 
 use minato_core::actions::{self, ActState, Artifact, Job, Run};
+use minato_core::board::{self, BoardState, Project};
 use minato_core::composer::Picker;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
@@ -92,7 +93,7 @@ impl View {
                 ("e", "key.logs"),
                 ("o", "key.browser"),
             ],
-            View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open")],
+            View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open"), ("u", "key.undo"), ("o", "key.browser")],
         }
     }
 }
@@ -155,6 +156,12 @@ pub struct App {
     pub acts: ActState,
     /// The jobs and artifacts of one run, once fetched.
     pub run_detail: Option<RunDetail>,
+    /// Project "uchmk" with its Status columns, once fetched.
+    pub board: Option<Project>,
+    pub bs: BoardState,
+    /// Moves that can be undone: the Project item and the option it came from.
+    pub board_undo: Vec<(String, String)>,
+    /// Set when the board should be fetched again at once.
     /// Calls the window has asked for; the net takes them.
     pub outbox: Vec<Outgoing>,
     pub quit: bool,
@@ -217,6 +224,9 @@ impl App {
             runs: Vec::new(),
             acts: ActState::default(),
             run_detail: None,
+            board: None,
+            bs: BoardState::default(),
+            board_undo: Vec::new(),
             outbox: Vec::new(),
             quit: false,
         };
@@ -264,6 +274,7 @@ impl App {
                 None if self.view == View::List => return self.list_key(c),
                 None if self.view == View::Inbox => return self.inbox_key(c),
                 None if self.view == View::Actions => return self.actions_key(c),
+                None if self.view == View::Board => return self.board_key(c),
                 None => return false,
             },
         }
@@ -302,6 +313,7 @@ impl App {
         self.mode == Mode::Main && match self.view {
             View::List => self.list_key(' '),
             View::Actions => self.actions_key(' '),
+            View::Board => self.board_key('\n'),
             _ => false,
         }
     }
@@ -337,6 +349,80 @@ impl App {
             _ => return self.acts.key(c, &self.runs),
         }
         true
+    }
+
+    /// A key on the board: `h l j k` move the cursor, `H L` move the card to
+    /// the next column (and tell GitHub), `u` undoes the last move, `Enter`
+    /// opens the card in the list, `o` in the browser.
+    fn board_key(&mut self, c: char) -> bool {
+        let Some(p) = self.board.as_mut() else { return false };
+        match c {
+            'H' | 'L' => {
+                if let Some((item, call, before)) = board::shift(p, &mut self.bs, if c == 'H' { -1 } else { 1 }) {
+                    if let Some(b) = before {
+                        self.board_undo.push((item.clone(), b));
+                    }
+                    self.queue(&format!("board:{}:{}", item, self.outbox.len()), call, Some("board.moved"));
+                }
+            }
+            'u' => {
+                let Some((item, option)) = self.board_undo.pop() else { return true };
+                if let Some(i) = p.cards.iter().position(|k| k.item == item) {
+                    if let Some(call) = p.set_option(i, &option) {
+                        self.bs.follow(p, i);
+                        self.queue(&format!("board:{}:{}", item, self.outbox.len()), call, Some("board.undone"));
+                    }
+                }
+            }
+            'o' | '\n' => {
+                if let Some(card) = self.bs.selected(p).map(|i| p.cards[i].clone()) {
+                    if c == 'o' {
+                        self.open_url = Some(card.url);
+                    } else {
+                        self.show_in_list(&card.id);
+                    }
+                }
+            }
+            _ => return self.bs.key(c, p),
+        }
+        true
+    }
+
+    /// A card dropped on a column (the mouse): the same write as `H` `L`.
+    pub fn drop_card(&mut self, card: usize, col: usize) {
+        let Some(p) = self.board.as_mut() else { return };
+        let Some(option) = p.columns().get(col).and_then(|c| c.option.clone()) else { return };
+        if p.cards.get(card).is_none_or(|k| k.option.as_ref() == Some(&option)) {
+            return;
+        }
+        let (item, before) = (p.cards[card].item.clone(), p.cards[card].option.clone());
+        if let Some(call) = p.set_option(card, &option) {
+            self.bs.follow(p, card);
+            if let Some(b) = before {
+                self.board_undo.push((item.clone(), b));
+            }
+            self.queue(&format!("board:{}:{}", item, self.outbox.len()), call, Some("board.moved"));
+        }
+    }
+
+    /// The cursor put on a card by a click.
+    pub fn pick_card(&mut self, card: usize) {
+        if let Some(p) = self.board.as_ref() {
+            self.bs.follow(p, card);
+        }
+    }
+
+    /// Open the list view on one item.
+    fn show_in_list(&mut self, id: &str) {
+        let me = self.viewer.clone().unwrap_or_default();
+        self.list.filter = Default::default();
+        self.list.col = minato_core::list::Col::Items;
+        if let Some(k) = self.list.shown(&self.items, &me).iter().position(|i| i.id == id) {
+            self.list.sel = k;
+            self.view = View::List;
+        } else {
+            self.say_key("board.not_listed");
+        }
     }
 
     fn say_key(&mut self, key: &'static str) {
@@ -563,6 +649,63 @@ mod tests {
         assert!(a.feed('h'));
         assert!(!a.feed('R'), "the filter column ignores it");
         assert!(a.outbox.is_empty(), "R does nothing in the filter column");
+    }
+
+    fn board_with_two_cards() -> board::Project {
+        let col = |id: &str, name: &str| board::Column { option: Some(id.into()), name: name.into() };
+        let card = |item: &str, option: &str| board::Card {
+            item: item.into(),
+            id: format!("N-{item}"),
+            repo: "uchmk/kura".into(),
+            number: 1,
+            title: "t".into(),
+            url: format!("https://example.test/{item}"),
+            pr: false,
+            labels: Vec::new(),
+            option: Some(option.into()),
+        };
+        board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
+    }
+
+    #[test]
+    fn the_board_moves_a_card_writes_and_undoes() {
+        let mut a = app();
+        a.feed('4');
+        assert!(!a.feed('L'), "no board yet");
+        a.board = Some(board_with_two_cards());
+        assert!(a.feed('L'));
+        assert_eq!(a.board.as_ref().unwrap().cards[0].option.as_deref(), Some("o2"));
+        assert_eq!(a.outbox.len(), 1);
+        assert!(a.outbox[0].key.starts_with("board:I1:"));
+        assert_eq!(a.bs.col, 1);
+        assert!(a.feed('u'));
+        assert_eq!(a.board.as_ref().unwrap().cards[0].option.as_deref(), Some("o1"));
+        assert_eq!(a.outbox.len(), 2);
+        assert!(a.feed('u'), "nothing left to undo is still the board's key");
+        assert_eq!(a.outbox.len(), 2);
+    }
+
+    #[test]
+    fn a_dropped_card_goes_to_its_column_once() {
+        let mut a = app();
+        a.feed('4');
+        a.board = Some(board_with_two_cards());
+        a.drop_card(1, 1);
+        assert_eq!(a.board.as_ref().unwrap().cards[1].option.as_deref(), Some("o2"));
+        assert_eq!(a.outbox.len(), 1);
+        a.drop_card(1, 1);
+        assert_eq!(a.outbox.len(), 1, "dropping on its own column writes nothing");
+        a.drop_card(9, 0);
+        assert_eq!(a.outbox.len(), 1);
+    }
+
+    #[test]
+    fn board_o_opens_the_card_in_the_browser() {
+        let mut a = app();
+        a.feed('4');
+        a.board = Some(board_with_two_cards());
+        assert!(a.feed('o'));
+        assert_eq!(a.open_url.as_deref(), Some("https://example.test/I1"));
     }
 
     #[test]

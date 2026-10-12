@@ -95,3 +95,16 @@
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [ ] **9.10** Fill the list with many runs → No scrollbar; far rows fold and "more" shows
+
+## 10. Board
+
+- [ ] **10.1** Press `4` → Project "uchmk" shows its Status options as columns with counts; each card shows repo, number, kind, title and labels; a "No status" column leads if some card has none
+- [ ] **10.2** Move with `h l j k` → The column header and the card are highlighted; the cursor stays inside the columns
+- [ ] **10.3** Press `L` on a card → The card moves to the next column at once, a toast says so, and the card's Status changes in the GitHub Project
+- [ ] **10.4** Press `H` on a card in the first Status column → Nothing moves (no write)
+- [ ] **10.5** Drag a card onto another column with the mouse → The card follows the pointer, the column under it is outlined, and on release the card moves and GitHub changes
+- [ ] **10.6** Press `u` after a move → The card goes back and GitHub changes back
+- [ ] **10.7** Press `Enter` on a card that is in the list, then on one that is not → The list opens on it; otherwise a toast says it is not in the list
+- [ ] **10.8** Press `o` on a card → The browser opens the issue or PR
+- [ ] **10.9** Use a token without the `project` scope and press `L` → An error toast appears and, after a moment, the card returns to its column
+- [ ] **10.10** Put many cards in one column → No scrollbar; far cards fold and "more" shows
