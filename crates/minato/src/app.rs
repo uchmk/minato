@@ -14,6 +14,9 @@ use minato_core::inbox::{Card, InboxState, Mark, Rules};
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::notes::{self, Note, NotesState};
 
+use minato_core::workflow::{self, Workflow};
+
+use crate::overlay::{Form, K, LogView, Out, Overlay};
 use crate::prefs::Prefs;
 
 /// The four views, opened by `1` to `4` (docs/design.md).
@@ -92,6 +95,7 @@ impl View {
                 ("X", "key.cancel"),
                 ("D", "key.dispatch"),
                 ("e", "key.logs"),
+                ("L", "key.log"),
                 ("o", "key.browser"),
             ],
             View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open"), ("u", "key.undo"), ("o", "key.browser")],
@@ -171,6 +175,8 @@ pub struct App {
     pub acts: ActState,
     /// The jobs and artifacts of one run, once fetched.
     pub run_detail: Option<RunDetail>,
+    /// The dispatch form or a job's log, while one is open.
+    pub overlay: Option<Overlay>,
     /// Project "uchmk" with its Status columns, once fetched.
     pub board: Option<Project>,
     pub bs: BoardState,
@@ -188,8 +194,11 @@ pub struct App {
 }
 
 /// What GitHub said about one run.
+#[derive(Default)]
 pub struct RunDetail {
     pub id: u64,
+    /// The workflow file at the run's commit (the `needs:` graph, the inputs).
+    pub workflow: Option<Workflow>,
     pub jobs: Option<Vec<Job>>,
     pub artifacts: Option<Vec<Artifact>>,
 }
@@ -206,6 +215,9 @@ pub struct Outgoing {
 pub enum Pick {
     Labels,
     Assignees,
+    /// The Project's Status or Priority of the item (one choice).
+    Status,
+    Priority,
 }
 
 /// The writing box: a comment on one item, with the labels and the
@@ -247,6 +259,7 @@ impl App {
             runs: Vec::new(),
             acts: ActState::default(),
             run_detail: None,
+            overlay: None,
             board: None,
             bs: BoardState::default(),
             board_undo: Vec::new(),
@@ -284,7 +297,7 @@ impl App {
     /// A character typed (not a key with Ctrl or Alt: those are the
     /// shortcuts). Returns whether it was used.
     pub fn feed(&mut self, c: char) -> bool {
-        if self.compose.is_some() || self.confirm.is_some() || self.palette.is_some() {
+        if self.compose.is_some() || self.confirm.is_some() || self.palette.is_some() || self.overlay.is_some() {
             return true;
         }
         match (self.mode, c) {
@@ -364,7 +377,15 @@ impl App {
             'R' => self.say_key("run.not_failed"),
             'X' if run.status.active() => self.queue(&format!("write:{}:cancel", run.id), actions::cancel(&run), Some("run.cancelled")),
             'X' => self.say_key("run.not_active"),
-            'D' => self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched")),
+            'D' => {
+                let inputs = self.workflow_of(&run).map(|w| w.inputs.clone()).unwrap_or_default();
+                if inputs.is_empty() {
+                    self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
+                } else {
+                    self.overlay = Some(Overlay::Form(Box::new(Form::new(run, inputs))));
+                }
+            }
+            'L' => self.open_log(&run),
             'e' => {
                 let failed = self.run_detail.as_ref().filter(|d| d.id == run.id).and_then(|d| d.jobs.as_ref()).and_then(|j| j.iter().find(|j| j.status == actions::Status::Bad));
                 self.open_url = Some(failed.map_or_else(|| run.url.clone(), |j| j.url.clone()));
@@ -377,6 +398,43 @@ impl App {
             _ => return self.acts.key(c, &self.runs),
         }
         true
+    }
+
+    /// The workflow file of the run, once read.
+    pub fn workflow_of(&self, run: &Run) -> Option<&Workflow> {
+        self.run_detail.as_ref().filter(|d| d.id == run.id).and_then(|d| d.workflow.as_ref())
+    }
+
+    /// `L`: the log of the failed job (else the last one), in the app.
+    fn open_log(&mut self, run: &Run) {
+        let jobs = self.run_detail.as_ref().filter(|d| d.id == run.id).and_then(|d| d.jobs.as_ref());
+        let Some(job) = jobs.and_then(|j| j.iter().find(|j| j.status == actions::Status::Bad).or(j.last())).cloned() else {
+            return self.say_key("run.no_jobs");
+        };
+        self.queue(&format!("a-log:{}", job.id), Call::Get(workflow::log_path(run, &job)), None);
+        self.overlay = Some(Overlay::Log(LogView::new(job.id, job.name)));
+    }
+
+    /// A key for the open box.
+    pub fn overlay_key(&mut self, k: K) {
+        let out = match self.overlay.as_mut() {
+            Some(Overlay::Form(f)) => f.key(k),
+            Some(Overlay::Log(l)) => l.key(k),
+            None => return,
+        };
+        match out {
+            Out::Nothing => {}
+            Out::Close => self.overlay = None,
+            Out::Missing(name) => {
+                let words = format!("{}: {name}", self.tr("run.input_missing"));
+                self.say(words);
+            }
+            Out::Send(inputs) => {
+                if let Some(Overlay::Form(f)) = self.overlay.take() {
+                    self.queue(&format!("write:{}:dispatch", f.run.id), actions::dispatch_with(&f.run, &inputs), Some("run.dispatched"));
+                }
+            }
+        }
     }
 
     /// A key on the board: `h l j k` move the cursor, `H L` move the card to
@@ -609,6 +667,34 @@ impl App {
         match kind {
             Pick::Labels => self.queue(&format!("write:{n}:labels"), write::set_labels(&item, &picker.chosen), Some("write.labels")),
             Pick::Assignees => self.queue(&format!("write:{n}:people"), write::set_assignees(&item, &picker.chosen), Some("write.assignees")),
+            Pick::Status | Pick::Priority => {
+                let priority = kind == Pick::Priority;
+                let (Some(name), Some(p)) = (picker.chosen.first(), self.board.as_mut()) else { return };
+                let Some(card) = p.card_of(&item.id) else { return };
+                if let Some(call) = p.set_by_name(card, priority, name) {
+                    let key = format!("board:{}:{n}", p.cards[card].item);
+                    self.queue(&key, call, Some("write.field"));
+                }
+            }
+        }
+    }
+
+    /// Alt+S / Alt+P in the writing box: the picker for the item's Project
+    /// Status or Priority. Says so when the item is not in the Project.
+    pub fn open_field_picker(&mut self, priority: bool) {
+        let Some(id) = self.compose.as_ref().map(|c| c.id.clone()) else { return };
+        let found = self.board.as_ref().and_then(|p| p.card_of(&id).map(|k| p.choices(k, priority)));
+        match found {
+            Some((names, chosen)) if !names.is_empty() => {
+                let kind = if priority { Pick::Priority } else { Pick::Status };
+                if let Some(c) = self.compose.as_mut() {
+                    c.picker = Some((kind, Picker::single(names, chosen)));
+                }
+            }
+            _ => {
+                let words = self.tr("write.no_field");
+                self.say(words);
+            }
         }
     }
 
@@ -653,6 +739,9 @@ impl App {
     /// Escape: close the help or the settings.
     pub fn escape(&mut self) -> bool {
         if self.confirm.take().is_some() {
+            return true;
+        }
+        if self.overlay.take().is_some() {
             return true;
         }
         let was = self.mode;
@@ -709,6 +798,8 @@ mod tests {
             updated_at: "2026-10-12T09:01:00Z".into(),
             url: format!("https://github.com/uchmk/kura/actions/runs/{id}"),
             pr,
+            path: ".github/workflows/check.yml".into(),
+            head_sha: "abc0000".into(),
         }
     }
 
@@ -760,8 +851,9 @@ mod tests {
             pr: false,
             labels: Vec::new(),
             option: Some(option.into()),
+            priority: None,
         };
-        board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
+        board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], priority_field: "PF".into(), priority_options: vec![col("p1", "High")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
     }
 
     #[test]
@@ -849,6 +941,33 @@ mod tests {
         a.palette = Some(ito_palette::View::new());
         assert!(a.feed('q'));
         assert!(!a.quit);
+    }
+
+    #[test]
+    fn alt_s_picks_a_status_for_an_item_in_the_project() {
+        let mut a = with_pr();
+        a.board = Some(board_with_two_cards());
+        a.board.as_mut().unwrap().cards[0].id = a.items[0].id.clone();
+        a.feed('r');
+        a.outbox.clear();
+        a.open_field_picker(false);
+        let c = a.compose.as_mut().unwrap();
+        let (kind, pk) = c.picker.as_mut().unwrap();
+        assert_eq!(*kind, Pick::Status);
+        pk.step(true);
+        pk.toggle();
+        a.apply_pick();
+        assert!(a.outbox[0].key.starts_with("board:I1:"));
+        assert_eq!(a.board.as_ref().unwrap().cards[0].option.as_deref(), Some("o2"));
+    }
+
+    #[test]
+    fn alt_p_says_so_when_the_item_is_not_in_the_project() {
+        let mut a = with_pr();
+        a.board = Some(board_with_two_cards());
+        a.feed('r');
+        a.open_field_picker(true);
+        assert!(a.compose.as_ref().unwrap().picker.is_none() && a.toast.is_some());
     }
 
     #[test]
@@ -1010,5 +1129,54 @@ mod tests {
         c.picker = Some((Pick::Labels, pk));
         a.apply_pick();
         assert!(a.outbox[0].key.ends_with(":labels"));
+    }
+
+    fn with_detail(a: &mut App, yaml: &str) {
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Bad, None)];
+        a.acts.col = actions::Col::Runs;
+        let job = |id, name: &str, status| actions::Job { id, name: name.into(), status, started_at: String::new(), completed_at: String::new(), url: String::new() };
+        a.run_detail = Some(RunDetail { id: 1, jobs: Some(vec![job(10, "lint", actions::Status::Ok), job(11, "Test (linux)", actions::Status::Bad)]), workflow: Some(workflow::parse(yaml)), ..Default::default() });
+    }
+
+    #[test]
+    fn d_opens_the_form_when_the_workflow_has_inputs_and_sends_them() {
+        let mut a = app();
+        with_detail(&mut a, "on:
+  workflow_dispatch:
+    inputs:
+      who:
+        required: true
+jobs:
+  lint:
+    runs-on: x
+");
+        a.feed('D');
+        assert!(matches!(a.overlay, Some(Overlay::Form(_))));
+        assert!(a.outbox.is_empty());
+        a.overlay_key(K::Send);
+        assert!(a.overlay.is_some() && a.outbox.is_empty());
+        a.overlay_key(K::Char('x'));
+        a.overlay_key(K::Send);
+        assert!(a.overlay.is_none());
+        let Call::Send { body, .. } = &a.outbox[0].call else { panic!() };
+        assert!(body.contains("\"inputs\"") && body.contains("\"who\":\"x\""), "{body}");
+    }
+
+    #[test]
+    fn d_starts_at_once_without_inputs_and_l_opens_the_failed_log() {
+        let mut a = app();
+        with_detail(&mut a, "jobs:
+  lint:
+    runs-on: x
+");
+        a.feed('D');
+        assert!(a.overlay.is_none());
+        assert_eq!(a.outbox.len(), 1);
+        a.feed('L');
+        let Some(Overlay::Log(l)) = &a.overlay else { panic!() };
+        assert_eq!(l.job_id, 11);
+        assert_eq!(a.outbox[1].key, "a-log:11");
+        assert!(a.escape() && a.overlay.is_none());
     }
 }

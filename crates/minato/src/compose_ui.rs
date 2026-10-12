@@ -65,10 +65,16 @@ fn compose(ui: &mut Ui, app: &mut App) {
     let id = Id::new("minato-compose");
     let mut act = Act::Stay;
     if c.picker.is_some() {
-        picker(&ctx, &p, &mut c, field, &mut act, [app.tr("pick.loading"), app.tr("pick.labels"), app.tr("pick.assignees")]);
+        let title = match c.picker.as_ref().map(|(k, _)| *k) {
+            Some(Pick::Labels) => app.tr("pick.labels"),
+            Some(Pick::Assignees) => app.tr("pick.assignees"),
+            Some(Pick::Status) => app.tr("pick.status"),
+            _ => app.tr("pick.priority"),
+        };
+        picker(&ctx, &p, &mut c, field, &mut act, [app.tr("pick.loading"), title]);
     } else {
         // The shortcuts go first, so the field never sees them.
-        let (send_close, send, preview, bold, italic, key_link, labels, people, esc) = ctx.input_mut(|i| {
+        let (send_close, send, preview, bold, italic, key_link, labels, people, status, priority, esc) = ctx.input_mut(|i| {
             (
                 i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Enter),
                 i.consume_key(Modifiers::COMMAND, Key::Enter),
@@ -78,6 +84,8 @@ fn compose(ui: &mut Ui, app: &mut App) {
                 i.consume_key(Modifiers::COMMAND, Key::K),
                 i.consume_key(Modifiers::ALT, Key::L),
                 i.consume_key(Modifiers::ALT, Key::A),
+                i.consume_key(Modifiers::ALT, Key::S),
+                i.consume_key(Modifiers::ALT, Key::P),
                 i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
@@ -91,6 +99,10 @@ fn compose(ui: &mut Ui, app: &mut App) {
             }
         } else if preview {
             c.preview = !c.preview;
+        } else if status || priority {
+            app.compose = Some(c);
+            app.open_field_picker(priority);
+            c = app.compose.take().expect("the box is still open");
         } else if labels || people {
             let (kind, options, chosen) = if labels {
                 (Pick::Labels, c.labels.clone(), item.as_ref().map(|i| i.labels.iter().map(|l| l.name.clone()).collect()).unwrap_or_default())
@@ -137,10 +149,10 @@ fn compose(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// The picker. `words` are loading, labels, assignees.
-fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, act: &mut Act, words: [&str; 3]) {
+/// The picker. `words` are loading and the title.
+fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, act: &mut Act, words: [&str; 2]) {
     let colors = ito_theme::colors();
-    let Some((kind, pk)) = c.picker.as_mut() else { return };
+    let Some((_, pk)) = c.picker.as_mut() else { return };
     let events = ctx.input_mut(|i| std::mem::take(&mut i.events));
     for e in events {
         match e {
@@ -153,7 +165,7 @@ fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, 
             _ => {}
         }
     }
-    let word = if *kind == Pick::Labels { words[1] } else { words[2] };
+    let word = words[1];
     p.text(pos2(field.left(), field.top() + 10.0), Align2::LEFT_CENTER, format!("{word}  /  {}", pk.query), FontId::proportional(13.0), ACCENT);
     let body = Rect::from_min_max(pos2(field.left(), field.top() + 26.0), field.max);
     if pk.options.is_empty() {
@@ -168,7 +180,12 @@ fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, 
         if k == pk.cursor {
             p.rect_filled(row, 0.0, ACCENT.gamma_multiply(0.16));
         }
-        let mark = if pk.is_chosen(name) { "[x]" } else { "[ ]" };
+        let mark = match (pk.single, pk.is_chosen(name)) {
+            (true, true) => "(o)",
+            (true, false) => "( )",
+            (false, true) => "[x]",
+            (false, false) => "[ ]",
+        };
         p.text(pos2(row.left() + 6.0, row.center().y), Align2::LEFT_CENTER, format!("{mark}  {name}"), FontId::monospace(12.0), colors.fg);
     }
 }

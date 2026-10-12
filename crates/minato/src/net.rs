@@ -8,6 +8,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use minato_core::actions::{self, Run};
 use minato_core::board;
 use minato_core::notes;
+use minato_core::workflow;
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
@@ -18,6 +19,7 @@ use minato_core::github::{Client, Rate, Token, UreqTransport};
 use minato_core::list::Item;
 
 use crate::app::App;
+use crate::overlay::Overlay;
 
 /// How often the rate limit is asked while plenty is left.
 const POLL: Duration = Duration::from_secs(60);
@@ -206,9 +208,9 @@ impl Net {
                         k if k.starts_with("a-jobs:") || k.starts_with("a-arts:") => {
                             let jobs = k.starts_with("a-jobs:");
                             let id: u64 = k[7..].parse().unwrap_or(0);
-                            let d = app.run_detail.get_or_insert(crate::app::RunDetail { id, jobs: None, artifacts: None });
+                            let d = app.run_detail.get_or_insert(crate::app::RunDetail { id, ..Default::default() });
                             if d.id != id {
-                                *d = crate::app::RunDetail { id, jobs: None, artifacts: None };
+                                *d = crate::app::RunDetail { id, ..Default::default() };
                             }
                             if jobs {
                                 match actions::parse_jobs(&f.body) {
@@ -219,6 +221,26 @@ impl Net {
                                 match actions::parse_artifacts(&f.body) {
                                     Ok(v) => d.artifacts = Some(v),
                                     Err(e) => app.say(e),
+                                }
+                            }
+                        }
+                        k if k.starts_with("a-yaml:") => {
+                            let id: u64 = k[7..].parse().unwrap_or(0);
+                            let d = app.run_detail.get_or_insert(crate::app::RunDetail { id, ..Default::default() });
+                            if d.id != id {
+                                *d = crate::app::RunDetail { id, ..Default::default() };
+                            }
+                            // A workflow that cannot be read just has no graph.
+                            if let Ok(text) = workflow::parse_contents(&f.body) {
+                                d.workflow = Some(workflow::parse(&text));
+                            }
+                        }
+                        k if k.starts_with("a-log:") => {
+                            let id: u64 = k[6..].parse().unwrap_or(0);
+                            if let Some(Overlay::Log(l)) = app.overlay.as_mut() {
+                                if l.job_id == id {
+                                    l.scroll = 0;
+                                    l.lines = Some(workflow::log_tail(&f.body, 400));
                                 }
                             }
                         }
@@ -240,6 +262,13 @@ impl Net {
                 }
                 Err(e) => {
                     self.pending.remove(&reply.key);
+                    if let Some(id) = reply.key.strip_prefix("a-log:").and_then(|n| n.parse::<u64>().ok()) {
+                        if let Some(Overlay::Log(l)) = app.overlay.as_mut() {
+                            if l.job_id == id {
+                                l.lines = Some(vec![e.clone()]);
+                            }
+                        }
+                    }
                     if reply.key.starts_with("board:") {
                         self.next_board = Instant::now();
                     }
@@ -300,6 +329,9 @@ impl Net {
                 if let Some(r) = &run {
                     worker.send(Job { key: format!("a-jobs:{}", r.id), call: Call::Get(actions::jobs_path(r)) });
                     worker.send(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
+                    if let Some(path) = workflow::contents_path(r) {
+                        worker.send(Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
+                    }
                 }
                 self.asked_run = want;
             }

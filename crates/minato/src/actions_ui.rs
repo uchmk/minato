@@ -253,13 +253,18 @@ fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
     y += 4.0;
     match have.and_then(|d| d.jobs.as_ref()) {
         None => block(&mut y, app.tr("detail.fetching").to_string(), FontId::proportional(12.0), c.dim),
-        Some(jobs) => {
-            for j in jobs {
-                let d = j.seconds(now).map(actions::duration).unwrap_or_default();
-                block(&mut y, format!("{} {}   {d}", j.status.mark(), j.name), FontId::proportional(12.5), tone(j.status));
-                y += 2.0;
+        Some(jobs) => match have.and_then(|d| d.workflow.as_ref()).filter(|w| w.layers().iter().all(|&l| l < MAX_COLS) && w.jobs.iter().any(|j| !j.needs.is_empty())) {
+            Some(wf) => y += graph(&p, jobs, wf, pos2(x, y), w, now),
+            None => {
+                for j in jobs {
+                    let d = j.seconds(now).map(actions::duration).unwrap_or_default();
+                    let after = have.and_then(|d| d.workflow.as_ref()).and_then(|wf| wf.source_of(j).map(|k| wf.jobs[k].needs.join(", "))).filter(|n| !n.is_empty());
+                    let needs = after.map(|n| format!("   ← {n}")).unwrap_or_default();
+                    block(&mut y, format!("{} {}   {d}{needs}", j.status.mark(), j.name), FontId::proportional(12.5), tone(j.status));
+                    y += 2.0;
+                }
             }
-        }
+        },
     }
     y += 12.0;
     // The last ten results, newest at the left.
@@ -287,4 +292,53 @@ fn detail_col(ui: &mut Ui, app: &App, r: Rect) {
             y += 2.0;
         }
     }
+}
+
+/// Most columns the `needs:` graph is drawn with; deeper workflows are listed.
+const MAX_COLS: usize = 4;
+const BOX_H: f32 = 36.0;
+const BOX_GAP: f32 = 8.0;
+const COL_GAP: f32 = 18.0;
+
+/// The jobs as boxes in columns by how deep their `needs:` go, joined by
+/// lines. Returns the height used.
+fn graph(p: &egui::Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::workflow::Workflow, at: egui::Pos2, w: f32, now: i64) -> f32 {
+    let c = ito_theme::colors();
+    let layers = wf.layers();
+    let src: Vec<Option<usize>> = jobs.iter().map(|j| wf.source_of(j)).collect();
+    let col_of = |k: usize| src[k].map_or(0, |s| layers[s]);
+    let cols = (0..jobs.len()).map(col_of).max().unwrap_or(0) + 1;
+    let bw = (w - COL_GAP * (cols - 1) as f32) / cols as f32;
+    let mut rows = vec![0usize; cols];
+    let mut rect = Vec::with_capacity(jobs.len());
+    for k in 0..jobs.len() {
+        let col = col_of(k);
+        let r = Rect::from_min_size(pos2(at.x + col as f32 * (bw + COL_GAP), at.y + rows[col] as f32 * (BOX_H + BOX_GAP)), vec2(bw, BOX_H));
+        rows[col] += 1;
+        rect.push(r);
+    }
+    for (k, s) in src.iter().enumerate() {
+        let Some(s) = s else { continue };
+        for need in &wf.jobs[*s].needs {
+            let Some(from) = wf.jobs.iter().position(|j| &j.key == need) else { continue };
+            for (m, r) in rect.iter().enumerate() {
+                if src[m] == Some(from) {
+                    let (a, b) = (r.right_center(), rect[k].left_center());
+                    let mid = a.x + (b.x - a.x) / 2.0;
+                    p.add(egui::Shape::line(vec![a, pos2(mid, a.y), pos2(mid, b.y), b], Stroke::new(1.0, c.dim)));
+                }
+            }
+        }
+    }
+    for (job, r) in jobs.iter().zip(&rect) {
+        let t = tone(job.status);
+        p.rect_filled(*r, CornerRadius::same(5), t.gamma_multiply(0.16));
+        p.rect_stroke(*r, CornerRadius::same(5), Stroke::new(1.0, t), egui::StrokeKind::Inside);
+        let clip = p.with_clip_rect(r.shrink(3.0));
+        clip.text(pos2(r.left() + 7.0, r.top() + 12.0), Align2::LEFT_CENTER, format!("{} {}", job.status.mark(), job.name), FontId::proportional(11.5), c.fg);
+        let d = job.seconds(now).map(actions::duration).unwrap_or_default();
+        clip.text(pos2(r.left() + 7.0, r.top() + 27.0), Align2::LEFT_CENTER, d, FontId::monospace(10.5), c.dim);
+    }
+    let deepest = rows.iter().copied().max().unwrap_or(0);
+    deepest as f32 * (BOX_H + BOX_GAP)
 }

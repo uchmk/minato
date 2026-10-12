@@ -75,6 +75,9 @@
 - [ ] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
 - [ ] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
 - [ ] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
+- [ ] **8.5a** In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` → A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project
+- [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project
+- [ ] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
 - [ ] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
 - [ ] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
 - [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
@@ -120,3 +123,16 @@
 - [ ] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
 - [ ] **11.8** Type `board`, press `Enter` → The Board view opens
 - [ ] **11.9** Press `Esc`, and `Ctrl+Shift+P` twice → The palette closes; the second press closes it again
+
+## 12. Dispatch form, job log and needs graph
+
+- [ ] **12.1** In Actions, open a run of a workflow whose YAML has `needs:` → The jobs are drawn as boxes in columns by depth, joined by lines, coloured by result with the time under the name
+- [ ] **12.2** Open a run of a workflow with no `needs:` or five or more levels → The jobs are listed instead, with `← needs` where it applies
+- [ ] **12.3** Press `D` on a run whose workflow has `workflow_dispatch` inputs → A form lists the inputs with their descriptions, defaults and `*` for required
+- [ ] **12.4** `Up`/`Down` to move, type into a text input, `Enter`/`Space` on a boolean or choice → Text is typed; booleans and choices change; `Tab` moves down
+- [ ] **12.5** Press `Ctrl+Enter` with a required input empty → A toast says a value is needed; the form stays
+- [ ] **12.6** Fill the inputs and press `Ctrl+Enter` → The form closes, a toast says the workflow started, and a new run with those inputs appears on GitHub
+- [ ] **12.7** Press `D` on a workflow without inputs → The workflow starts at once, as before
+- [ ] **12.8** Press `Esc` in the form → It closes and nothing starts
+- [ ] **12.9** Press `L` on a failed run → A panel shows the failed job's log from a few lines before the first error, errors in red
+- [ ] **12.10** `j`/`k`/`Space`/`PageUp`/`g`/`G` in the log, then `Esc` → The log scrolls with no scrollbar; `Esc` closes it

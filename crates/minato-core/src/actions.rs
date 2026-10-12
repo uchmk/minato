@@ -77,6 +77,10 @@ pub struct Run {
     pub url: String,
     /// The pull request the run belongs to, if any.
     pub pr: Option<u64>,
+    /// The workflow file, e.g. `.github/workflows/ci.yml`.
+    pub path: String,
+    /// The whole commit id (`sha` is its first 7 characters).
+    pub head_sha: String,
 }
 
 impl Run {
@@ -177,6 +181,8 @@ pub fn parse_runs(body: &str) -> Result<Vec<Run>, String> {
                 updated_at: text(r, "updated_at"),
                 url: text(r, "html_url"),
                 pr: r.pointer("/pull_requests/0/number").and_then(Value::as_u64),
+                path: text(r, "path"),
+                head_sha: text(r, "head_sha"),
             }
         })
         .collect())
@@ -233,6 +239,12 @@ pub fn cancel(run: &Run) -> Call {
 /// Start the run's workflow by hand on the run's branch (no inputs).
 pub fn dispatch(run: &Run) -> Call {
     post(format!("/repos/{}/actions/workflows/{}/dispatches", run.repo, run.workflow_id), json!({ "ref": run.branch }))
+}
+
+/// Start the run's workflow on the run's branch with the given inputs.
+pub fn dispatch_with(run: &Run, inputs: &[(String, String)]) -> Call {
+    let map: serde_json::Map<String, Value> = inputs.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
+    post(format!("/repos/{}/actions/workflows/{}/dispatches", run.repo, run.workflow_id), json!({ "ref": run.branch, "inputs": map }))
 }
 
 /// The page of the pull request a run belongs to.

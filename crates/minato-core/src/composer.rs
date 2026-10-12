@@ -96,13 +96,19 @@ pub struct Picker {
     pub options: Vec<String>,
     pub chosen: Vec<String>,
     original: Vec<String>,
+    /// Ticking a name unticks the others (a Project's single-select field).
+    pub single: bool,
     pub query: String,
     pub cursor: usize,
 }
 
 impl Picker {
     pub fn new(options: Vec<String>, chosen: Vec<String>) -> Self {
-        Self { options, original: chosen.clone(), chosen, query: String::new(), cursor: 0 }
+        Self { options, original: chosen.clone(), chosen, single: false, query: String::new(), cursor: 0 }
+    }
+
+    pub fn single(options: Vec<String>, chosen: Vec<String>) -> Self {
+        Self { single: true, ..Self::new(options, chosen) }
     }
 
     /// The options that contain the query, ignoring case.
@@ -132,6 +138,10 @@ impl Picker {
     /// Tick or untick the name under the cursor.
     pub fn toggle(&mut self) {
         let Some(name) = self.shown().get(self.cursor).map(|s| s.to_string()) else { return };
+        if self.single {
+            self.chosen = vec![name];
+            return;
+        }
         match self.chosen.iter().position(|c| *c == name) {
             Some(i) => {
                 self.chosen.remove(i);

@@ -16,6 +16,8 @@ mod inbox_ui;
 mod list_ui;
 mod notes_ui;
 mod net;
+mod overlay;
+mod overlay_ui;
 mod prefs;
 mod settings;
 mod ui;
@@ -49,6 +51,12 @@ impl Minato {
         for e in events {
             if self.app.compose.is_some() || self.app.palette.is_some() {
                 break;
+            }
+            if self.app.overlay.is_some() {
+                for k in overlay_keys(&e) {
+                    self.app.overlay_key(k);
+                }
+                continue;
             }
             match e {
                 egui::Event::Key { key: egui::Key::Escape, pressed: true, .. } => {
@@ -113,6 +121,7 @@ impl eframe::App for Minato {
                 self.app.mode = Mode::Settings;
             }
             compose_ui::show(ui, &mut self.app);
+            overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }
         if let Some(url) = self.app.open_url.take() {
@@ -126,6 +135,30 @@ impl eframe::App for Minato {
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         ito_theme::colors().bg.to_normalized_gamma_f32()
+    }
+}
+
+/// An input event as the Actions boxes see it.
+fn overlay_keys(e: &egui::Event) -> Vec<overlay::K> {
+    use egui::Key;
+    use overlay::K;
+    match e {
+        egui::Event::Key { key, pressed: true, modifiers, .. } => vec![match key {
+            Key::Escape => K::Esc,
+            Key::Enter if modifiers.command => K::Send,
+            Key::Enter => K::Enter,
+            Key::ArrowUp => K::Up,
+            Key::ArrowDown => K::Down,
+            Key::ArrowLeft => K::Left,
+            Key::ArrowRight => K::Right,
+            Key::PageUp => K::PageUp,
+            Key::PageDown => K::PageDown,
+            Key::Backspace => K::Back,
+            Key::Tab => K::Down,
+            _ => return Vec::new(),
+        }],
+        egui::Event::Text(t) => t.chars().map(K::Char).collect(),
+        _ => Vec::new(),
     }
 }
 

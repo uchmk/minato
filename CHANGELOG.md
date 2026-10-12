@@ -2,6 +2,16 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.9.0] - 2026-10-12
+
+### Added
+
+- Actions: `D` は、workflow の `workflow_dispatch` に `inputs:` があれば入力の欄（文字・真偽・選択、必須は `*`）を開く。`Ctrl+Enter` で開始、`Esc` で取りやめ。無ければ前どおりすぐ走らせる。
+- Actions: `L` で失敗したジョブのログをアプリの中に出す（最初の `##[error]` の少し前から）。`j` `k` `Space` `g` `G` で動き、`Esc` で閉じる。
+- Actions: 実行の詳細に、ジョブを `needs:` の深さで列に並べた図を出す（結果の色・時間つき、線でつなぐ）。YAML はその実行のコミットから取る。読めない・深すぎるときは一覧に `← needs` を付ける。
+- 書き込みの箱に `Alt+S`（Status）と `Alt+P`（Priority）: Project の選択肢から 1 つ選ぶと GitHub の Project に書く。Project に無い項目には「Project にありません」と出す。
+- コア: 小さな YAML の読み取り（`workflow.rs`）、base64、ログの抜き出しと、それぞれの試験。
+
 ## [0.8.0] - 2026-10-12
 
 ### Added

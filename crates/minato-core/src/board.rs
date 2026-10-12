@@ -17,9 +17,9 @@ pub fn query() -> String {
 ... on PullRequest { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
     format!(
         "query {{ viewer {{ projectsV2(first: 20) {{ nodes {{ id title \
-field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
+field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} priority: field(name: \"Priority\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
 items(first: 100) {{ nodes {{ id content {{ {content} }} \
-fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }} }}"
+fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }} }}"
     )
 }
 
@@ -37,6 +37,8 @@ pub struct Card {
     pub labels: Vec<Label>,
     /// The Status option it stands in, if any.
     pub option: Option<String>,
+    /// The Priority option it stands in, if the Project has that field.
+    pub priority: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,6 +54,9 @@ pub struct Project {
     pub title: String,
     pub field: String,
     pub options: Vec<Column>,
+    /// The Priority field's id and options (empty when there is none).
+    pub priority_field: String,
+    pub priority_options: Vec<Column>,
     pub cards: Vec<Card>,
 }
 
@@ -75,6 +80,11 @@ pub fn parse(body: &str) -> Result<Project, String> {
         .and_then(Value::as_array)
         .map(|a| a.iter().map(|o| Column { option: Some(text(o, "/id")), name: text(o, "/name") }).collect())
         .unwrap_or_default();
+    let priority_options = p
+        .pointer("/priority/options")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|o| Column { option: Some(text(o, "/id")), name: text(o, "/name") }).collect())
+        .unwrap_or_default();
     let cards = p
         .pointer("/items/nodes")
         .and_then(Value::as_array)
@@ -95,11 +105,12 @@ pub fn parse(body: &str) -> Result<Project, String> {
                         .map(|l| l.iter().map(|l| Label { name: text(l, "/name"), color: text(l, "/color") }).collect())
                         .unwrap_or_default(),
                     option: Some(text(i, "/fieldValueByName/optionId")).filter(|s| !s.is_empty()),
+                    priority: Some(text(i, "/priority/optionId")).filter(|s| !s.is_empty()),
                 })
                 .collect()
         })
         .unwrap_or_default();
-    Ok(Project { id: text(p, "/id"), title: text(p, "/title"), field, options, cards })
+    Ok(Project { id: text(p, "/id"), title: text(p, "/title"), field, options, priority_field: text(p, "/priority/id"), priority_options, cards })
 }
 
 impl Project {
@@ -133,6 +144,31 @@ impl Project {
     /// The column a card stands in.
     pub fn column_of(&self, card: usize) -> Option<usize> {
         (0..self.columns().len()).find(|&c| self.in_column(c).contains(&card))
+    }
+
+    /// The card of an issue or PR (by node id).
+    pub fn card_of(&self, id: &str) -> Option<usize> {
+        self.cards.iter().position(|c| c.id == id)
+    }
+
+    /// The names of a field's options, and the one a card stands in.
+    pub fn choices(&self, card: usize, priority: bool) -> (Vec<String>, Vec<String>) {
+        let (opts, cur) = if priority { (&self.priority_options, self.cards.get(card).and_then(|c| c.priority.as_ref())) } else { (&self.options, self.cards.get(card).and_then(|c| c.option.as_ref())) };
+        let names = opts.iter().map(|o| o.name.clone()).collect();
+        let chosen = opts.iter().filter(|o| o.option.as_ref() == cur).map(|o| o.name.clone()).collect();
+        (names, chosen)
+    }
+
+    /// Set a card's Status or Priority by option name; the write for GitHub.
+    pub fn set_by_name(&mut self, card: usize, priority: bool, name: &str) -> Option<Call> {
+        let opts = if priority { &self.priority_options } else { &self.options };
+        let option = opts.iter().find(|o| o.name == name)?.option.clone()?;
+        if !priority {
+            return self.set_option(card, &option);
+        }
+        let k = self.cards.get_mut(card)?;
+        k.priority = Some(option.clone());
+        Some(project_field(&self.id, &k.item, &self.priority_field, &option))
     }
 
     /// Set a card's option and return the write that tells GitHub.
@@ -240,6 +276,22 @@ mod tests {
     fn errors_and_missing_fields_are_reported() {
         assert_eq!(parse(r#"{"errors":[{"message":"Your token has not been granted the required scopes"}]}"#), Err("Your token has not been granted the required scopes".into()));
         assert!(parse(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
+    }
+
+    #[test]
+    fn priority_is_read_and_set_by_name() {
+        let body = BODY.replace(r#""field":{"id":"F1","#, r#""priority":{"id":"PF","options":[{"id":"p1","name":"High"},{"id":"p2","name":"Low"}]},"field":{"id":"F1","#).replace(r#""fieldValueByName":{"optionId":"o1"}},
+        {"id":"I2""#, r#""fieldValueByName":{"optionId":"o1"},"priority":{"optionId":"p2"}},
+        {"id":"I2""#);
+        let mut p = parse(&body).unwrap();
+        assert_eq!(p.card_of("N1"), Some(0));
+        assert_eq!(p.choices(0, true), (vec!["High".to_string(), "Low".to_string()], vec!["Low".to_string()]));
+        let Some(Call::Graphql { variables, .. }) = p.set_by_name(0, true, "High") else { panic!() };
+        assert!(variables.contains("PF") && variables.contains("p1"));
+        assert_eq!(p.cards[0].priority.as_deref(), Some("p1"));
+        assert!(p.set_by_name(0, true, "Nope").is_none());
+        assert!(p.set_by_name(0, false, "Done").is_some());
+        assert_eq!(p.cards[0].option.as_deref(), Some("o3"));
     }
 
     #[test]
