@@ -30,7 +30,7 @@ use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
-use minato_core::github::write::parse_names;
+use minato_core::github::write::{self, parse_names};
 use minato_core::github::{client, Client, Etags, Rate, Token, UreqTransport};
 
 use minato_core::list::Item;
@@ -223,6 +223,16 @@ impl Net {
         }
     }
 
+    /// A list for the writing box did not come: asked again on the next
+    /// look; said only when the box is open on its repository (it may have
+    /// been read ahead).
+    fn list_failed(&self, app: &mut App, repo: &str, e: String) {
+        app.lists_failed(repo);
+        if app.composing_in(repo) {
+            app.say(e);
+        }
+    }
+
     /// The owner the settings name, when it is not the viewer.
     fn other(&self) -> Option<&str> {
         self.scope.as_ref().map(|s| s.0.as_str()).filter(|o| !o.is_empty())
@@ -325,29 +335,17 @@ impl Net {
             k if k.starts_with("labels:") || k.starts_with("people:") => {
                 let labels = k.starts_with("labels:");
                 let repo = &k[7..];
-                let names = parse_names(body, if labels { "name" } else { "login" });
-                let open = app.compose.as_ref().and_then(|c| app.items.iter().find(|i| i.id == c.id)).is_some_and(|i| i.repo == repo);
-                match (names, open) {
-                    (Ok(v), true) => {
-                        if let Some(c) = app.compose.as_mut() {
-                            *(if labels { &mut c.labels } else { &mut c.people }) = v;
-                        }
-                    }
-                    (Err(e), true) => app.say(e),
-                    _ => {}
+                match parse_names(body, if labels { "name" } else { "login" }) {
+                    Ok(v) if labels => app.got_lists(repo, |l| l.labels = v),
+                    Ok(v) => app.got_lists(repo, |l| l.people = v),
+                    Err(e) => self.list_failed(app, repo, e),
                 }
             }
             k if k.starts_with("miles:") => {
                 let repo = &k[6..];
-                let open = app.compose.as_ref().and_then(|c| app.items.iter().find(|i| i.id == c.id)).is_some_and(|i| i.repo == repo);
-                match (minato_core::github::write::parse_milestones(body), open) {
-                    (Ok(v), true) => {
-                        if let Some(c) = app.compose.as_mut() {
-                            c.milestones = v;
-                        }
-                    }
-                    (Err(e), true) => app.say(e),
-                    _ => {}
+                match minato_core::github::write::parse_milestones(body) {
+                    Ok(v) => app.got_lists(repo, |l| l.milestones = v),
+                    Err(e) => self.list_failed(app, repo, e),
                 }
             }
             "notes" => match notes::parse(body) {
@@ -655,6 +653,10 @@ impl Net {
                 Err(_) if ahead => {}
                 Err(e) => {
                     self.pending.remove(&reply.key);
+                    if let Some(repo) = list_repo(&reply.key) {
+                        self.list_failed(app, repo, e);
+                        continue;
+                    }
                     if let Some(id) = reply.key.strip_prefix("a-log:").and_then(|n| n.parse::<u64>().ok()) {
                         if let Some(Overlay::Log(l)) = app.overlay.as_mut() {
                             if l.job_id == id {
@@ -709,6 +711,12 @@ impl Net {
                 if !fresh {
                     let vars = format!("{{\"id\":{}}}", json_str(id));
                     quick.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
+                }
+                // The writing box's lists are read ahead, after the detail:
+                // `r` then opens with them.
+                let repo = app.selected().map(|i| i.repo.clone()).unwrap_or_default();
+                for (key, call) in app.ask_lists(&repo) {
+                    quick.send(Job { key, call });
                 }
             }
             self.asked = want;
@@ -840,7 +848,7 @@ fn cached(key: &str, narrowed: bool) -> bool {
     match key {
         "items" => !narrowed,
         "me" | "discussions" | "mentions" | "mainci" | "notes" | "board-pick" | "a-repos" => true,
-        k => k.starts_with("a-runs:"),
+        k => k.starts_with("a-runs:") || list_repo(k).is_some(),
     }
 }
 
@@ -872,8 +880,16 @@ fn rest_path(key: &str, other: Option<&str>) -> Option<String> {
         "me" => Some("/user".into()),
         "notes" => Some(notes::PATH.into()),
         "a-repos" => Some(actions::repos_path(other)),
+        k if k.starts_with("labels:") => list_repo(k).map(write::labels_path),
+        k if k.starts_with("people:") => list_repo(k).map(write::assignees_path),
+        k if k.starts_with("miles:") => list_repo(k).map(write::milestones_path),
         k => k.strip_prefix("a-runs:").map(actions::runs_path),
     }
+}
+
+/// The repository of a key asking for a list for the writing box.
+fn list_repo(key: &str) -> Option<&str> {
+    ["labels:", "people:", "miles:"].iter().find_map(|p| key.strip_prefix(p))
 }
 
 /// Whether `key` is for a run's jobs, artifacts or workflow.
@@ -930,5 +946,13 @@ mod tests {
         assert_ne!(scope_line(None), scope_line(Some(&("rust-lang".into(), "uchmk".into()))));
         assert!(scoped("a-runs:o/r") && scoped("board") && !scoped("detail:x") && !scoped("notes"));
         assert_eq!(rest_path("a-repos", Some("o")).as_deref(), Some("/users/o/repos?type=owner&sort=pushed&per_page=12"));
+    }
+
+    #[test]
+    fn the_writing_boxs_lists_are_kept_with_their_etags() {
+        assert_eq!(list_repo("people:o/r"), Some("o/r"));
+        assert_eq!(list_repo("detail:x"), None);
+        assert!(cached("labels:o/r", true) && cached("miles:o/r", false) && !scoped("people:o/r"));
+        assert_eq!(rest_path("people:o/r", None).as_deref(), Some("/repos/o/r/assignees?per_page=100"));
     }
 }

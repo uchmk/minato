@@ -327,6 +327,11 @@ pub struct App {
     /// What was written in the box on an item and left there (by a click
     /// elsewhere or Esc), by node id; it comes back when the box opens again.
     pub drafts: HashMap<String, String>,
+    /// Each repository's lists for the writing box, by `owner/name`, as
+    /// GitHub last said (kept across the box's openings and in the cache).
+    pub lists: HashMap<String, Lists>,
+    /// When each repository's lists were last asked for.
+    lists_asked: HashMap<String, Instant>,
     state_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The item (node id) a merge waits to be confirmed for.
     pub confirm: Option<String>,
@@ -426,6 +431,18 @@ fn writer(path: std::path::PathBuf) -> std::sync::mpsc::Sender<String> {
     tx
 }
 
+/// How long a repository's lists for the writing box are not asked again.
+const LISTS_AGE: Duration = Duration::from_secs(600);
+
+/// A repository's labels, assignable people and open milestones
+/// (`(number, title)`).
+#[derive(Clone, Debug, Default)]
+pub struct Lists {
+    pub labels: Vec<String>,
+    pub people: Vec<String>,
+    pub milestones: Vec<(u64, String)>,
+}
+
 /// The writing box: a comment on one item, with the labels and the
 /// assignees to change from the same place.
 pub struct Compose {
@@ -480,6 +497,8 @@ impl App {
             browser_w: None,
             compose: None,
             drafts: HashMap::new(),
+            lists: HashMap::new(),
+            lists_asked: HashMap::new(),
             state_tx: None,
             confirm: None,
             confirm_act: Confirm::Merge,
@@ -1332,19 +1351,68 @@ impl App {
         Some(item)
     }
 
-    /// `r`: open the writing box on the selected item and ask for the
-    /// repository's labels and people.
+    /// `r`: open the writing box on the selected item with the repository's
+    /// labels and people known so far, and ask for them unless just asked.
     pub fn open_compose(&mut self) {
         let Some(item) = self.writable() else { return };
         if self.compose.as_ref().is_some_and(|c| c.id == item.id) {
             return;
         }
         self.close_compose();
-        self.queue(&format!("labels:{}", item.repo), Call::Get(write::labels_path(&item.repo)), None);
-        self.queue(&format!("people:{}", item.repo), Call::Get(write::assignees_path(&item.repo)), None);
-        self.queue(&format!("miles:{}", item.repo), Call::Get(write::milestones_path(&item.repo)), None);
+        for (key, call) in self.ask_lists(&item.repo) {
+            self.queue(&key, call, None);
+        }
         let text = self.drafts.remove(&item.id).unwrap_or_default();
-        self.compose = Some(Compose { id: item.id, text, preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), tool: None });
+        let Lists { labels, people, milestones } = self.lists.get(&item.repo).cloned().unwrap_or_default();
+        self.compose = Some(Compose { id: item.id, text, preview: false, picker: None, labels, people, milestones, tool: None });
+    }
+
+    /// The jobs that ask for `repo`'s labels, people and milestones, unless
+    /// they were asked in the last [`LISTS_AGE`] (they are then marked asked).
+    pub fn ask_lists(&mut self, repo: &str) -> Vec<(String, Call)> {
+        let now = Instant::now();
+        if repo.is_empty() || self.lists_asked.get(repo).is_some_and(|t| now.duration_since(*t) < LISTS_AGE) {
+            return Vec::new();
+        }
+        self.lists_asked.insert(repo.to_string(), now);
+        vec![
+            (format!("labels:{repo}"), Call::Get(write::labels_path(repo))),
+            (format!("people:{repo}"), Call::Get(write::assignees_path(repo))),
+            (format!("miles:{repo}"), Call::Get(write::milestones_path(repo))),
+        ]
+    }
+
+    /// A list of `repo`'s did not come: the next look asks again.
+    pub fn lists_failed(&mut self, repo: &str) {
+        self.lists_asked.remove(repo);
+    }
+
+    /// Whether the writing box is open on an item of `repo`.
+    pub fn composing_in(&self, repo: &str) -> bool {
+        self.compose.as_ref().and_then(|c| self.items.iter().find(|i| i.id == c.id)).is_some_and(|i| i.repo == repo)
+    }
+
+    /// One of `repo`'s lists came (`set` puts it in): kept, and given to the
+    /// box open on the repository and to its picker, which may have opened
+    /// while the list was on its way.
+    pub fn got_lists(&mut self, repo: &str, set: impl FnOnce(&mut Lists)) {
+        let lists = self.lists.entry(repo.to_string()).or_default();
+        set(lists);
+        let Lists { labels, people, milestones } = lists.clone();
+        if !self.composing_in(repo) {
+            return;
+        }
+        let Some(c) = self.compose.as_mut() else { return };
+        (c.labels, c.people, c.milestones) = (labels, people, milestones);
+        if let Some((kind, pk)) = c.picker.as_mut() {
+            pk.options = match kind {
+                Pick::Labels => c.labels.clone(),
+                Pick::Assignees | Pick::Reviewers => c.people.clone(),
+                Pick::Milestone => c.milestones.iter().map(|(_, t)| t.clone()).collect(),
+                _ => return,
+            };
+            pk.cursor = pk.cursor.min(pk.shown().len().saturating_sub(1));
+        }
     }
 
     /// Close the box, keeping what was written on an item as its draft (a
@@ -2167,6 +2235,30 @@ mod tests {
         // Status needs the item in the Project: it only says so.
         a.click(Click::Field(2));
         assert!(a.compose.as_ref().unwrap().picker.is_none());
+    }
+
+    #[test]
+    fn the_lists_are_asked_once_and_reach_a_picker_opened_before_them() {
+        let mut a = with_pr();
+        let repo = a.selected().unwrap().repo.clone();
+        a.feed('r');
+        let keys: Vec<String> = a.outbox.iter().map(|o| o.key.clone()).collect();
+        assert_eq!(keys, [format!("labels:{repo}"), format!("people:{repo}"), format!("miles:{repo}")]);
+        a.open_pick(1);
+        assert!(a.compose.as_ref().unwrap().picker.as_ref().unwrap().1.options.is_empty());
+        a.got_lists(&repo, |l| l.people = vec!["amy".into(), "bob".into()]);
+        assert_eq!(a.compose.as_ref().unwrap().picker.as_ref().unwrap().1.options, ["amy", "bob"]);
+        // Opened again: what came is there at once and not asked again.
+        a.close_compose();
+        a.outbox.clear();
+        a.feed('r');
+        assert!(a.outbox.is_empty());
+        assert_eq!(a.compose.as_ref().unwrap().people, ["amy", "bob"]);
+        // Another repository's list is kept but not put in this box.
+        a.got_lists("o/other", |l| l.labels = vec!["x".into()]);
+        assert!(a.compose.as_ref().unwrap().labels.is_empty() && a.lists["o/other"].labels == ["x"]);
+        a.lists_failed(&repo);
+        assert_eq!(a.ask_lists(&repo).len(), 3);
     }
 
     #[test]

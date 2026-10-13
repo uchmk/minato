@@ -105,6 +105,8 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 8.13 | Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel | The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated |
 | 8.14 | Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status | Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so |
 | 8.15 | With a picker open, click Comment or Close in the box's footer | The picker's change is written first, then the comment is sent (or the item closed) |
+| 8.16 | Select an item of a repository not looked at yet and at once press `r` then `Alt+A` | The picker may say loading for a moment, then the names fill in by themselves (no need to close and reopen it) |
+| 8.17 | Select an item, wait a second, then press `r` and `Alt+A`; quit, start again and do the same | The names are there at once both times (read ahead on the selection, then kept in the cache) |
 
 ## 9. Actions
 
