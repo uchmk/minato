@@ -209,44 +209,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
     }
     let p = ui.painter().clone();
-    let mut x = r.left() + 12.0;
     let mid = r.center().y;
-    // The logo, then the name (no kanji: the mark and the word only).
-    let logo = Rect::from_center_size(pos2(x + 11.0, mid), vec2(22.0, 22.0));
-    if let Some(tex) = logo_texture(&ctx) {
-        p.image(tex.id(), logo, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-    }
-    x = logo.right() + 8.0;
-    let name = p.text(pos2(x, mid), Align2::LEFT_CENTER, "minato", FontId::proportional(14.0), c.fg);
-    x = name.right() + 18.0;
-    // The view tabs, each with its digit.
-    for v in View::ALL {
-        let label = app.tr(v.label());
-        let font = FontId::proportional(13.0);
-        let digit = ui.fonts_mut(|f| f.layout_no_wrap(v.digit().to_string(), FontId::monospace(11.0), c.dim));
-        let text = ui.fonts_mut(|f| f.layout_no_wrap(label.to_owned(), font, c.fg));
-        let w = 10.0 + digit.size().x + 6.0 + text.size().x + 10.0;
-        let tab = Rect::from_min_size(pos2(x, mid - 14.0), vec2(w, 28.0));
-        let resp = ui.interact(tab, ui.id().with(("tab", v.digit())), Sense::click());
-        let on = app.is_on(v);
-        if on {
-            p.rect_filled(tab, CornerRadius::same(6), c.panel);
-            p.line_segment([tab.left_bottom() + vec2(8.0, 0.0), tab.right_bottom() - vec2(8.0, 0.0)], Stroke::new(2.0, ACCENT));
-        } else if resp.hovered() {
-            p.rect_filled(tab, CornerRadius::same(6), c.panel.gamma_multiply(0.6));
-        }
-        let (dc, tc) = if on { (ACCENT, c.fg) } else { (c.dim, c.dim) };
-        p.galley(pos2(tab.left() + 10.0, mid - digit.size().y / 2.0), digit.clone(), dc);
-        p.galley(pos2(tab.left() + 10.0 + digit.size().x + 6.0, mid - text.size().y / 2.0), text, tc);
-        if resp.clicked() {
-            out.view = Some(v);
-        }
-        if resp.hovered() {
-            ctx.set_cursor_icon(CursorIcon::PointingHand);
-        }
-        x = tab.right() + 2.0;
-    }
-    let left_end = x;
     // The window buttons on the right.
     let mut right = r.right();
     for (k, kind) in [Caption::Close, Caption::Maximize, Caption::Minimize].into_iter().enumerate() {
@@ -281,15 +244,75 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let mut hover = app.viewer.clone().unwrap_or_else(|| app.tr("account").into());
     if !app.settings.owner.is_empty() {
         p.circle_stroke(acct.center(), 11.5, Stroke::new(1.5, ACCENT));
-        hover = format!("{hover}\n{}: {}", app.tr("account.showing"), app.settings.owner);
+        hover = format!("{hover}
+{}: {}", app.tr("account.showing"), app.settings.owner);
     }
     resp.on_hover_text(hover);
     right = acct.left() - 10.0;
+    // The tabs, each with its digit and label. On a narrow window (or a large
+    // zoom) the name goes first, then the labels of the tabs not shown, so
+    // the bell always has room right of them.
+    let tabs: Vec<_> = View::ALL
+        .iter()
+        .map(|&v| {
+            let digit = ui.fonts_mut(|f| f.layout_no_wrap(v.digit().to_string(), FontId::monospace(11.0), c.dim));
+            let text = ui.fonts_mut(|f| f.layout_no_wrap(app.tr(v.label()).to_owned(), FontId::proportional(13.0), c.fg));
+            (v, digit, text)
+        })
+        .collect();
+    let width = |digit: &std::sync::Arc<egui::Galley>, text: Option<&std::sync::Arc<egui::Galley>>| 10.0 + digit.size().x + text.map_or(0.0, |t| 6.0 + t.size().x) + 10.0;
+    let full: f32 = tabs.iter().map(|(_, d, t)| width(d, Some(t)) + 2.0).sum();
+    let short: f32 = tabs.iter().map(|(v, d, t)| width(d, app.is_on(*v).then_some(t)) + 2.0).sum();
+    let mut x = r.left() + 12.0;
+    // The logo, then the name (no kanji: the mark and the word only).
+    let logo = Rect::from_center_size(pos2(x + 11.0, mid), vec2(22.0, 22.0));
+    if let Some(tex) = logo_texture(&ctx) {
+        p.image(tex.id(), logo, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    }
+    x = logo.right() + 8.0;
+    let name = ui.fonts_mut(|f| f.layout_no_wrap("minato".into(), FontId::proportional(14.0), c.fg));
+    let room = right - 34.0;
+    if x + name.size().x + 18.0 + full <= room {
+        let w = name.size().x;
+        p.galley(pos2(x, mid - name.size().y / 2.0), name, c.fg);
+        x += w + 18.0;
+    } else {
+        x += 4.0;
+    }
+    let labels = x + full <= room || x + short > room;
+    for (v, digit, text) in tabs {
+        let on = app.is_on(v);
+        let text = (labels || on).then_some(text);
+        let tab = Rect::from_min_size(pos2(x, mid - 14.0), vec2(width(&digit, text.as_ref()), 28.0));
+        let resp = ui.interact(tab, ui.id().with(("tab", v.digit())), Sense::click());
+        if on {
+            p.rect_filled(tab, CornerRadius::same(6), c.panel);
+            p.line_segment([tab.left_bottom() + vec2(8.0, 0.0), tab.right_bottom() - vec2(8.0, 0.0)], Stroke::new(2.0, ACCENT));
+        } else if resp.hovered() {
+            p.rect_filled(tab, CornerRadius::same(6), c.panel.gamma_multiply(0.6));
+        }
+        let (dc, tc) = if on { (ACCENT, c.fg) } else { (c.dim, c.dim) };
+        p.galley(pos2(tab.left() + 10.0, mid - digit.size().y / 2.0), digit.clone(), dc);
+        if let Some(text) = text {
+            p.galley(pos2(tab.left() + 10.0 + digit.size().x + 6.0, mid - text.size().y / 2.0), text, tc);
+        }
+        if resp.clicked() {
+            out.view = Some(v);
+        }
+        if resp.hovered() {
+            ctx.set_cursor_icon(CursorIcon::PointingHand);
+        }
+        if !labels && !on {
+            resp.on_hover_text(app.tr(v.label()));
+        }
+        x = tab.right() + 2.0;
+    }
+    let left_end = x;
     // The palette field in the middle of what is left, the bell just right
     // of it as in tsumugi.
     let free = Rect::from_min_max(pos2(left_end + 12.0, r.top()), pos2(right - 34.0, r.bottom()));
     let w = (free.width()).clamp(0.0, 420.0);
-    let mut bell_left = right - 28.0;
+    let mut bell_left = (right - 28.0).max(left_end + 6.0);
     if w > 120.0 {
         let field = Rect::from_center_size(pos2(r.center().x.clamp(free.left() + w / 2.0, free.right() - w / 2.0), mid), vec2(w, 26.0));
         let resp = ui.interact(field, ui.id().with("palette"), Sense::click());
@@ -424,8 +447,11 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     if app.synced.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
     }
-    // The keys stop short of it: the view's last ones go first, F1 stays.
-    let stop = t.left() - 16.0;
+    // The keys stop short of it, kept as wide as two digits so they do not
+    // come and go as the seconds tick: the view's last ones go first, then
+    // F1's word; its key stays.
+    let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x);
+    let stop = right - t.width().max(widest) - 16.0;
     let mut widths: Vec<f32> = keys
         .iter()
         .map(|(key, word)| {
@@ -434,8 +460,16 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             k + 12.0 + 6.0 + w + 14.0
         })
         .collect();
+    let help = keys.last().is_some_and(|k| k.1 == "key.help");
+    let mut bare = false;
     while keys.len() > 1 && x + widths.iter().sum::<f32>() - 14.0 > stop {
-        let at = if keys.last().is_some_and(|k| k.1 == "key.help") { keys.len() - 2 } else { keys.len() - 1 };
+        if help && keys.len() == 2 && !bare {
+            let k = ui.fonts_mut(|f| f.layout_no_wrap("F1".to_owned(), FontId::monospace(11.0), c.fg).size().x);
+            widths[1] = k + 12.0 + 14.0;
+            bare = true;
+            continue;
+        }
+        let at = if help { keys.len() - 2 } else { keys.len() - 1 };
         keys.remove(at);
         widths.remove(at);
     }
@@ -447,6 +481,10 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
         p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
         p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, kc);
+        if bare && *word == "key.help" {
+            x = chip.right() + 14.0;
+            continue;
+        }
         let label = word_for(app, word);
         let t = p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
         x = t.right() + 14.0;

@@ -22,6 +22,10 @@ const MAX_W: f32 = 900.0;
 const CHIPS_H: f32 = 8.0 + 26.0 + 8.0;
 const BAR_H: f32 = 36.0;
 const FOOT_H: f32 = 46.0;
+/// The strip as one line, in a detail too short for the whole of it.
+const LINE_H: f32 = 8.0 + 30.0 + 8.0;
+/// Below this the strip is one line until the box is opened.
+const SHORT: f32 = 440.0;
 /// GitHub's green of the Comment button.
 const GREEN: Color32 = Color32::from_rgb(0x23, 0x86, 0x36);
 const GREEN_HOT: Color32 = Color32::from_rgb(0x2c, 0x97, 0x4b);
@@ -36,7 +40,8 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
         return;
     };
     let stub = minato_core::mainci::is_stub(item);
-    let body = if stub { r } else { Rect::from_min_max(r.min, pos2(r.right(), r.bottom() - strip_h(r.height()))) };
+    let open = app.compose.as_ref().is_some_and(|w| w.id == item.id);
+    let body = if stub { r } else { Rect::from_min_max(r.min, pos2(r.right(), r.bottom() - strip_h(r.height(), open))) };
     let p = ui.painter().with_clip_rect(body);
     let x = body.left() + 26.0;
     let w = (body.width() - 52.0).min(MAX_W);
@@ -50,7 +55,8 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
         y = sections(&p, app, item, x, y, w);
-        strip(ui, app, item, Rect::from_min_max(pos2(r.left(), body.bottom()), r.max), out);
+        let at = Rect::from_min_max(pos2(r.left(), body.bottom()), r.max);
+        if open || r.height() >= SHORT { strip(ui, app, item, at, out) } else { strip_line(ui, app, item, at, out) }
     }
     // The wheel stops when the end is a little above the strip.
     out.detail_max = Some(((y - top + 36.0 - body.height()) / LINE).ceil().max(0.0));
@@ -61,9 +67,38 @@ fn edit_h(h: f32) -> f32 {
     if h >= 560.0 { 104.0 } else { 62.0 }
 }
 
-/// How high the strip at the foot is in a detail `h` high.
-fn strip_h(h: f32) -> f32 {
-    CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0
+/// How high the strip at the foot is in a detail `h` high: one line in a
+/// short one, unless the box is `open`.
+fn strip_h(h: f32, open: bool) -> f32 {
+    if !open && h < SHORT { LINE_H } else { CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0 }
+}
+
+/// The strip as one line: the draft's first line or the hint, and `r`. A
+/// click starts writing, which opens the whole strip.
+fn strip_line(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
+    let c = ito_theme::colors();
+    let p = ui.painter().with_clip_rect(r);
+    p.rect_filled(r, 0.0, style::head());
+    p.line_segment([r.left_top(), r.right_top()], Stroke::new(1.0, c.border));
+    let bx = Rect::from_min_max(pos2(r.left() + 26.0, r.top() + 8.0), pos2(r.right() - 26.0, r.bottom() - 8.0));
+    let resp = ui::hit(ui, bx, "detail-strip");
+    if resp.clicked() {
+        out.click = Some(Click::Write);
+    }
+    p.rect_filled(bx, CornerRadius::same(8), c.bg);
+    p.rect_stroke(bx, CornerRadius::same(8), Stroke::new(1.0, if resp.hovered() { ACCENT } else { c.border }), StrokeKind::Inside);
+    let kx = bx.right() - 10.0 - (p.layout_no_wrap("r".into(), FontId::monospace(11.0), c.fg).size().x + 10.0);
+    style::kbd(&p, kx, bx.center().y, "r");
+    let draft = app.drafts.get(&item.id).and_then(|t| t.lines().find(|l| !l.trim().is_empty()));
+    let (text, ink) = match draft {
+        Some(t) => (t.to_owned(), c.fg),
+        None => (app.tr("compose.placeholder").to_owned(), c.dim),
+    };
+    let g = style::truncated(&p, text, FontId::proportional(13.0), ink, kx - 8.0 - (bx.left() + 12.0));
+    p.galley(pos2(bx.left() + 12.0, bx.center().y - g.size().y / 2.0), g, ink);
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::Text);
+    }
 }
 
 /// The inbox's card for the item, if it is one.

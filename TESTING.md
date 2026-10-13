@@ -14,7 +14,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 1.2 | Drag the empty part of the title bar | The window moves; double-click maximises and restores |
 | 1.3 | Click minimise, maximise, close | Each does what it says; close shows a red button under the pointer |
 | 1.4 | Drag each edge and corner | The window resizes with the matching pointer; nothing resizes while maximised |
-| 1.5 | Shrink the window | It stops at 720x420; nothing scrolls and no scrollbar appears anywhere |
+| 1.5 | Shrink the window | It stops at 720x420; nothing scrolls and no scrollbar appears anywhere; each view still fits (section 30) |
 | 1.6 | Look at the exe in Explorer and the taskbar | The same logo as in the title bar (tile, cyan and gold walls, blue wave, two lights) |
 
 ## 2. Views and keys
@@ -27,7 +27,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 2.3a | In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board | In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table |
 | 2.4 | Press `,` or click the comma button | The settings screen opens; `Esc` closes it |
 | 2.5 | Press `Ctrl+Shift+P` | A toast says it is not connected yet (the palette comes later) |
-| 2.6 | Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) | The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go and `F1` stays, never under `⟳`, `API` or the clock |
+| 2.6 | Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) | The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock |
 
 ## 3. Keybar status and clock
 
@@ -67,7 +67,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
 | 6.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 6.8 | Look at a PR with checks | The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation |
-| 6.9 | Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' | A long repository name ends with "…" before its count; "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half |
+| 6.9 | Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' | A long repository name ends with "…" before its count (in a narrow column it loses its owner and the counts go); "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half |
 
 ## 7. Inbox view
 
@@ -364,3 +364,16 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 29.10 | Press `Esc` with nothing else open, then open the panel again and click ✕ | `Esc` closes the panel and the view takes the whole width; ✕ does the same |
 | 29.11 | Make a message show (e.g. `d` then `u`) with the panel open | The message is at the top right of the view, left of the panel, not under it |
 | 29.12 | On Linux press `o` | The system's browser opens the page; no panel |
+
+## 30. The smallest window
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 30.1 | Shrink the window to 720x420 with the app zoomed to 130% (`Ctrl+=`) | The tabs keep clear of the bell: the name "minato" goes first, then the labels of the tabs not shown (their label comes on hover) |
+| 30.2 | At that size press `1` | One whole card shows under its section; the label chips take one row ending in "+N", the foot one row ending in "+N"; "受信箱" goes before the count reaches the order chip; a section's hint goes before it touches the count |
+| 30.3 | At that size select a card, then press `r`; press `Esc` | The write strip is one line ("コメントを書く (r)…" and `r`) so the body shows; `r` or a click on it opens the whole strip; `Esc` folds it back to the line, the draft's first line in it |
+| 30.4 | At that size press `2`, then `3` | The filter columns show the repositories without their owner and no counts; in Actions the state pill goes under the run's name and the facts under the title wrap instead of being cut |
+| 30.5 | At that size press `4`, then `l` and `h` | The head shows "‹ 列 1–2 / 3 ›" with the arrow lit on the side that has more; `l` / `h` move the columns and the numbers |
+| 30.6 | At that size watch the keybar of each view for 20 seconds | The view's first key stays (F1 keeps only its key when there is no room); no key comes and goes as the sync seconds tick |
+| 30.7 | Press `2` with a red CI on a repository's main | The main branch's CI is not a row of the list and adds nothing to the repository counts |
+| 30.8 | Open an item whose body has 🤖 (a PR written by Claude Code) | The robot shows in one colour, not as a box, in the detail and on hover |

@@ -207,8 +207,9 @@ pub fn search_query(text: &str, owner: &str) -> String {
 }
 
 pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pick>)> {
+    // A main-branch stub is not a row of the list, so it brings no option.
     let distinct = |f: &dyn Fn(&Item) -> String| {
-        let mut v: Vec<String> = items.iter().map(f).collect();
+        let mut v: Vec<String> = items.iter().filter(|i| !crate::mainci::is_stub(i)).map(f).collect();
         v.sort();
         v.dedup();
         v
@@ -216,7 +217,6 @@ pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pi
     let mut repos = vec![Pick::Repo(None)];
     repos.extend(distinct(&|i| i.repo.clone()).into_iter().map(|r| Pick::Repo(Some(r))));
     let mut authors = vec![Pick::Author(None)];
-    // A main-branch stub has no author.
     authors.extend(distinct(&|i| i.author.clone()).into_iter().filter(|a| !a.is_empty()).map(|a| Pick::Author(Some(a))));
     vec![
         ("repo", repos),
@@ -263,9 +263,10 @@ impl ListState {
         self.filter.search.and_then(|i| self.searches.get(i)).map(String::as_str)
     }
 
-    /// The items that pass the filter and the search, in the order given.
+    /// The items that pass the filter and the search, in the order given. A
+    /// main-branch stub (the inbox's and the board's) is never a row.
     pub fn shown<'a>(&self, items: &'a [Item], me: &str) -> Vec<&'a Item> {
-        items.iter().filter(|i| self.filter.matches(i, me) && self.find.takes(i)).collect()
+        items.iter().filter(|i| !crate::mainci::is_stub(i) && self.filter.matches(i, me) && self.find.takes(i)).collect()
     }
 
     /// The selected item's node id, if any.
@@ -497,6 +498,21 @@ mod tests {
         s.sel = 5;
         s.clamp(&it, "me");
         assert_eq!(s.sel, 0);
+    }
+
+    #[test]
+    fn a_main_branch_stub_is_neither_a_row_nor_an_option() {
+        let mut it = items();
+        let mut stub = item("uchmk/minato", Kind::Issue, "");
+        stub.id = "main:uchmk/minato".into();
+        stub.number = 0;
+        stub.ci = Some(Ci::Bad);
+        it.push(stub);
+        let s = ListState::default();
+        assert_eq!(s.shown(&it, "me").len(), 3);
+        let repos = &options(&it, &[])[0].1;
+        assert!(!repos.contains(&Pick::Repo(Some("uchmk/minato".into()))));
+        assert_eq!(repos.len(), 3);
     }
 
     #[test]

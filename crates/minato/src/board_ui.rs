@@ -29,7 +29,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let title = if app.ja() { format!("Project「{}」", board.title) } else { format!("Project “{}”", board.title) };
     p.text(pos2(head.left() + 14.0, head.center().y), Align2::LEFT_CENTER, title, FontId::proportional(13.5), c.fg);
     let n = if app.ja() { format!("{} 件", board.cards.len()) } else { board.cards.len().to_string() };
-    p.text(pos2(head.right() - 14.0, head.center().y), Align2::RIGHT_CENTER, n, FontId::monospace(11.5), c.dim);
+    let n_r = p.text(pos2(head.right() - 14.0, head.center().y), Align2::RIGHT_CENTER, n, FontId::monospace(11.5), c.dim);
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));
     let area = Rect::from_min_max(head.left_bottom(), r.max).shrink2(vec2(GAP, GAP));
     let cols = board.columns();
@@ -39,6 +39,16 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     // Columns share the width; with too many, the ones around the cursor show.
     let fit = (((area.width() + GAP) / (MIN_COL_W + GAP)) as usize).clamp(1, cols.len().max(1));
     let first = app.bs.col.saturating_sub(fit - 1).min(cols.len().saturating_sub(fit));
+    // Which of them, and an arrow lit on a side with more beyond it.
+    if fit < cols.len() {
+        let last = first + fit;
+        let span = if app.ja() { format!("列 {}–{} / {}", first + 1, last, cols.len()) } else { format!("columns {}–{} of {}", first + 1, last, cols.len()) };
+        let cy = head.center().y;
+        let ink = |more: bool| if more { ACCENT } else { c.border };
+        let right = p.text(pos2(n_r.left() - 16.0, cy), Align2::RIGHT_CENTER, "›", FontId::proportional(15.0), ink(last < cols.len()));
+        let mid = p.text(pos2(right.left() - 6.0, cy), Align2::RIGHT_CENTER, span, FontId::proportional(12.0), c.dim);
+        p.text(pos2(mid.left() - 6.0, cy), Align2::RIGHT_CENTER, "‹", FontId::proportional(15.0), ink(first > 0));
+    }
     let w = (area.width() - GAP * (fit as f32 - 1.0)) / fit as f32;
     let rects: Vec<(usize, Rect)> = (first..(first + fit).min(cols.len()))
         .enumerate()

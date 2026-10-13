@@ -133,14 +133,12 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             if app.acts.is_chosen(pick) {
                 p.text(pos2(row.left() + 14.0, cy), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), ACCENT);
             }
-            let t = p.text(pos2(row.right() - 14.0, cy), Align2::RIGHT_CENTER, count(app, pick).to_string(), FontId::monospace(11.5), c.dim);
             let mut x = row.left() + 14.0 + 18.0;
             if let Pick::State(Some(b)) = pick {
                 let (m, col) = bucket_mark(*b);
                 x = p.text(pos2(x, cy), Align2::LEFT_CENTER, m, FontId::proportional(12.5), col).right() + 6.0;
             }
-            let g = style::truncated(&p, pick_label(app, pick), FontId::proportional(13.0), c.fg, t.left() - 6.0 - x);
-            p.galley(pos2(x, cy - g.size().y / 2.0), g, c.fg);
+            crate::list_ui::filter_words(&p, row, x, pick_label(app, pick), Some(count(app, pick)));
             y += ENT_H;
             flat += 1;
         }
@@ -280,6 +278,10 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     hx = p.text(pos2(hx, y), Align2::LEFT_CENTER, format!("{} #{}", run.workflow, run.number), FontId::monospace(13.5), c.fg).right() + 8.0;
     let color = tone(run.status);
     let words = format!("{} {}", run.status.mark(), app.tr(run.status.word()));
+    // The state on a line of its own when it would run past the right.
+    if hx + p.layout_no_wrap(words.clone(), FontId::proportional(11.5), color).size().x + 14.0 > x + w {
+        (hx, y) = (x, y + 26.0);
+    }
     style::chip(&p, hx, y, &words, FontId::proportional(11.5), 7.0, 18.0, 9, color, color.gamma_multiply(0.14), color);
     y += 10.0 + 10.0;
     let title = p.layout(run.title.clone(), FontId::proportional(21.0), c.fg, w);
@@ -289,10 +291,17 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     y += th + 8.0;
     let dur = run.seconds(now).map(actions::duration).unwrap_or_default();
     let branch = if run.pr.is_some() { format!("{} → main", run.branch) } else { run.branch.clone() };
+    // The facts in a row, wrapping before one would run past the right.
     let mut mx = x;
     for m in [run.event.clone(), branch, run.sha.clone(), run.actor.clone(), dur, ago(&run.started_at, now)] {
         if !m.is_empty() {
-            mx = p.text(pos2(mx, y + 8.0), Align2::LEFT_CENTER, m, FontId::monospace(13.0), c.dim).right() + 14.0;
+            let g = p.layout_no_wrap(m, FontId::monospace(13.0), c.dim);
+            if mx > x && mx + g.size().x > x + w {
+                (mx, y) = (x, y + 20.0);
+            }
+            let gw = g.size().x;
+            p.galley(pos2(mx, y + 8.0 - g.size().y / 2.0), g, c.dim);
+            mx += gw + 14.0;
         }
     }
     y += 16.0;

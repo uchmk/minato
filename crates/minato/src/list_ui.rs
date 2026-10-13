@@ -133,21 +133,40 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             if app.list.is_chosen(pick) {
                 p.text(pos2(row.left() + 14.0, cy), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), ACCENT);
             }
-            // The count first, so a long name stops short of it.
-            let mut end = row.right() - 14.0;
-            if let Pick::Repo(repo) = pick {
-                let n = app.items.iter().filter(|i| !minato_core::mainci::is_stub(i) && repo.as_ref().is_none_or(|r| *r == i.repo)).count();
-                end = p.text(pos2(end, cy), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(11.5), c.dim).left() - 6.0;
-            }
-            let x = row.left() + 14.0 + 18.0;
-            let g = style::truncated(&p, pick_label(app, pick), FontId::proportional(13.0), c.fg, end - x);
-            p.galley(pos2(x, cy - g.size().y / 2.0), g, c.fg);
+            let n = match pick {
+                Pick::Repo(repo) => Some(app.items.iter().filter(|i| !minato_core::mainci::is_stub(i) && repo.as_ref().is_none_or(|r| *r == i.repo)).count()),
+                _ => None,
+            };
+            filter_words(&p, row, row.left() + 14.0 + 18.0, pick_label(app, pick), n);
             y += ENT_H;
             flat += 1;
         }
     }
     filter_more(&p, app, r, above, below);
 }
+
+/// A filter row's words from `x` and its count at the right, as the column's
+/// width allows: a narrow column leaves the count out, and a repository's
+/// name loses its owner before it is cut short.
+pub fn filter_words(p: &Painter, row: Rect, x: f32, label: String, n: Option<usize>) {
+    let c = ito_theme::colors();
+    let cy = row.center().y;
+    let narrow = row.width() < NARROW;
+    let mut end = row.right() - if narrow { 8.0 } else { 14.0 };
+    if let Some(n) = n.filter(|_| !narrow) {
+        end = p.text(pos2(end, cy), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(11.5), c.dim).left() - 6.0;
+    }
+    let font = FontId::proportional(13.0);
+    let label = match label.split_once('/') {
+        Some((_, name)) if p.layout_no_wrap(label.clone(), font.clone(), c.fg).size().x > end - x => name.to_owned(),
+        _ => label,
+    };
+    let g = style::truncated(p, label, font, c.fg, end - x);
+    p.galley(pos2(x, cy - g.size().y / 2.0), g, c.fg);
+}
+
+/// A filter column narrower than this shows no counts.
+const NARROW: f32 = 150.0;
 
 /// The "⋯ 上に N 件" / "⋯ 下に N 件" lines of a filter column.
 pub fn filter_more(p: &Painter, app: &App, r: Rect, above: usize, below: usize) {

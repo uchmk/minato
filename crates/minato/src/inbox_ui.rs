@@ -20,10 +20,11 @@ const MORE_H: f32 = 22.0;
 /// A section's header, and the 「なし」 of an empty one.
 const SEC_H: f32 = 30.0;
 const EMPTY_H: f32 = 24.0;
-/// The foot: two rows of chips.
 /// The rows the foot's chips may take before the rest are left out.
 const FOOT_ROWS: usize = 4;
 const CHIP_H: f32 = 22.0;
+/// A row of the label chips at the top.
+const TAG_ROW: f32 = 23.0;
 /// The border of a chip that is on.
 const CHIP_ON: Color32 = Color32::from_rgb(0x57, 0x55, 0x7A);
 
@@ -45,15 +46,30 @@ fn queue(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     p.rect_filled(r, 0.0, c.side);
     let all = app.inbox_all();
     let shown = app.inbox.shown(&all, &app.items);
-    // The head: 受信箱 N of M, and the order on the right.
+    // The head: 受信箱 N of M, and the order on the right; on a narrow
+    // column the word goes, then the count, before they reach the order.
     let hy = r.top() + 12.0 + 9.0;
-    let t = style::bold(&p, pos2(r.left() + 14.0, hy), Align2::LEFT_CENTER, app.tr("view.inbox"), FontId::proportional(11.5), c.dim);
-    p.text(pos2(t.right() + 8.0, hy), Align2::LEFT_CENTER, format!("{} of {}", shown.len(), all.len()), FontId::proportional(12.0), c.fg);
     let sort = app.tr("inbox.sort");
     let sw = p.layout_no_wrap(sort.to_owned(), FontId::proportional(11.5), c.fg).size().x + 18.0;
-    style::chip(&p, r.right() - 14.0 - sw, hy, sort, FontId::proportional(11.5), 9.0, 20.0, 6, c.border, Color32::TRANSPARENT, c.fg);
-    let y = tags(ui, &p, app, &all, r, r.top() + 12.0 + 20.0, out);
-    let foot = chips(ui, &p, app, &all, r, out);
+    let sort_x = r.right() - 14.0 - sw;
+    style::chip(&p, sort_x, hy, sort, FontId::proportional(11.5), 9.0, 20.0, 6, c.border, Color32::TRANSPARENT, c.fg);
+    let count = p.layout_no_wrap(format!("{} of {}", shown.len(), all.len()), FontId::proportional(12.0), c.fg);
+    let word = p.layout_no_wrap(app.tr("view.inbox").to_owned(), FontId::proportional(11.5), c.dim);
+    let mut x = r.left() + 14.0;
+    if x + word.size().x + 8.0 + count.size().x + 8.0 <= sort_x {
+        x = style::bold(&p, pos2(x, hy), Align2::LEFT_CENTER, app.tr("view.inbox"), FontId::proportional(11.5), c.dim).right() + 8.0;
+    }
+    if x + count.size().x + 8.0 <= sort_x {
+        p.galley(pos2(x, hy - count.size().y / 2.0), count, c.fg);
+    }
+    // The rows of chips at the top and the foot share what one section with
+    // one card leaves: the foot first (at least a row), then the labels.
+    let groups = [Group::Mine, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).count();
+    let spare = r.height() - 32.0 - 8.0 - groups as f32 * SEC_H - CARD_FULL;
+    let foot_rows = ((spare - TAG_ROW) / (CHIP_H + 8.0)).floor().clamp(1.0, FOOT_ROWS as f32) as usize;
+    let foot = chips(ui, &p, app, &all, r, foot_rows, out);
+    let tag_rows = ((spare - (r.bottom() - foot)) / TAG_ROW).floor().max(1.0) as usize;
+    let y = tags(ui, &p, app, &all, r, r.top() + 12.0 + 20.0, tag_rows, out);
     let body = Rect::from_min_max(pos2(r.left() + 8.0, y), pos2(r.right() - 8.0, foot - 4.0));
     if all.is_empty() {
         let words = app.tr(if app.viewer.is_none() { "list.loading" } else { "inbox.empty" });
@@ -63,8 +79,10 @@ fn queue(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     sections(ui, &p.with_clip_rect(body), app, &shown, body, out);
 }
 
-/// The labels of the cards as chips that pick one; where the row ends.
-fn tags(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, top: f32, out: &mut Out) -> f32 {
+/// The labels of the cards as chips that pick one, in up to `rows` rows (a
+/// "+N" says how many more there are); where the rows end.
+#[allow(clippy::too_many_arguments)]
+fn tags(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, top: f32, rows: usize, out: &mut Out) -> f32 {
     let c = ito_theme::colors();
     let mut seen: Vec<&Label> = Vec::new();
     for card in all {
@@ -80,11 +98,17 @@ fn tags(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, top: f32, out: &
     }
     let (left, right) = (r.left() + 14.0, r.right() - 14.0);
     let (mut x, mut y) = (left, top + 6.0 + 9.0);
-    for l in seen {
+    let (mut row, total) = (1, seen.len());
+    for (k, l) in seen.into_iter().enumerate() {
         let w = p.layout_no_wrap(l.name.clone(), FontId::proportional(11.0), Color32::WHITE).size().x + 14.0;
         if x + w > right && x > left {
+            if row == rows {
+                p.text(pos2(x, y), Align2::LEFT_CENTER, format!("+{}", total - k), FontId::monospace(11.0), c.dim);
+                break;
+            }
             x = left;
-            y += 18.0 + 5.0;
+            y += TAG_ROW;
+            row += 1;
         }
         let rect = Rect::from_min_size(pos2(x, y - 9.0), vec2(w, 18.0));
         let on = app.inbox.tag.as_deref() == Some(l.name.as_str());
@@ -147,9 +171,10 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
         let n = shown.iter().filter(|card| card.group == g).count();
         let sy = y + 10.0 + 7.0;
         let t = style::bold(p, pos2(body.left() + 6.0, sy), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.0), c.fg);
-        p.text(pos2(t.right() + 6.0, sy), Align2::LEFT_CENTER, n.to_string(), FontId::monospace(12.0), c.dim);
-        if !hint.is_empty() {
-            p.text(pos2(body.right() - 6.0, sy), Align2::RIGHT_CENTER, app.tr(hint), FontId::proportional(11.5), c.dim);
+        let n_r = p.text(pos2(t.right() + 6.0, sy), Align2::LEFT_CENTER, n.to_string(), FontId::monospace(12.0), c.dim);
+        let hint = p.layout_no_wrap(if hint.is_empty() { String::new() } else { app.tr(hint).to_owned() }, FontId::proportional(11.5), c.dim);
+        if body.right() - 6.0 - hint.size().x >= n_r.right() + 12.0 {
+            p.galley(pos2(body.right() - 6.0 - hint.size().x, sy - hint.size().y / 2.0), hint, c.dim);
         }
         y += SEC_H;
         if n == 0 {
@@ -261,16 +286,24 @@ struct FootChip<'a> {
 
 /// The foot at the bottom of `r`: the status chips, then the repository
 /// chips, each with how many cards it would show; a group wraps to more
-/// rows when the column is narrow (up to `FOOT_ROWS`). Where the foot starts.
-fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) -> f32 {
+/// rows when the column is narrow (up to `rows`), the status chips keeping
+/// only their dots when they would not fit in one. Where the foot starts.
+#[allow(clippy::too_many_arguments)]
+fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, rows: usize, out: &mut Out) -> f32 {
     let c = ito_theme::colors();
     let count = |s: InboxState| s.shown(all, &app.items).len();
     let base = || InboxState { undo: Vec::new(), ..app.inbox.clone() };
     let sts = [(Status::All, "inbox.all", None), (Status::Mine, "inbox.mine", Some(ACCENT)), (Status::Wait, "inbox.wait", Some(style::RUN)), (Status::Done, "inbox.done_chip", Some(style::OK))];
-    let status: Vec<FootChip> = sts
+    let mut status: Vec<FootChip> = sts
         .into_iter()
         .map(|(st, word, dot)| FootChip { dot, word: app.tr(word), n: count(InboxState { status: st, ..base() }), on: app.inbox.status == st, click: Click::InboxStatus(st) })
         .collect();
+    let (left, right) = (r.left() + 12.0, r.right() - 12.0);
+    if status.iter().map(|f| chip_w(p, f.dot, f.word, f.n) + 5.0).sum::<f32>() - 5.0 > right - left {
+        for f in status.iter_mut().filter(|f| f.dot.is_some()) {
+            f.word = "";
+        }
+    }
     let (repos, _) = InboxState::repos_and_tags(all, &app.items);
     let repos: Vec<FootChip> = std::iter::once(None)
         .chain(repos.iter().map(|r| Some(r.as_str())))
@@ -283,7 +316,6 @@ fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) 
         })
         .collect();
     // Place them first, so the foot is as tall as its rows.
-    let (left, right) = (r.left() + 12.0, r.right() - 12.0);
     let mut at = Vec::new();
     let mut row = 0;
     for group in [&status, &repos] {
@@ -299,16 +331,22 @@ fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) 
         }
         row += 1;
     }
-    let top = r.bottom() - 8.0 - row.min(FOOT_ROWS) as f32 * (CHIP_H + 8.0);
+    let top = r.bottom() - 8.0 - row.min(rows) as f32 * (CHIP_H + 8.0);
     p.line_segment([pos2(r.left(), top), pos2(r.right(), top)], Stroke::new(1.0, c.border));
+    let total = status.len() + repos.len();
+    let mut end = left;
     for (k, (f, (x, row))) in status.iter().chain(&repos).zip(at).enumerate() {
-        if row >= FOOT_ROWS {
+        let y = top + 8.0 + CHIP_H / 2.0 + row.min(rows - 1) as f32 * (CHIP_H + 8.0);
+        if row >= rows {
+            // How many more there are, after the last row's last chip.
+            p.text(pos2(end + 5.0, y), Align2::LEFT_CENTER, format!("+{}", total - k), FontId::monospace(11.0), c.dim);
             break;
         }
-        let y = top + 8.0 + CHIP_H / 2.0 + row as f32 * (CHIP_H + 8.0);
-        if chip(ui, p, x, y, f.dot, f.word, f.n, f.on, ("inbox-foot", k)).clicked() {
+        let resp = chip(ui, p, x, y, f.dot, f.word, f.n, f.on, ("inbox-foot", k));
+        if resp.clicked() {
             out.click = Some(f.click.clone());
         }
+        end = resp.rect.right();
     }
     top
 }
@@ -316,7 +354,8 @@ fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) 
 /// How wide a chip of the foot is.
 fn chip_w(p: &Painter, dot: Option<Color32>, word: &str, n: usize) -> f32 {
     let w = |s: String, font: FontId| p.layout_no_wrap(s, font, Color32::WHITE).size().x;
-    9.0 + dot.map_or(0.0, |_| w("●".into(), FontId::proportional(8.0)) + 5.0) + w(word.to_owned(), FontId::proportional(12.0)) + 5.0 + w(n.to_string(), FontId::monospace(11.0)) + 9.0
+    let word = if word.is_empty() { 0.0 } else { w(word.to_owned(), FontId::proportional(12.0)) + 5.0 };
+    9.0 + dot.map_or(0.0, |_| w("●".into(), FontId::proportional(8.0)) + 5.0) + word + w(n.to_string(), FontId::monospace(11.0)) + 9.0
 }
 
 /// A chip of the foot: its dot, its words and its count; its response.
@@ -339,9 +378,11 @@ fn chip(ui: &Ui, p: &Painter, x: f32, y: f32, dot: Option<Color32>, word: &str, 
         p.galley(pos2(gx, y - g.size().y / 2.0), g, color);
         gx += gw + 5.0;
     }
-    let ww = word_g.size().x;
-    p.galley(pos2(gx, y - word_g.size().y / 2.0), word_g, color);
-    gx += ww + 5.0;
+    if !word.is_empty() {
+        let ww = word_g.size().x;
+        p.galley(pos2(gx, y - word_g.size().y / 2.0), word_g, color);
+        gx += ww + 5.0;
+    }
     p.galley(pos2(gx, y - n_g.size().y / 2.0), n_g, color);
     resp
 }
