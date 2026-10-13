@@ -400,25 +400,13 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     if app.find_on() {
         x = find_bar(ui, app, r, out);
     }
-    let keys: Vec<(&str, &str)> = match app.mode {
+    let mut keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
         Mode::Help => vec![("F1", "key.back"), ("Esc", "key.back")],
         Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
         Mode::Main if app.find_on() => Vec::new(),
         Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("F1", "key.help")]).collect(),
     };
-    for (k, (key, word)) in keys.iter().enumerate() {
-        let best = k == 0;
-        let kc = if best { ACCENT } else { c.fg };
-        let galley = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), kc));
-        let chip = Rect::from_min_size(pos2(x, mid - 9.0), vec2(galley.size().x + 12.0, 18.0));
-        p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
-        p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
-        p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, kc);
-        let label = word_for(app, word);
-        let t = p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
-        x = t.right() + 14.0;
-    }
     // The right side, from the right: the clock, the API budget, the sync.
     let mut right = r.right() - 12.0;
     let clock = app.prefs.common.clock_or(None);
@@ -432,9 +420,36 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let t = p.text(pos2(right, mid), Align2::RIGHT_CENTER, api, FontId::monospace(11.5), c.dim);
     right = t.left() - 16.0;
     let ago = minato_core::status::ago(app.since_sync(), app.ja());
-    p.text(pos2(right, mid), Align2::RIGHT_CENTER, format!("⟳ {ago}"), FontId::monospace(11.5), c.dim);
+    let t = p.text(pos2(right, mid), Align2::RIGHT_CENTER, format!("⟳ {ago}"), FontId::monospace(11.5), c.dim);
     if app.synced.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+    }
+    // The keys stop short of it: the view's last ones go first, F1 stays.
+    let stop = t.left() - 16.0;
+    let mut widths: Vec<f32> = keys
+        .iter()
+        .map(|(key, word)| {
+            let k = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), c.fg).size().x);
+            let w = ui.fonts_mut(|f| f.layout_no_wrap(word_for(app, word).to_owned(), FontId::proportional(12.0), c.fg).size().x);
+            k + 12.0 + 6.0 + w + 14.0
+        })
+        .collect();
+    while keys.len() > 1 && x + widths.iter().sum::<f32>() - 14.0 > stop {
+        let at = if keys.last().is_some_and(|k| k.1 == "key.help") { keys.len() - 2 } else { keys.len() - 1 };
+        keys.remove(at);
+        widths.remove(at);
+    }
+    for (k, (key, word)) in keys.iter().enumerate() {
+        let best = k == 0;
+        let kc = if best { ACCENT } else { c.fg };
+        let galley = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), kc));
+        let chip = Rect::from_min_size(pos2(x, mid - 9.0), vec2(galley.size().x + 12.0, 18.0));
+        p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
+        p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
+        p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, kc);
+        let label = word_for(app, word);
+        let t = p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
+        x = t.right() + 14.0;
     }
 }
 
@@ -495,7 +510,8 @@ fn word_for(app: &App, key: &'static str) -> &'static str {
 }
 
 /// The list of every key: the global ones, then the view's; over the inbox,
-/// a table of its cards' reasons below them.
+/// a table of its cards' reasons beside them, below them on a narrower
+/// window, or on a second page (Tab) when it would not fit.
 fn help(ui: &mut Ui, app: &App, r: Rect) {
     let c = ito_theme::colors();
     let p = ui.painter().clone();
@@ -504,17 +520,28 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     let left: [(&str, &[(&str, &'static str)]); 2] = [(app.tr("help.global"), &GLOBAL_KEYS), (app.tr("help.notes"), &NOTES_KEYS)];
     let right: [(&str, &[(&str, &'static str)]); 1] = [(app.tr(app.view.label()), app.view.keys())];
     let tall = |s: &[(&str, &[(&str, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
-    let cols = tall(&left).max(tall(&right));
     let rules = app.view == View::Inbox;
-    let rules_h = if rules { 48.0 + (RULES.len() + HELP_MARKS.len()) as f32 * 20.0 } else { 0.0 };
-    let h = 50.0 + cols + rules_h + 30.0;
-    let w = (r.width() - 24.0).min(860.0);
+    let rules_h = 48.0 + (RULES.len() + HELP_MARKS.len()) as f32 * 20.0;
+    // The table stands as a third column when the window is wide enough,
+    // else under the two, else on a page of its own.
+    let wide = rules && r.width() - 24.0 >= 1180.0;
+    let keys_h = tall(&left).max(tall(&right));
+    let paged = rules && !wide && 50.0 + keys_h + rules_h + 30.0 > r.height() - 24.0;
+    let (show_keys, below) = match (paged, app.help_rules) {
+        (true, true) => (false, true),
+        (true, false) => (true, false),
+        _ => (true, rules),
+    };
+    let cols = if show_keys { keys_h } else { 0.0 };
+    let h = 50.0 + cols.max(if wide { rules_h } else { 0.0 }) + (if below && !wide { rules_h } else { 0.0 }) + 30.0;
+    let w = (r.width() - 24.0).min(if wide { 1300.0 } else { 860.0 });
     let card = Rect::from_center_size(r.center(), vec2(w, h.min(r.height() - 24.0).max(80.0)));
     p.rect_filled(card, CornerRadius::same(10), c.raised());
     p.rect_stroke(card, CornerRadius::same(10), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
     p.text(pos2(card.left() + 20.0, card.top() + 18.0), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
-    let col_w = (w - 40.0) / 2.0;
-    let column = |x: f32, sections: &[(&str, &[(&str, &'static str)])]| {
+    let x0 = card.left() + 20.0;
+    let (left_w, right_w) = if wide { (330.0, 280.0) } else { ((w - 40.0) / 2.0, (w - 40.0) / 2.0) };
+    let column = |x: f32, col_w: f32, sections: &[(&str, &[(&str, &'static str)])]| {
         let mut y = card.top() + 50.0;
         for (title, rows) in sections {
             p.text(pos2(x, y), Align2::LEFT_TOP, *title, FontId::proportional(11.5), ACCENT);
@@ -530,14 +557,16 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
             y += 8.0;
         }
     };
-    column(card.left() + 20.0, &left);
-    column(card.left() + 20.0 + col_w, &right);
-    if rules {
+    if show_keys {
+        column(x0, left_w, &left);
+        column(x0 + left_w, right_w, &right);
+    }
+    let (x, mut y) = if wide { (x0 + left_w + right_w, card.top() + 50.0) } else { (x0, card.top() + 50.0 + cols) };
+    if below && y + 58.0 <= card.bottom() - 28.0 {
         // One row per rule (its key, reason and what to do), then the keys
         // for any card.
-        let x = card.left() + 20.0;
-        let (why_x, do_x, end) = (x + 70.0, x + 70.0 + (w - 110.0) * 0.4, card.right() - 20.0);
-        let mut y = card.top() + 50.0 + cols;
+        let end = card.right() - 20.0;
+        let (why_x, do_x) = (x + 40.0, x + 40.0 + (end - x - 40.0) * 0.4);
         p.text(pos2(x, y), Align2::LEFT_TOP, app.tr("help.rules"), FontId::proportional(11.5), ACCENT);
         y += 20.0;
         for (at, word) in [(x, "help.key"), (why_x, "help.why"), (do_x, "help.do")] {
@@ -556,6 +585,9 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
         }
     }
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
+    if paged {
+        p.text(pos2(card.right() - 20.0, card.bottom() - 22.0), Align2::RIGHT_CENTER, app.tr("help.page"), FontId::proportional(11.5), c.dim);
+    }
 }
 
 /// The keys for any inbox card, after the rules in the help.

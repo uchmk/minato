@@ -280,6 +280,9 @@ pub enum Cmd {
 pub struct App {
     pub view: View,
     pub mode: Mode,
+    /// The help's second page (the inbox's table), when it does not fit
+    /// beside the keys; Tab turns it.
+    pub help_rules: bool,
     pub prefs: Prefs,
     /// The language in force (`en`, `ja`), from common.toml or the OS.
     pub lang: String,
@@ -474,6 +477,7 @@ impl App {
         let mut app = Self {
             view: View::Inbox,
             mode: Mode::Main,
+            help_rules: false,
             prefs,
             lang: "en".into(),
             unread: 0,
@@ -695,6 +699,10 @@ impl App {
     /// Only on the main screen with nothing over it.
     pub fn cycle_view(&mut self, back: bool) -> bool {
         let free = self.compose.is_none() && self.confirm.is_none() && self.palette.is_none() && self.overlay.is_none();
+        if free && self.mode == Mode::Help {
+            self.help_rules = !self.help_rules;
+            return true;
+        }
         if !free || self.mode != Mode::Main {
             return false;
         }
@@ -2711,6 +2719,9 @@ jobs:
         a.palette = Some(ito_palette::View::new());
         a.toggle_help();
         assert!(a.mode == Mode::Help && a.palette.is_none());
+        // Tab turns the help's page, not the view.
+        assert!(a.cycle_view(false));
+        assert!(a.help_rules && a.view == View::Inbox);
         a.toggle_help();
         assert_eq!(a.mode, Mode::Main);
     }

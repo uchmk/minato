@@ -23,10 +23,10 @@
 - [ ] **2.1** Press `1`, `2`, `3`, `4` → The matching tab lights with an underline and the empty view's name and text change
 - [ ] **2.2** Click each tab → Same as the digit
 - [ ] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right; `F1`, `?` or `Esc` closes it; digits do nothing while it is open
-- [ ] **2.3a** In the inbox, press `F1`; then in the board → In the inbox, below the keys, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`; nothing is cut off at the right. In the board there is no such table
+- [ ] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
 - [ ] **2.4** Press `,` or click the comma button → The settings screen opens; `Esc` closes it
 - [ ] **2.5** Press `Ctrl+Shift+P` → A toast says it is not connected yet (the palette comes later)
-- [ ] **2.6** Look at the keybar in each view → The keys of the view at the left, the first one lit, ending with `F1`; no overflow at 720 px
+- [ ] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go and `F1` stays, never under `⟳`, `API` or the clock
 
 ## 3. Keybar status and clock
 
