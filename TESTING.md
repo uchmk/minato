@@ -399,6 +399,6 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 31.12 | Press `r` and type more lines than the box holds | The text scrolls inside the box with the caret in view; nothing is drawn below the box |
 | 31.13 | Narrow the window until the title bar's palette button is small | The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap |
 | 31.14 | Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` | The counter shows whichever of the REST (`core`) and GraphQL budgets has less left |
-| 31.15 | Narrow the inbox column to its least, then zoom in | A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail |
+| 31.15 | Narrow the inbox column to its least, then zoom in; press `r` on the least window | A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail; the open box stays inside the detail, its field chips going first |
 | 31.16 | Rest the pointer on a row of the list until its body shows, then press `S` | The repository settings show without the row's body over them |
 | 31.17 | Press `2`, `C`, wait for the closed items, then `1` | The inbox shows its cards at once, not "nothing is waiting" |

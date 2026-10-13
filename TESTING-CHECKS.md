@@ -309,9 +309,9 @@
 - [x] **29.10** Press `Esc` with nothing else open, then open the panel again and click ✕ → `Esc` closes the panel and the view takes the whole width; ✕ does the same
 - [x] **29.11** Make a message show (e.g. `d` then `u`) with the panel open → The message is at the top right of the view, left of the panel, not under it
 - [ ] **29.12** On Linux press `o` → The system's browser opens the page; no panel
-- [ ] **29.13** Press `o` on a card, then `j` `k` without clicking the page → The panel opens without the keys: `j` `k` move the selection, not the page
-- [ ] **29.14** In the panel follow a link GitHub moves to without loading a page (an issue's link to another issue, a PR's tabs) → The address field shows the new page's address
-- [ ] **29.15** With the panel open press `N` → The new-issue box shows whole over the view, not cut by the panel's ground
+- [x] **29.13** Press `o` on a card, then `j` `k` without clicking the page → The panel opens without the keys: `j` `k` move the selection, not the page
+- [x] **29.14** In the panel follow a link GitHub moves to without loading a page (an issue's link to another issue, a PR's tabs) → The address field shows the new page's address
+- [x] **29.15** With the panel open press `N` → The new-issue box shows whole over the view, not cut by the panel's ground
 
 ## 30. The smallest window
 
@@ -329,7 +329,7 @@
 - [x] **31.1** Zoom in (`Ctrl+=`) or open the browser panel, press `3` and select a failed run → The "Next" box's button goes under its words when both do not fit side by side, and the box grows; nothing covers the words
 - [x] **31.2** Select a failed run of a workflow with fewer than ten runs loaded → The note and the squares' heading say how many runs they are about (Japanese: 直近 5 回, 最近 5 回で 1 回)
 - [x] **31.3** Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` → No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows
-- [ ] **31.4** Narrow the window, press `1` and `/`, type a few letters → The search's hint goes first, then the field narrows; neither runs into the sync status
+- [x] **31.4** Narrow the window, press `1` and `/`, type a few letters → The search's hint goes first, then the field narrows; neither runs into the sync status
 - [x] **31.5** On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` → Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out
 - [ ] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's; `F1` still lists them all
 - [ ] **31.7** Open the palette and type part of a long title → The title is cut with `…` inside its row, clear of the key hint
@@ -338,8 +338,8 @@
 - [x] **31.10** Press `C` in the list, then `1` → The inbox has no card of a closed issue or a merged PR
 - [ ] **31.11** Select a run of a workflow with `workflow_dispatch` and press `D` at once → Until its file is read, a toast says it is reading the workflow file and to press `D` again; then `D` opens the form with its inputs (or asks to run it)
 - [ ] **31.12** Press `r` and type more lines than the box holds → The text scrolls inside the box with the caret in view; nothing is drawn below the box
-- [ ] **31.13** Narrow the window until the title bar's palette button is small → The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap
+- [x] **31.13** Narrow the window until the title bar's palette button is small → The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap
 - [ ] **31.14** Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` → The counter shows whichever of the REST (`core`) and GraphQL budgets has less left
-- [ ] **31.15** Narrow the inbox column to its least, then zoom in → A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail
+- [x] **31.15** Narrow the inbox column to its least, then zoom in; press `r` on the least window → A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail; the open box stays inside the detail, its field chips going first
 - [x] **31.16** Rest the pointer on a row of the list until its body shows, then press `S` → The repository settings show without the row's body over them
 - [x] **31.17** Press `2`, `C`, wait for the closed items, then `1` → The inbox shows its cards at once, not "nothing is waiting"

@@ -26,6 +26,8 @@ const FOOT_H: f32 = 46.0;
 const LINE_H: f32 = 8.0 + 30.0 + 8.0;
 /// Below this the strip is one line until the box is opened.
 const SHORT: f32 = 440.0;
+/// The least of the box's field before the chips are left out.
+const EDIT_MIN: f32 = 40.0;
 /// GitHub's green of the Comment button.
 const GREEN: Color32 = Color32::from_rgb(0x23, 0x86, 0x36);
 const GREEN_HOT: Color32 = Color32::from_rgb(0x2c, 0x97, 0x4b);
@@ -68,9 +70,15 @@ fn edit_h(h: f32) -> f32 {
 }
 
 /// How high the strip at the foot is in a detail `h` high: one line in a
-/// short one, unless the box is `open`.
+/// short one, unless the box is `open`; never above the detail.
 fn strip_h(h: f32, open: bool) -> f32 {
-    if !open && h < SHORT { LINE_H } else { CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0 }
+    if !open && h < SHORT { LINE_H } else { (CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0).min(h) }
+}
+
+/// How high the chips are in a strip `h` high: left out (their fields keep
+/// their `Alt` keys) when the box's field would be shorter than `EDIT_MIN`.
+fn chips_h(h: f32) -> f32 {
+    if h - CHIPS_H - BAR_H - FOOT_H - 12.0 >= EDIT_MIN { CHIPS_H } else { 8.0 }
 }
 
 /// The strip as one line: the draft's first line or the hint, and `r`. A
@@ -275,7 +283,11 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     let right = r.right() - 26.0;
     let y = r.top() + 8.0 + 13.0;
     let mut x = x0;
+    let chips = chips_h(r.height());
     for k in app.settings.order {
+        if chips < CHIPS_H {
+            break;
+        }
         if !app.settings.fields[k] {
             continue;
         }
@@ -308,12 +320,12 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     }
     // The hint only where it fits whole.
     let gear = p.layout_no_wrap(app.tr("compose.gear").to_owned(), FontId::proportional(11.5), c.dim);
-    if x + 4.0 + gear.size().x <= right {
+    if chips == CHIPS_H && x + 4.0 + gear.size().x <= right {
         p.galley(pos2(x + 4.0, y - gear.size().y / 2.0), gear, c.dim);
     }
     let open = app.compose.as_ref().filter(|w| w.id == item.id);
-    let edit_h = r.height() - CHIPS_H - BAR_H - FOOT_H - 12.0;
-    let bx = Rect::from_min_size(pos2(x0, r.top() + CHIPS_H), vec2(right - x0, BAR_H + edit_h + FOOT_H));
+    let edit_h = (r.height() - chips - BAR_H - FOOT_H - 12.0).max(20.0);
+    let bx = Rect::from_min_size(pos2(x0, r.top() + chips), vec2(right - x0, BAR_H + edit_h + FOOT_H));
     p.rect_filled(bx, CornerRadius::same(8), c.bg);
     let bar = Rect::from_min_size(bx.min, vec2(bx.width(), BAR_H));
     p.rect_filled(bar, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, style::head().gamma_multiply(0.6));
