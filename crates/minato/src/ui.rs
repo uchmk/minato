@@ -569,7 +569,8 @@ pub fn find_box(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(field));
     let edit = egui::TextEdit::singleline(&mut text).id(id).frame(egui::Frame::NONE).desired_width(field.width()).lock_focus(true).font(FontId::proportional(12.5)).text_color(c.fg).hint_text(app.tr("find.hint"));
     child.add(edit);
-    ctx.memory_mut(|m| m.request_focus(id));
+    // Only when it has lost it: asking again ends an IME composition.
+    ctx.memory_mut(|m| if !m.has_focus(id) { m.request_focus(id) });
     if text != app.find_text {
         app.set_find(&text);
     }

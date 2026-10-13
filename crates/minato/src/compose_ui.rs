@@ -186,7 +186,8 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             // (no bar: the field shows where the caret is).
             let hidden = egui::scroll_area::ScrollBarVisibility::AlwaysHidden;
             egui::ScrollArea::vertical().id_salt("minato-compose-scroll").max_height(field.height()).min_scrolled_height(field.height()).auto_shrink([false, false]).scroll_bar_visibility(hidden).show(&mut child, |ui| ui.add(edit));
-            ctx.memory_mut(|m| m.request_focus(id));
+            // Only when it has lost it: asking again ends an IME composition.
+            ctx.memory_mut(|m| if !m.has_focus(id) { m.request_focus(id) });
         }
     }
     match act {

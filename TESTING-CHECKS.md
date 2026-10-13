@@ -74,6 +74,7 @@
 ## 8. Writing box and fields
 
 - [x] **8.1** Select an item and press `r` → The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window
+- [x] **8.1a** In the box, type a Japanese sentence with the IME (convert with `Space`, commit with `Enter`) → The composition shows in the box with its candidate window by the caret; the committed text stays and the box keeps the cursor
 - [ ] **8.2** Type text, press `Ctrl+P`, then `Esc` → The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field
 - [x] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
 - [ ] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
@@ -278,7 +279,7 @@
 ## 28. Search, Tab and the board's speed
 
 - [x] **28.1** In the inbox press `/`, type `font kura` → A field opens in the keybar after a lit `/` chip (the `/` itself is not typed in); the cards narrow as you type to those with both words in the title, #number, repository, labels, author or body start; the keybar shows "N 件" (red at 0) and "Enter 決定 · Esc 消す"; the words are marked in the card titles and in the detail's body and comments
-- [ ] **28.2** Type a Japanese word with the IME in the search field → The IME's candidate window shows by the field; the committed word filters and is marked
+- [x] **28.2** Type a Japanese word with the IME in the search field → The IME's candidate window shows by the field; the committed word filters and is marked
 - [x] **28.3** Search `preview`, then `Preview` → Lower case finds "Preview" and "preview"; once a capital is typed only "Preview" is found
 - [x] **28.4** With the field open press `Down`/`Up`, then `Enter`, then `j k`, then `Esc` → The arrows move the selection; `Enter` closes the field but keeps the filter and the keybar line; `j k` move again; `Esc` clears the words and every card comes back
 - [x] **28.5** Search in the inbox, press `2`, then `/` again → The list is filtered by the same words; `/` reopens the field with them, the cursor at the end

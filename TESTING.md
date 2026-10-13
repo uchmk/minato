@@ -87,6 +87,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | # | Do | Expect |
 | --- | --- | --- |
 | 8.1 | Select an item and press `r` | The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window |
+| 8.1a | In the box, type a Japanese sentence with the IME (convert with `Space`, commit with `Enter`) | The composition shows in the box with its candidate window by the caret; the committed text stays and the box keeps the cursor |
 | 8.2 | Type text, press `Ctrl+P`, then `Esc` | The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field |
 | 8.3 | Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` | `**word**`, `_word_` and `[word](url)` (with `url` selected) |
 | 8.4 | Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` | The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change |
