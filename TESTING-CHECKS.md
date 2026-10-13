@@ -56,10 +56,10 @@
 - [x] **6.4** Press `h`, then `j` and `Space` on a repository → The list narrows to it and the query line over the list changes; the chosen option is filled
 - [x] **6.5** Pick "CI is red" → Only PRs with a red mark remain
 - [x] **6.6** Press `l` twice and `j` → The detail scrolls by lines, with no scrollbar; moving the row resets it
-- [ ] **6.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
+- [x] **6.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 - [x] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation
 - [x] **6.9** Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' → A long repository name ends with "…" before its count (in a narrow column it loses its owner and the counts go); "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half
-- [ ] **6.10** Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh → The selection stays on the same item, which moves down a row; the detail does not change
+- [x] **6.10** Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh → The selection stays on the same item, which moves down a row; the detail does not change
 
 ## 7. Inbox view
 
@@ -69,37 +69,37 @@
 - [x] **7.4** Press `s` → The card disappears (back tomorrow 9:00) with a toast; `u` brings it back
 - [x] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
 - [x] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide behind a "⋯" line inside their own section, under its header ("⋯ 下に N 件", or "⋯ N 件" for a section with none shown); no card is folded to its title and no scrollbar
-- [ ] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
+- [x] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 - [x] **7.8** Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) → The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room
 
 ## 8. Writing box and fields
 
 - [x] **8.1** Select an item and press `r` → The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window
 - [x] **8.1a** In the box, type a Japanese sentence with the IME (convert with `Space`, commit with `Enter`) → The composition shows in the box with its candidate window by the caret; the committed text stays and the box keeps the cursor
-- [ ] **8.2** Type text, press `Ctrl+P`, then `Esc` → The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field
+- [x] **8.2** Type text, press `Ctrl+P`, then `Esc` → The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field
 - [x] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
-- [ ] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
-- [ ] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
-- [ ] **8.5a** In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` → A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project
+- [x] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
+- [x] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
+- [x] **8.5a** In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` → A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project
 - [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project
-- [ ] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
+- [x] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
 - [x] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
 - [ ] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
 - [ ] **8.6c** Press `m` in the list on a ready PR, `Enter` → The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead
 - [ ] **8.6d** Press `x` on a merged item or a discussion → A toast says only an open issue or PR can be closed
-- [ ] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
-- [ ] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
+- [x] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
+- [x] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
 - [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
 - [ ] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
-- [ ] **8.11** Press `a` on an issue → You are assigned; a toast says so
-- [ ] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
+- [x] **8.11** Press `a` on an issue → You are assigned; a toast says so
+- [x] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
 - [x] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change
-- [ ] **8.13** Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel → The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated
-- [ ] **8.14** Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status → Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so
-- [ ] **8.15** With a picker open, click Comment or Close in the box's footer → The picker's change is written first, then the comment is sent (or the item closed)
-- [ ] **8.16** Select an item of a repository not looked at yet and at once press `r` then `Alt+A` → The picker may say loading for a moment, then the names fill in by themselves (no need to close and reopen it)
-- [ ] **8.17** Select an item, wait a second, then press `r` and `Alt+A`; quit, start again and do the same → The names are there at once both times (read ahead on the selection, then kept in the cache)
+- [x] **8.13** Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel → The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated
+- [x] **8.14** Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status → Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so
+- [x] **8.15** With a picker open, click Comment or Close in the box's footer → The picker's change is written first, then the comment is sent (or the item closed)
+- [x] **8.16** Select an item of a repository not looked at yet and at once press `r` then `Alt+A` → The picker may say loading for a moment, then the names fill in by themselves (no need to close and reopen it)
+- [x] **8.17** Select an item, wait a second, then press `r` and `Alt+A`; quit, start again and do the same → The names are there at once both times (read ahead on the selection, then kept in the cache)
 - [x] **8.18** Zoom in (`Ctrl+=` twice) and look at the field chips above the writing box → A chip that does not fit is left out whole, none is cut at the right; "⚙ 出す項目は設定（,）で選ぶ" shows only when it fits
 
 ## 9. Actions
@@ -107,27 +107,28 @@
 - [x] **9.1** Press `3` → The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others show whole too, as many as fit
 - [x] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
 - [x] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
-- [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
+- [x] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [ ] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
-- [ ] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
-- [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
+- [x] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
+- [x] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [x] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [x] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
 - [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button; the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
 - [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 - [ ] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds)
+- [ ] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
 
 ## 10. Board
 
 - [x] **10.1** Press `4` → Project "uchmk" shows its Status options as columns with counts; each card shows repo, number, kind, title and labels; a "No status" column leads if some card has none
 - [x] **10.2** Move with `h l j k` → The column header and the card are highlighted; the cursor stays inside the columns
-- [ ] **10.3** Press `L` on a card → The card moves to the next column at once, a toast says so, and the card's Status changes in the GitHub Project
+- [x] **10.3** Press `L` on a card → The card moves to the next column at once, a toast says so, and the card's Status changes in the GitHub Project
 - [x] **10.4** Press `H` on a card in the first Status column → Nothing moves (no write)
-- [ ] **10.5** Drag a card onto another column with the mouse → The card follows the pointer, the column under it is outlined, and on release the card moves and GitHub changes
-- [ ] **10.6** Press `u` after a move → The card goes back and GitHub changes back
+- [x] **10.5** Drag a card onto another column with the mouse → The card follows the pointer, the column under it is outlined, and on release the card moves and GitHub changes
+- [x] **10.6** Press `u` after a move → The card goes back and GitHub changes back
 - [x] **10.7** Press `Enter` on a card that is in the list, then on one that is not → The list opens on it; otherwise a toast says it is not in the list
-- [ ] **10.8** Press `o` on a card → The built-in browser shows the issue or PR
+- [x] **10.8** Press `o` on a card → The built-in browser shows the issue or PR
 - [ ] **10.9** Use a token without the `project` scope and press `L` → An error toast appears and, after a moment, the card returns to its column
 - [x] **10.10** Put many cards in one column → No scrollbar; the cards that do not fit hide and "more" shows; none is folded
 - [x] **10.11** Look at a card with a long title → The title ends with "…" inside the card, not cut mid-glyph at its edge
@@ -205,7 +206,7 @@
 
 ## 18. Mentions, red main CI and rule priority
 
-- [ ] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
+- [x] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
 - [ ] **18.2** Have someone mention you on their open issue → The issue is in the inbox with "Mentions you"
 - [ ] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
 - [ ] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
@@ -214,7 +215,7 @@
 ## 19. New issue
 
 - [x] **19.1** In the inbox or the list press `N` → The writing box opens titled "New issue" with the repository of the selected item
-- [ ] **19.2** Type a title, a new line and a body, then `Ctrl+Enter` → A toast says the issue was created; it is on GitHub with that title and body and appears in the list soon
+- [x] **19.2** Type a title, a new line and a body, then `Ctrl+Enter` → A toast says the issue was created; it is on GitHub with that title and body and appears in the list soon
 - [x] **19.3** Press `N`, leave it empty, `Ctrl+Enter` → A toast says the title is empty and the box stays open
 
 ## 20. Repository settings
@@ -252,9 +253,9 @@
 - [x] **25.1** Select an issue and look under the detail → A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment"; in a narrower detail (zoom in, or the browser panel open) the toolbar drops its last groups whole (@ #, then the lists) instead of drawing over the tabs
 - [x] **25.2** Click the text area, type two lines, then click another row → The box takes the cursor in place; after the click the box leaves and the text stays; back on the item, clicking the box shows the text again
 - [x] **25.3** Select a word and click B, I, the link and the list buttons → The word becomes `**word**`, `_word_`, `[word](url)`, and the line a list item; hovering a button shows its name
-- [ ] **25.4** Click Preview, then Write → The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text
+- [x] **25.4** Click Preview, then Write → The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text
 - [x] **25.5** With nothing written click "Comment", then "Close issue" → "Comment" is dim and does nothing; "Close issue" asks first, as `x` does
-- [ ] **25.6** Type a comment and click "Close with comment" (the close button's name once there is text) → The comment is sent and the issue is closed
+- [x] **25.6** Type a comment and click "Close with comment" (the close button's name once there is text) → The comment is sent and the issue is closed
 - [x] **25.7** Look at an item whose body and comments use Markdown → Headings, bold, italic, code, lists, quotes and links show as such in the detail, not as raw marks
 - [x] **25.8** Drag a column line in the inbox, list and Actions, close minato and start it again → The columns come back at the widths they were left at (state.toml in minato's state folder)
 - [ ] **25.9** Start minato while offline after a run with the connection up → The inbox, list, Actions and Board show the last answers at once; a selected item shows its last detail
@@ -262,7 +263,7 @@
 
 ## 26. HTML in Markdown, the wheel, the scale, the hover and the messages
 
-- [ ] **26.1** Look at an item whose body has `<details><summary>…</summary>` and `<b>`, `<code>`, `<br>`, `<a href>` → The summary is a bar with a triangle pointing down and what the details hold under it; bold, code, the line break and the link show as Markdown does; no raw tags are left
+- [x] **26.1** Look at an item whose body has `<details><summary>…</summary>` and `<b>`, `<code>`, `<br>`, `<a href>` → The summary is a bar with a triangle pointing down and what the details hold under it; bold, code, the line break and the link show as Markdown does; no raw tags are left
 - [x] **26.2** Turn the wheel over the inbox cards, the list's filters and rows, the Actions runs, a board column and the notifications → The selection (or the filter cursor) moves one a notch, down for down; the column under the pointer takes the focus
 - [x] **26.3** Turn the wheel over a long detail in the inbox, the list and Actions → It scrolls about three lines a notch; in the inbox and the list it stops once its end shows, and at the top
 - [x] **26.4** Press Ctrl+=, Ctrl++ (with Shift), Ctrl+- and Ctrl+0, also on the settings screen, and pick "Zoom in" in the palette → The window grows or shrinks a step, a message says the size (as kura's), Ctrl+0 brings it back to 100%; kura and tsumugi take the same size from common.toml
@@ -287,12 +288,12 @@
 - [x] **28.5** Search in the inbox, press `2`, then `/` again → The list is filtered by the same words; `/` reopens the field with them, the cursor at the end
 - [x] **28.6** With the field open click a view tab for Actions, open the palette, press `n` (bell) by mouse → The field closes each time; in Actions the keybar shows its keys again
 - [x] **28.7** Press `Tab` five times from the inbox, then `Shift+Tab` → Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open
-- [ ] **28.8** Press `4` on a fresh start (no cache), then again after `1` and back → The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once
+- [x] **28.8** Press `4` on a fresh start (no cache), then again after `1` and back → The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once
 - [ ] **28.9** Select a run in Actions while the network is off for 15 seconds, then turn it on → Its jobs come within about 10 seconds of the network coming back, not after the next refresh
 - [x] **28.10** In Actions select a finished run, move away and back; quit minato, start it and select it again → The second time and after the restart its jobs, artifacts and graph show at once, with no "loading"
 - [ ] **28.11** Select a running run and wait for two refreshes of the runs (about a minute) → Its jobs' marks and durations follow the run; when it finishes the detail shows the final jobs and artifacts
 - [x] **28.12** Hold `j` across many runs in Actions, then let go → The detail of the run you stop on comes within a few seconds, not after those of the runs passed
-- [ ] **28.13** Press `4` on a Project with more than 100 cards → Every card shows (up to 500); the cards appear together, not 100 first and the rest later
+- [x] **28.13** Press `4` on a Project with more than 100 cards → Every card shows (up to 500); the cards appear together, not 100 first and the rest later
 - [x] **28.14** Rest the pointer on a board card for the first time, then again → The first time the box with the body's start comes after a moment; the second time at once
 - [x] **28.15** Start minato, stay in the inbox for about 30 seconds, then press `3` and `4` → Actions shows its runs and the board its cards at once, with no "loading"
 - [x] **28.16** Stay in the inbox for a minute after a start, then in Actions select a finished run never selected before → Its jobs, artifacts and graph show at once; the runs next to it too

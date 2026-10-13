@@ -424,6 +424,16 @@ impl ActState {
         self.sel = self.sel.min(self.shown(runs).len().saturating_sub(1));
     }
 
+    /// Keep the selection on the same run after the runs changed (a new run
+    /// above it, or a re-run moving it to the top); clamped when it is gone.
+    pub fn stay(&mut self, before: &[Run], after: &[Run]) {
+        let id = self.selected(before).map(|r| r.id);
+        if let Some(k) = id.and_then(|id| self.shown(after).iter().position(|r| r.id == id)) {
+            self.sel = k;
+        }
+        self.clamp(after);
+    }
+
     /// `gg` and `G`, as the list's.
     pub fn jump(&mut self, end: bool, runs: &[Run]) {
         match self.col {
@@ -535,6 +545,19 @@ mod tests {
         s.sel = 1;
         assert_eq!(ids(&s), [13, 11, 12]);
         assert!(ActState::default().near_first(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_selection_stays_on_its_run_when_one_comes_above_it() {
+        let runs = runs();
+        let mut s = ActState { sel: 1, ..Default::default() };
+        let mut more = runs.clone();
+        more.insert(0, Run { id: 99, ..runs[2].clone() });
+        s.stay(&runs, &more);
+        assert_eq!(s.selected(&more).map(|r| r.id), Some(12));
+        // Gone: the row is kept, inside the list.
+        s.stay(&more, &more[..2]);
+        assert_eq!(s.sel, 1);
     }
 
     #[test]

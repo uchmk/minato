@@ -298,8 +298,8 @@ impl Net {
     fn show_runs(&self, app: &mut App) {
         let mut all: Vec<Run> = self.run_found.values().flatten().cloned().collect();
         all.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-        app.runs = all;
-        app.acts.clamp(&app.runs);
+        let before = std::mem::replace(&mut app.runs, all);
+        app.acts.stay(&before, &app.runs);
     }
 
     /// Write an answer to the cache (on the writer's thread).
