@@ -93,6 +93,7 @@
 - [ ] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [ ] **8.11** Press `a` on an issue → You are assigned; a toast says so
+- [ ] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
 - [x] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change
 - [ ] **8.13** Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel → The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated
 - [ ] **8.14** Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status → Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so

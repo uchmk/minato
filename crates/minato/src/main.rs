@@ -100,6 +100,7 @@ impl Minato {
             let settings = i.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma);
             (i.events.clone(), palette, settings)
         });
+        let events = no_alt_letters(events);
         if settings && self.app.compose.is_none() && self.app.confirm.is_none() && self.app.overlay.is_none() {
             self.app.palette = None;
             self.app.mode = Mode::Settings;
@@ -163,6 +164,16 @@ impl Minato {
             }
         }
     }
+}
+
+/// The events without the letters an Alt key also sends on Windows: `Alt+A`
+/// is not `a` (AltGr, which comes with Ctrl, still types).
+fn no_alt_letters(events: Vec<egui::Event>) -> Vec<egui::Event> {
+    let alt: Vec<String> = events.iter().filter_map(|e| match e {
+        egui::Event::Key { key, pressed: true, modifiers, .. } if modifiers.alt && !modifiers.ctrl && key.name().len() == 1 => Some(key.name().to_ascii_lowercase()),
+        _ => None,
+    }).collect();
+    events.into_iter().filter(|e| !matches!(e, egui::Event::Text(t) if alt.contains(&t.to_ascii_lowercase()))).collect()
 }
 
 /// The palette over the window, while it is open.
@@ -417,6 +428,18 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_alt_key_does_not_type_its_letter() {
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let text = |t: &str| egui::Event::Text(t.to_string());
+        let got = no_alt_letters(vec![key(egui::Key::A, egui::Modifiers::ALT), text("a"), text("j")]);
+        assert_eq!(got.iter().filter(|e| matches!(e, egui::Event::Text(_))).count(), 1);
+        // AltGr comes with Ctrl: its character stays.
+        let got = no_alt_letters(vec![key(egui::Key::Q, egui::Modifiers::ALT | egui::Modifiers::CTRL), text("@")]);
+        assert_eq!(got.len(), 2);
+        assert_eq!(no_alt_letters(vec![text("a")]).len(), 1);
+    }
 
     #[test]
     fn the_arrows_are_hjkl() {
