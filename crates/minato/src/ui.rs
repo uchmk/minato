@@ -270,13 +270,19 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         right = b.left();
     }
     right -= 8.0;
-    // The account: a round mark that will hold the avatar.
+    // The account: a round mark that will hold the avatar, ringed while
+    // another's repositories are shown.
     let acct = Rect::from_center_size(pos2(right - 12.0, mid), vec2(24.0, 24.0));
     let resp = ui.interact(acct, ui.id().with("account"), Sense::click());
     p.circle_filled(acct.center(), 11.0, c.border);
     let initial = app.viewer.as_deref().and_then(|l| l.chars().next()).map_or('?'.to_string(), |ch| ch.to_uppercase().to_string());
     p.text(acct.center(), Align2::CENTER_CENTER, initial, FontId::proportional(12.0), if app.viewer.is_some() { c.fg } else { c.dim });
-    resp.on_hover_text(app.viewer.as_deref().unwrap_or(app.tr("account")));
+    let mut hover = app.viewer.clone().unwrap_or_else(|| app.tr("account").into());
+    if !app.settings.owner.is_empty() {
+        p.circle_stroke(acct.center(), 11.5, Stroke::new(1.5, ACCENT));
+        hover = format!("{hover}\n{}: {}", app.tr("account.showing"), app.settings.owner);
+    }
+    resp.on_hover_text(hover);
     right = acct.left() - 10.0;
     // The palette field in the middle of what is left, the bell just right
     // of it as in tsumugi.

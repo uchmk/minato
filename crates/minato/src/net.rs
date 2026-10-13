@@ -105,6 +105,9 @@ pub struct Net {
     kept: HashMap<String, (String, String)>,
     /// The keys GitHub has answered this run (the cache does not undo them).
     live: HashSet<String>,
+    /// The settings' owner (empty: the viewer) and board Project the polls
+    /// follow; `None` until the first frame.
+    scope: Option<(String, String)>,
 }
 
 /// How often the runs are asked again, while the Actions view is open, and
@@ -181,7 +184,7 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, back: None, etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default() }
+        Net { token_rx, worker: None, quick: None, back: None, etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -191,10 +194,22 @@ impl Net {
         let Some(rx) = &self.cache_rx else { return };
         let Ok(entries) = rx.try_recv() else { return };
         self.cache_rx = None;
+        // What was kept for another owner or Project is not shown; kept
+        // with no mark, it is of the viewer and "uchmk".
+        let line = scope_line(self.scope.as_ref());
+        let kept = entries.iter().find(|e| e.key == "scope").map_or_else(|| scope_line(None), |e| e.body.clone());
+        let same = kept == line;
+        if !same {
+            self.keep("scope", "", &line);
+        }
+        let other = self.other().map(str::to_string);
         for e in entries {
             // A GET kept with its ETag: the first ask may be a 304.
-            if let Some(path) = rest_path(&e.key).filter(|_| !e.stamp.is_empty()) {
+            if let Some(path) = rest_path(&e.key, other.as_deref()).filter(|_| !e.stamp.is_empty()) {
                 self.etags.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entry(client::url(&path)).or_insert_with(|| (e.stamp.clone(), e.body.clone()));
+            }
+            if !same && scoped(&e.key) {
+                continue;
             }
             if let Some(id) = e.key.strip_prefix("detail:") {
                 self.kept.insert(id.to_string(), (e.stamp, e.body));
@@ -206,6 +221,47 @@ impl Net {
                 self.take(app, &e.key, &e.body, false);
             }
         }
+    }
+
+    /// The owner the settings name, when it is not the viewer.
+    fn other(&self) -> Option<&str> {
+        self.scope.as_ref().map(|s| s.0.as_str()).filter(|o| !o.is_empty())
+    }
+
+    /// Follow the settings' owner and board Project: when one changes, what
+    /// was found for the old is forgotten and asked for again at once.
+    fn rescope(&mut self, app: &mut App) {
+        let want = (app.settings.owner.clone(), app.settings.project.clone());
+        let Some(old) = self.scope.replace(want.clone()) else { return };
+        if old == want {
+            return;
+        }
+        self.keep("scope", "", &scope_line(Some(&want)));
+        if old.0 != want.0 {
+            self.found = Default::default();
+            self.mentioned.clear();
+            self.stubs.clear();
+            self.rebuild(app);
+            self.next_search = Instant::now();
+            self.repos.clear();
+            self.run_found.clear();
+            self.show_runs(app);
+            self.runs_asked = None;
+            self.asked_run = None;
+            app.run_detail = None;
+        }
+        self.board_no = None;
+        self.board_asked = None;
+        self.board_pages.clear();
+        app.board = None;
+    }
+
+    /// The runs found of the repositories looked at, newest first.
+    fn show_runs(&self, app: &mut App) {
+        let mut all: Vec<Run> = self.run_found.values().flatten().cloned().collect();
+        all.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        app.runs = all;
+        app.acts.clamp(&app.runs);
     }
 
     /// Write an answer to the cache (on the writer's thread).
@@ -309,7 +365,7 @@ impl Net {
                 }
                 self.next_notes = Instant::now();
             }
-            "board-pick" => match board::pick(body) {
+            "board-pick" => match board::pick(body, &app.settings.project) {
                 Ok(n) => {
                     // The pick was asked instead of the board: the board now.
                     if live {
@@ -338,20 +394,28 @@ impl Net {
             "a-repos" => match actions::parse_repos(body) {
                 Ok(v) => {
                     self.repos = v.into_iter().take(REPOS).collect();
+                    // The runs of a repository no longer among them go.
+                    let repos = &self.repos;
+                    self.run_found.retain(|r, _| repos.contains(r));
+                    self.show_runs(app);
                     self.runs_asked = None;
                 }
                 Err(e) => app.say(e),
             },
-            k if k.starts_with("a-runs:") => match actions::parse_runs(body) {
-                Ok(v) => {
-                    self.run_found.insert(k["a-runs:".len()..].to_string(), v);
-                    let mut all: Vec<Run> = self.run_found.values().flatten().cloned().collect();
-                    all.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-                    app.runs = all;
-                    app.acts.clamp(&app.runs);
+            k if k.starts_with("a-runs:") => {
+                let repo = &k["a-runs:".len()..];
+                // Kept from before, or asked before the owner changed.
+                if !self.repos.is_empty() && !self.repos.iter().any(|r| r == repo) {
+                    return;
                 }
-                Err(e) => app.say(e),
-            },
+                match actions::parse_runs(body) {
+                    Ok(v) => {
+                        self.run_found.insert(repo.to_string(), v);
+                        self.show_runs(app);
+                    }
+                    Err(e) => app.say(e),
+                }
+            }
             k if run_part(k) => self.take_run(app, k, body, None),
             k if k.starts_with("a-repo:") => {
                 if let Some(Overlay::Log(l)) = app.overlay.as_mut() {
@@ -416,7 +480,7 @@ impl Net {
         self.board_pages.push(body.to_string());
         let next = board::next_page(body).filter(|_| self.board_pages.len() < PAGES);
         if let (Some(after), Some(n), Some(w)) = (next, self.board_no, &self.worker) {
-            let job = Job { key: "board-more".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, Some(&after)) } };
+            let job = Job { key: "board-more".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, Some(&after)) } };
             if app.view == View::Board {
                 w.send_first(job);
             } else {
@@ -562,6 +626,7 @@ impl Net {
                 Err(_) => {}
             }
         }
+        self.rescope(app);
         self.load_cache(app);
         let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
         let mut replies: Vec<_> = std::iter::from_fn(|| worker.try_recv().or_else(|| quick.try_recv())).map(|r| (r, false)).collect();
@@ -658,7 +723,10 @@ impl Net {
             self.next_poll = now + wait;
         }
         if let Some(me) = app.viewer.clone() {
-            let custom = if app.view == crate::app::View::List { app.list.active_search().map(|t| minato_core::list::search_query(t, &me)) } else { None };
+            // The searches are of the owner's repositories; the mentions
+            // and the authors stay the viewer's.
+            let owner = app.owner().unwrap_or(&me).to_string();
+            let custom = if app.view == crate::app::View::List { app.list.active_search().map(|t| minato_core::list::search_query(t, &owner)) } else { None };
             if app.show_closed != self.searched_closed || custom != self.searched_custom {
                 self.searched_closed = app.show_closed;
                 self.searched_custom = custom.clone();
@@ -666,7 +734,7 @@ impl Net {
             }
             if now >= self.next_search {
                 let state = if app.show_closed { "is:closed" } else { "is:open" };
-                let q = format!("user:{me} {state} sort:updated-desc");
+                let q = format!("user:{owner} {state} sort:updated-desc");
                 let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
                 if let Some(q) = custom {
@@ -678,10 +746,10 @@ impl Net {
                 } else if app.show_closed {
                     self.found[1].clear();
                 } else {
-                    let q = format!("user:{me} is:open mentions:{me} -author:{me} sort:updated-desc");
+                    let q = format!("user:{owner} is:open mentions:{me} -author:{me} sort:updated-desc");
                     let mvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                     worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: mvars } });
-                    worker.send(Job { key: "mainci".into(), call: Call::Graphql { query: mainci::query(), variables: "{}".into() } });
+                    worker.send(Job { key: "mainci".into(), call: Call::Graphql { query: mainci::query(self.other()), variables: "{}".into() } });
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 }
                 self.next_search = now + SEARCH;
@@ -698,15 +766,15 @@ impl Net {
         let open = app.view == View::Board;
         if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }, now) <= now {
             match self.board_no {
-                None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query().into(), variables: "{}".into() } }, open),
-                Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(), variables: board::vars(n, None) } }, open),
+                None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query(self.other()), variables: "{}".into() } }, open),
+                Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, None) } }, open),
             }
             self.board_asked = Some(now);
         }
         let open = app.view == View::Actions;
         if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }, now) <= now {
             if self.repos.is_empty() {
-                send(get("a-repos", actions::repos_path()), open);
+                send(get("a-repos", &actions::repos_path(self.other())), open);
             } else {
                 for r in &self.repos {
                     send(Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) }, open);
@@ -776,18 +844,34 @@ fn cached(key: &str, narrowed: bool) -> bool {
     }
 }
 
+/// Whether `key`'s answer is of the owner or the Project the settings name
+/// (not shown from the cache once they have changed).
+fn scoped(key: &str) -> bool {
+    matches!(key, "items" | "discussions" | "mentions" | "mainci" | "board-pick" | "board" | "a-repos") || key.starts_with("a-runs:")
+}
+
+/// The owner and the Project as kept in the cache (`None`: the viewer and
+/// the default Project).
+fn scope_line(scope: Option<&(String, String)>) -> String {
+    match scope {
+        Some((owner, project)) => format!("{owner}\n{project}"),
+        None => format!("\n{}", board::TITLE),
+    }
+}
+
 /// When a poll last asked at `asked` (`None`: never, or to be asked at once:
 /// `now`) is due again, asked every `every`.
 fn due(asked: Option<Instant>, every: Duration, now: Instant) -> Instant {
     asked.map_or(now, |t| t + every)
 }
 
-/// The path of a kept GET, whose ETag it is kept with.
-fn rest_path(key: &str) -> Option<String> {
+/// The path of a kept GET, whose ETag it is kept with (`other`: the owner
+/// the settings name, if not the viewer).
+fn rest_path(key: &str, other: Option<&str>) -> Option<String> {
     match key {
         "me" => Some("/user".into()),
         "notes" => Some(notes::PATH.into()),
-        "a-repos" => Some(actions::repos_path().into()),
+        "a-repos" => Some(actions::repos_path(other)),
         k => k.strip_prefix("a-runs:").map(actions::runs_path),
     }
 }
@@ -838,5 +922,13 @@ mod tests {
         assert!(due(None, RUNS, now) <= now);
         assert!(due(Some(now), RUNS, now) > now);
         assert!(due(Some(now - BOARD), BOARD, now) <= now);
+    }
+
+    #[test]
+    fn a_cache_with_no_mark_is_of_the_viewer_and_uchmk() {
+        assert_eq!(scope_line(None), scope_line(Some(&(String::new(), "uchmk".into()))));
+        assert_ne!(scope_line(None), scope_line(Some(&("rust-lang".into(), "uchmk".into()))));
+        assert!(scoped("a-runs:o/r") && scoped("board") && !scoped("detail:x") && !scoped("notes"));
+        assert_eq!(rest_path("a-repos", Some("o")).as_deref(), Some("/users/o/repos?type=owner&sort=pushed&per_page=12"));
     }
 }

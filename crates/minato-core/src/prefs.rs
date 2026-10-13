@@ -1,5 +1,6 @@
-//! minato's own settings: which inbox rules are on and which fields the
-//! writing box offers. Kept as a small JSON file beside common.toml.
+//! minato's own settings: whose repositories are shown, which inbox rules
+//! are on and which fields the writing box offers. Kept as a small JSON
+//! file beside common.toml.
 
 use serde_json::{Value, json};
 
@@ -8,8 +9,13 @@ use crate::inbox::Rules;
 /// The writing box's fields, in the order of the keys `Alt+L A S M P R`.
 pub const FIELDS: usize = 6;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
+    /// The user or organization whose repositories, searches and Project
+    /// are shown (a login); empty for the viewer.
+    pub owner: String,
+    /// The title of the Project the board shows (the first when none has it).
+    pub project: String,
     pub rules: Rules,
     /// Labels, Assignees, Status, Milestone, Priority, Reviewers.
     pub fields: [bool; FIELDS],
@@ -19,19 +25,25 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { rules: Rules::default(), fields: [true, true, true, false, false, false], order: [0, 1, 2, 3, 4, 5] }
+        Settings { owner: String::new(), project: crate::board::TITLE.into(), rules: Rules::default(), fields: [true, true, true, false, false, false], order: [0, 1, 2, 3, 4, 5] }
     }
 }
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
+        json!({ "owner": self.owner, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
     pub fn parse(text: &str) -> Settings {
         let mut s = Settings::default();
         let Ok(v) = serde_json::from_str::<Value>(text) else { return s };
+        if let Some(o) = v.get("owner").and_then(Value::as_str) {
+            s.owner = login(o);
+        }
+        if let Some(p) = v.get("project").and_then(Value::as_str) {
+            s.project = p.trim().to_string();
+        }
         let fill = |key: &str, out: &mut [bool]| {
             if let Some(list) = v.get(key).and_then(Value::as_array) {
                 for (slot, x) in out.iter_mut().zip(list) {
@@ -65,6 +77,13 @@ impl Settings {
     }
 }
 
+/// A login from what was typed: `@name`, `name` or the account's URL; what
+/// a login cannot hold is dropped.
+pub fn login(text: &str) -> String {
+    let last = text.trim().trim_end_matches('/').rsplit('/').next().unwrap_or_default();
+    last.trim_start_matches('@').chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,6 +97,18 @@ mod tests {
         assert_eq!(Settings::parse("nonsense"), Settings::default());
         let odd = Settings::parse(r#"{"fields":[false,"x"],"rules":[]}"#);
         assert!(!odd.fields[0] && odd.fields[1]);
+    }
+
+    #[test]
+    fn the_owner_and_the_project_are_kept_and_the_owner_is_a_login() {
+        let s = Settings { owner: "rust-lang".into(), project: "Roadmap".into(), ..Settings::default() };
+        assert_eq!(Settings::parse(&s.to_json()), s);
+        // Before they were settings: the viewer and "uchmk".
+        let old = Settings::parse(r#"{"fields":[true]}"#);
+        assert_eq!((old.owner.as_str(), old.project.as_str()), ("", "uchmk"));
+        assert_eq!(Settings::parse(r#"{"owner":" @Foo\"bar "}"#).owner, "Foobar");
+        assert_eq!(login("https://github.com/rust-lang/"), "rust-lang");
+        assert_eq!(login("  "), "");
     }
 
     #[test]

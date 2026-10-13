@@ -169,6 +169,10 @@
 - [ ] **15.2** Switch the dependabot rule on and go to the inbox → A dependabot PR now appears with its reason
 - [ ] **15.3** Switch Milestone on, press `r` then `Alt+M` on an item → The milestone picker opens; with it off, a toast says the field is hidden
 - [ ] **15.4** Change a switch, quit and start again → The switches keep their state; `minato-settings.json` sits beside common.toml
+- [ ] **15.5** Open the minato page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
+- [ ] **15.6** Type `https://github.com/@rust-lang` in the owner box and press Enter → The box shows `rust-lang`
+- [ ] **15.7** Type `Triage Queue` in "Board Project" and press Enter, then open the board → The board shows that Project; a title no Project has shows the owner's first Project
+- [ ] **15.8** Clear the owner box and press Enter; quit and start again → Your own repositories come back with no old rust-lang cards or runs left; the ring goes; the owner and the Project are kept across the restart
 
 ## 16. Closed items
 

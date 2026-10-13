@@ -298,8 +298,12 @@ pub struct App {
     pub marks: HashMap<String, Mark>,
     /// Where changed marks go to be written (see `keep_marks`).
     marks_tx: Option<std::sync::mpsc::Sender<String>>,
-    /// minato's own settings: the inbox rules and the writing box's fields.
+    /// minato's own settings: whose repositories, the inbox rules and the
+    /// writing box's fields.
     pub settings: Settings,
+    /// The text boxes of the owner and the board's Project in the settings
+    /// (taken into `settings` on Enter).
+    pub scope_text: [String; 2],
     settings_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The text box of the saved searches in the settings (one per line).
     pub searches_text: String,
@@ -464,6 +468,7 @@ impl App {
             marks: HashMap::new(),
             marks_tx: None,
             settings: Settings::default(),
+            scope_text: [String::new(), board::TITLE.into()],
             settings_tx: None,
             searches_text: String::new(),
             searches_tx: None,
@@ -1181,6 +1186,12 @@ impl App {
         self.say(words);
     }
 
+    /// Whose repositories are shown: the owner the settings name, else the
+    /// viewer.
+    pub fn owner(&self) -> Option<&str> {
+        Some(self.settings.owner.as_str()).filter(|o| !o.is_empty()).or(self.viewer.as_deref())
+    }
+
     /// Every card of the inbox now, before its filters.
     pub fn inbox_all(&self) -> Vec<Card> {
         let me = self.viewer.as_deref().unwrap_or("");
@@ -1249,6 +1260,7 @@ impl App {
     pub fn keep_settings(&mut self, path: std::path::PathBuf) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             self.settings = Settings::parse(&text);
+            self.scope_text = [self.settings.owner.clone(), self.settings.project.clone()];
         }
         self.settings_tx = Some(writer(path));
     }
@@ -2155,6 +2167,16 @@ mod tests {
         // Status needs the item in the Project: it only says so.
         a.click(Click::Field(2));
         assert!(a.compose.as_ref().unwrap().picker.is_none());
+    }
+
+    #[test]
+    fn the_owner_is_the_settings_one_else_the_viewer() {
+        let mut a = app();
+        assert_eq!(a.owner(), None);
+        a.viewer = Some("uchmk".into());
+        assert_eq!(a.owner(), Some("uchmk"));
+        a.settings.owner = "rust-lang".into();
+        assert_eq!(a.owner(), Some("rust-lang"));
     }
 
     #[test]

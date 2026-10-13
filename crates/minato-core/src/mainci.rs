@@ -1,4 +1,5 @@
-//! Which of my repositories have a red CI on the default branch. The inbox
+//! Which of my repositories (or of the owner the settings name) have a red
+//! CI on the default branch. The inbox
 //! shows each as a stub item (`id` starts with `main:`, `number` is 0), so the
 //! rule machinery stays the same; writes never go to a stub.
 
@@ -6,8 +7,10 @@ use serde_json::Value;
 
 use crate::list::{Ci, Item, Kind};
 
-pub fn query() -> String {
-    "query { viewer { repositories(first: 30, ownerAffiliations: OWNER, isFork: false, orderBy: {field: PUSHED_AT, direction: DESC}) { nodes { nameWithOwner url isArchived defaultBranchRef { name target { ... on Commit { statusCheckRollup { state } } } } } } } }".into()
+/// The repositories of the viewer, or of `owner` (a user or organization).
+pub fn query(owner: Option<&str>) -> String {
+    let head = crate::board::owner_head(owner);
+    format!("query {{ {head} repositories(first: 30, ownerAffiliations: OWNER, isFork: false, orderBy: {{field: PUSHED_AT, direction: DESC}}) {{ nodes {{ nameWithOwner url isArchived defaultBranchRef {{ name target {{ ... on Commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}")
 }
 
 /// Whether `item` stands for a repository, not for something on GitHub.

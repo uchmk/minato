@@ -1,6 +1,8 @@
-//! The board without drawing: Project "uchmk" read from GraphQL, its Status
-//! options as columns, the cards in them, the cursor, and the move of a
-//! card to the next column (which becomes a Project field write).
+//! The board without drawing: a Project (by its title, "uchmk" unless the
+//! settings say) of the viewer or of another user or organization, read from
+//! GraphQL, its Status options as columns, the cards in them, the cursor,
+//! and the move of a card to the next column (which becomes a Project field
+//! write).
 
 use serde_json::Value;
 
@@ -8,38 +10,63 @@ use crate::github::worker::Call;
 use crate::github::write::project_field;
 use crate::list::Label;
 
-/// The Project the board shows, by title (the first one when none matches).
+/// The Project the board shows by default, by title (the first one when
+/// none matches).
 pub const TITLE: &str = "uchmk";
 
-/// The Projects' numbers and titles only, to [`pick`] the one to show
-/// before asking for its cards. No variables.
-pub fn pick_query() -> &'static str {
-    "query { viewer { projectsV2(first: 20) { nodes { number title } } } }"
+/// Whom a query asks about: the viewer (`None`), or the user or
+/// organization `owner`, aliased `viewer` so that the answers read alike.
+/// Opens one brace. `owner` is a login ([`crate::prefs::login`]).
+pub fn owner_head(owner: Option<&str>) -> String {
+    match owner {
+        None => "viewer {".into(),
+        Some(o) => format!("viewer: repositoryOwner(login: {}) {{", Value::from(o)),
+    }
 }
 
-/// The number of the Project the board shows: the one titled [`TITLE`],
+/// [`owner_head`] for the Projects (a user's or an organization's), and
+/// what closes it.
+fn projects_scope(owner: Option<&str>) -> (String, &'static str) {
+    match owner {
+        None => (owner_head(None), "}"),
+        Some(_) => (format!("{} ... on ProjectV2Owner {{", owner_head(owner)), "} }"),
+    }
+}
+
+/// The Projects' numbers and titles only (of the viewer, or of `owner`),
+/// to [`pick`] the one to show before asking for its cards. No variables.
+pub fn pick_query(owner: Option<&str>) -> String {
+    let (head, tail) = projects_scope(owner);
+    format!("query {{ {head} projectsV2(first: 20) {{ nodes {{ number title }} }} {tail} }}")
+}
+
+/// The number of the Project the board shows: the one titled `title`,
 /// else the first.
-pub fn pick(body: &str) -> Result<u64, String> {
+pub fn pick(body: &str, title: &str) -> Result<u64, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    if v.pointer("/data/viewer").is_some_and(Value::is_null) {
+        return Err("no such user or organization".into());
+    }
     let Some(nodes) = v.pointer("/data/viewer/projectsV2/nodes").and_then(Value::as_array) else {
         return Err(v.pointer("/errors/0/message").and_then(Value::as_str).unwrap_or("no projects in the answer").to_string());
     };
-    let p = nodes.iter().find(|p| text(p, "/title") == TITLE).or_else(|| nodes.first()).ok_or("no Project found")?;
+    let p = nodes.iter().find(|p| text(p, "/title") == title).or_else(|| nodes.first()).ok_or("no Project found")?;
     p.pointer("/number").and_then(Value::as_u64).ok_or_else(|| "no Project number in the answer".to_string())
 }
 
-/// One Project (variable `n`, its number from [`pick`]), its Status field
-/// and 100 cards from the cursor `after` (null for the first). Asking for
-/// one, not every Project's items, and not the bodies (the hover asks
-/// [`peek_query`]), keeps the answer small.
-pub fn query() -> String {
+/// One Project (variable `n`, its number from [`pick`]) of the viewer or of
+/// `owner`, its Status field and 100 cards from the cursor `after` (null for
+/// the first). Asking for one, not every Project's items, and not the
+/// bodies (the hover asks [`peek_query`]), keeps the answer small.
+pub fn query(owner: Option<&str>) -> String {
+    let (head, tail) = projects_scope(owner);
     let content = "__typename ... on Issue { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } } \
 ... on PullRequest { id title number url repository { nameWithOwner } labels(first: 5) { nodes { name color } } }";
     format!(
-        "query($n: Int!, $after: String) {{ viewer {{ projectV2(number: $n) {{ id title \
+        "query($n: Int!, $after: String) {{ {head} projectV2(number: $n) {{ id title \
 field(name: \"Status\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} priority: field(name: \"Priority\") {{ ... on ProjectV2SingleSelectField {{ id options {{ id name }} }} }} \
 items(first: 100, after: $after) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ id content {{ {content} }} \
-fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} }} }}"
+fieldValueByName(name: \"Status\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} priority: fieldValueByName(name: \"Priority\") {{ ... on ProjectV2ItemFieldSingleSelectValue {{ optionId }} }} }} }} }} {tail} }}"
     )
 }
 
@@ -371,16 +398,31 @@ mod tests {
     #[test]
     fn the_project_is_picked_by_title_then_read_alone() {
         let list = r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":1,"title":"other"},{"number":2,"title":"uchmk"}]}}}}"#;
-        assert_eq!(pick(list), Ok(2));
-        assert_eq!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":5,"title":"x"}]}}}}"#), Ok(5));
-        assert!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
-        assert_eq!(pick(r#"{"errors":[{"message":"no scope"}]}"#), Err("no scope".into()));
-        assert!(query().starts_with("query($n: Int!, $after: String) { viewer { projectV2(number: $n) {"));
+        assert_eq!(pick(list, TITLE), Ok(2));
+        assert_eq!(pick(list, "other"), Ok(1));
+        assert_eq!(pick(list, ""), Ok(1));
+        assert_eq!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[{"number":5,"title":"x"}]}}}}"#, TITLE), Ok(5));
+        assert!(pick(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#, TITLE).is_err());
+        assert_eq!(pick(r#"{"errors":[{"message":"no scope"}]}"#, TITLE), Err("no scope".into()));
+        assert_eq!(pick(r#"{"data":{"viewer":null}}"#, TITLE), Err("no such user or organization".into()));
+        assert!(query(None).starts_with("query($n: Int!, $after: String) { viewer { projectV2(number: $n) {"));
         // The one Project, as `query` answers.
         let start = BODY.find(r#"{"id":"P1""#).unwrap();
         let one = format!(r#"{{"data":{{"viewer":{{"projectV2":{}}}}}}}"#, &BODY[start..BODY.len() - "]}}}}".len()]);
         let p = parse(&one).unwrap();
         assert_eq!(p, project());
+    }
+
+    #[test]
+    fn another_owners_projects_are_asked_under_the_viewers_name() {
+        let balanced = |q: &str| q.matches('{').count() == q.matches('}').count();
+        for owner in [None, Some("rust-lang")] {
+            assert!(balanced(&pick_query(owner)) && balanced(&query(owner)), "{owner:?}");
+        }
+        assert_eq!(pick_query(None), "query { viewer { projectsV2(first: 20) { nodes { number title } } } }");
+        let q = pick_query(Some("rust-lang"));
+        assert!(q.starts_with(r#"query { viewer: repositoryOwner(login: "rust-lang") { ... on ProjectV2Owner { projectsV2("#), "{q}");
+        assert!(query(Some("rust-lang")).contains(r#"viewer: repositoryOwner(login: "rust-lang") { ... on ProjectV2Owner { projectV2(number: $n)"#));
     }
 
     #[test]

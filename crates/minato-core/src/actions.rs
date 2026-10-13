@@ -206,8 +206,13 @@ pub fn parse_artifacts(body: &str) -> Result<Vec<Artifact>, String> {
     Ok(list(body, "artifacts")?.iter().map(|a| Artifact { name: text(a, "name"), bytes: num(a, "size_in_bytes") }).collect())
 }
 
-pub fn repos_path() -> &'static str {
-    "/user/repos?affiliation=owner&sort=pushed&per_page=12"
+/// The viewer's own repositories, or those of `owner` (a user or
+/// organization), newest push first.
+pub fn repos_path(owner: Option<&str>) -> String {
+    match owner {
+        None => "/user/repos?affiliation=owner&sort=pushed&per_page=12".into(),
+        Some(o) => format!("/users/{o}/repos?type=owner&sort=pushed&per_page=12"),
+    }
 }
 
 pub fn runs_path(repo: &str) -> String {
@@ -466,6 +471,12 @@ mod tests {
         assert_eq!(Status::from("completed", Some("timed_out")), Status::Bad);
         assert_eq!(Status::from("queued", None), Status::Queued);
         assert_eq!(Status::from("waiting", None), Status::Queued);
+    }
+
+    #[test]
+    fn another_owners_repos_are_their_public_ones() {
+        assert_eq!(repos_path(None), "/user/repos?affiliation=owner&sort=pushed&per_page=12");
+        assert_eq!(repos_path(Some("rust-lang")), "/users/rust-lang/repos?type=owner&sort=pushed&per_page=12");
     }
 
     #[test]

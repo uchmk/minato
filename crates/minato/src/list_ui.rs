@@ -144,7 +144,8 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let q = Rect::from_min_max(pos2(head.left() + 12.0, head.center().y - 11.0), pos2(n.left() - 8.0, head.center().y + 11.0));
     p.rect_filled(q, CornerRadius::same(6), c.bg);
     p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
-    let query = app.list.active_search().map_or_else(|| app.list.filter.query(me), |t| minato_core::list::search_query(t, me));
+    let owner = app.owner().unwrap_or("");
+    let query = app.list.active_search().map_or_else(|| app.list.filter.query(owner), |t| minato_core::list::search_query(t, owner));
     let g = style::truncated(&p, query, FontId::monospace(12.0), c.fg, q.width() - 18.0);
     p.galley(pos2(q.left() + 9.0, q.center().y - g.size().y / 2.0), g, c.fg);
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));

@@ -1,6 +1,7 @@
 //! The settings screen (`,`): `ito-prefs` draws the nav and the cards, and
 //! the rows common to every uchmk app (the language, the size, the clock,
-//! the theme) write common.toml. minato has no settings of its own yet.
+//! the theme) write common.toml. minato's own (whose repositories, the
+//! inbox rules, the saved searches, the writing box's fields) are on its page.
 
 use egui::{Align2, FontId, Sense, Stroke, StrokeKind, Ui, vec2};
 use ito_common::{CommonChange, themes_dir};
@@ -48,9 +49,11 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let mut asked: Vec<CommonChange> = Vec::new();
     let lang = app.lang.clone();
     let tr = |k: &'static str| crate::i18n::tr(&lang, k);
+    let me = app.viewer.clone().unwrap_or_default();
     let prefs = &mut app.prefs;
-    let before = app.settings;
+    let before = app.settings.clone();
     let st = &mut app.settings;
+    let scope_text = &mut app.scope_text;
     let searches_text = &mut app.searches_text;
     let mut searches_changed = false;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
@@ -73,6 +76,26 @@ pub fn show(ui: &mut Ui, app: &mut App) {
             asked.extend(ito_prefs::theme_page(ui, l, w, themes, (&t, &d, &li), &note, |ui| preview(ui, tr("settings.sample"))));
         }
         MINATO => {
+            section(ui, l, tr("settings.scope"), |ui| {
+                let rows = [("settings.owner", "settings.owner_note", me.as_str()), ("settings.project", "settings.project_note", "")];
+                for (k, (label, note, hint)) in rows.into_iter().enumerate() {
+                    if k > 0 {
+                        ito_prefs::sep(ui, l);
+                    }
+                    // Taken on Enter (or on leaving the box), not on each key:
+                    // each change asks GitHub again.
+                    let done = ito_prefs::row(ui, l, tr(label), tr(note), |ui| {
+                        let edit = egui::TextEdit::singleline(&mut scope_text[k]).hint_text(hint).desired_width(200.0).font(FontId::monospace(12.5));
+                        ui.add(edit).lost_focus()
+                    });
+                    if done && k == 0 {
+                        st.owner = minato_core::prefs::login(&scope_text[0]);
+                        scope_text[0] = st.owner.clone();
+                    } else if done {
+                        st.project = scope_text[1].trim().to_string();
+                    }
+                }
+            });
             section(ui, l, tr("settings.rules"), |ui| {
                 let mut shift = None;
                 for at in 0..st.rules.1.len() {

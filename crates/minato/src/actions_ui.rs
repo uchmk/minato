@@ -199,7 +199,7 @@ fn query(app: &App) -> String {
         q.push(format!("workflow:\"{w}\""));
     }
     if q.is_empty() {
-        q.push(format!("user:{}", app.viewer.as_deref().unwrap_or("")));
+        q.push(format!("user:{}", app.owner().unwrap_or("")));
     }
     q.join(" ")
 }
