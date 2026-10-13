@@ -176,9 +176,17 @@ impl Net {
         if !self.searched_closed {
             all.extend(self.stubs.iter().cloned());
         }
+        let card = app.inbox.selected(&app.inbox_all(), &app.items).map(|c| app.items[c.at].id.clone());
         let before = std::mem::replace(&mut app.items, all);
         app.list.follow(&before, &app.items);
-        app.list.clamp(&app.items, app.viewer.as_deref().unwrap_or(""));
+        app.list.stay(&before, &app.items, app.viewer.as_deref().unwrap_or(""));
+        // The inbox's card stays on its item too (cards point into the items).
+        if let Some(id) = card {
+            let all = app.inbox_all();
+            if let Some(k) = app.inbox.shown(&all, &app.items).iter().position(|c| app.items[c.at].id == id) {
+                app.inbox.sel = k;
+            }
+        }
     }
 
     /// Start looking for the token (it may run `gh`), and reading the

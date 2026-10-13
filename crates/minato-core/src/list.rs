@@ -372,6 +372,16 @@ impl ListState {
         };
     }
 
+    /// Keep the selection on the same item after the items changed (a new
+    /// item above it, or one gone, moves its row); clamped when it is gone.
+    pub fn stay(&mut self, before: &[Item], after: &[Item], me: &str) {
+        let id = self.selected(before, me).map(|i| i.id.clone());
+        if let Some(k) = id.and_then(|id| self.shown(after, me).iter().position(|i| i.id == id)) {
+            self.sel = k;
+        }
+        self.clamp(after, me);
+    }
+
     /// Keep the selection inside the list after the items changed.
     pub fn clamp(&mut self, items: &[Item], me: &str) {
         let n = self.shown(items, me).len();
@@ -542,6 +552,20 @@ mod tests {
         s.cursor = 99;
         s.follow(&it, &fewer);
         assert_eq!(s.cursor, flat.len() - 1);
+    }
+
+    #[test]
+    fn the_selection_stays_on_its_item_when_one_comes_above_it() {
+        let it = items();
+        let mut s = ListState { sel: 1, ..Default::default() };
+        let was = s.selected(&it, "me").unwrap().id.clone();
+        let mut more = vec![item("uchmk/yagura", Kind::Issue, "uchmk")];
+        more.extend(it.iter().cloned());
+        s.stay(&it, &more, "me");
+        assert_eq!((s.sel, &s.selected(&more, "me").unwrap().id), (2, &was));
+        // Its item gone: the row stays in the list.
+        s.stay(&more, &more[..1], "me");
+        assert_eq!(s.sel, 0);
     }
 
     #[test]

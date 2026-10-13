@@ -68,6 +68,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 6.8 | Look at a PR with checks | The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation |
 | 6.9 | Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' | A long repository name ends with "…" before its count (in a narrow column it loses its owner and the counts go); "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half |
+| 6.10 | Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh | The selection stays on the same item, which moves down a row; the detail does not change |
 
 ## 7. Inbox view
 
