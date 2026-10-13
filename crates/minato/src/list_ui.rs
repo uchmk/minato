@@ -207,29 +207,28 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: boo
     p.text(pos2(row.left() + 14.0 + 8.0, y1), Align2::CENTER_CENTER, mark, FontId::proportional(13.0), color);
     let x = row.left() + 14.0 + 16.0 + 10.0;
     let right = row.right() - 14.0;
-    // The marks at the right, one under another: the CI, the comments, the badge.
+    // The marks on the title's line, from the right: the badge, the
+    // comments, the CI (so they read CI, comments, badge, and a short row
+    // has room for them all).
     let mut rx = right;
-    let mut ry = y1;
+    if inbox {
+        let words = app.tr("notes.inbox");
+        let w = style::badge_w(&p, words);
+        style::badge(&p, rx - w, y1, words);
+        rx -= w + 10.0;
+    }
+    if item.comments > 0 {
+        let t = p.text(pos2(rx, y1), Align2::RIGHT_CENTER, format!("💬 {}", item.comments), FontId::proportional(12.0), c.dim);
+        rx = t.left() - 10.0;
+    }
     if let Some(ci) = item.ci {
         let (m, col) = match ci {
             Ci::Ok => ("✓", style::OK),
             Ci::Bad => ("✗", style::BAD),
             Ci::Pending => ("◐", style::RUN),
         };
-        let t = p.text(pos2(right, ry), Align2::RIGHT_CENTER, m, FontId::proportional(12.5), col);
-        rx = rx.min(t.left() - 10.0);
-        ry += 17.0;
-    }
-    if item.comments > 0 {
-        let t = p.text(pos2(right, ry), Align2::RIGHT_CENTER, format!("💬 {}", item.comments), FontId::proportional(12.0), c.dim);
-        rx = rx.min(t.left() - 10.0);
-        ry += 17.0;
-    }
-    if inbox {
-        let words = app.tr("notes.inbox");
-        let w = style::badge_w(&p, words);
-        style::badge(&p, right - w, ry, words);
-        rx = rx.min(right - w - 10.0);
+        let t = p.text(pos2(rx, y1), Align2::RIGHT_CENTER, m, FontId::proportional(12.5), col);
+        rx = t.left() - 10.0;
     }
     let title_color = if item.merged { MERGED } else { c.fg };
     // The marked one first, so its ground is under both.

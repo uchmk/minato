@@ -58,7 +58,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 6.1 | Press `2` after the connection is up | Within a few seconds your open issues, PRs and discussions list in three lines each; the CI mark and the comment count stand at the right |
+| 6.1 | Press `2` after the connection is up | Within a few seconds your open issues, PRs and discussions list in three lines each; on the title's line at the right stand, in this order, the CI mark, the comment count and the `受信箱` badge, inside the row even when it has no labels |
 | 6.2 | Press `j` / `k` | The selected row moves; the detail at the right follows within a second |
 | 6.3 | Shrink the window height until the rows do not fit | As many whole rows as fit show around the selected one; the rest hide with "⋯ 上に/下に N 件"; no row is folded to one line and no scrollbar appears |
 | 6.4 | Press `h`, then `j` and `Space` on a repository | The list narrows to it and the query line over the list changes; the chosen option is filled |
