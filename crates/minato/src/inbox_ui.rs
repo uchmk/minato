@@ -4,12 +4,12 @@
 //! right. Painted on rects; the cards fold (`minato_core::fold`) instead of
 //! scrolling. A click does what the keys that get there do.
 
-use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Fold, Show, fold};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
+use minato_core::fold::{fold, Fold, Show};
 use minato_core::inbox::{Card, Group, InboxState, Status};
-use minato_core::list::{Label, age, epoch};
+use minato_core::list::{age, epoch, Label};
 
-use crate::app::{App, Click, Pane, Wheel, now_epoch};
+use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
@@ -154,7 +154,11 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
     let mut lines = 0;
     let f = loop {
         let f = fold(&heights, 0.0, room - lines as f32 * MORE_H, sel);
-        let need: usize = groups.iter().map(|g| hidden(shown, &f, *g)).map(|(a, b, any)| if any { usize::from(a > 0) + usize::from(b > 0) } else { usize::from(b > 0) }).sum();
+        let need: usize = groups
+            .iter()
+            .map(|g| hidden(shown, &f, *g))
+            .map(|(a, b, any)| if any { usize::from(a > 0) + usize::from(b > 0) } else { usize::from(b > 0) })
+            .sum();
         if need <= lines {
             break f;
         }
@@ -172,13 +176,20 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
         let sy = y + 10.0 + 7.0;
         let t = style::bold(p, pos2(body.left() + 6.0, sy), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.0), c.fg);
         let n_r = p.text(pos2(t.right() + 6.0, sy), Align2::LEFT_CENTER, n.to_string(), FontId::monospace(12.0), c.dim);
-        let hint = p.layout_no_wrap(if hint.is_empty() { String::new() } else { app.tr(hint).to_owned() }, FontId::proportional(11.5), c.dim);
+        let hint =
+            p.layout_no_wrap(if hint.is_empty() { String::new() } else { app.tr(hint).to_owned() }, FontId::proportional(11.5), c.dim);
         if body.right() - 6.0 - hint.size().x >= n_r.right() + 12.0 {
             p.galley(pos2(body.right() - 6.0 - hint.size().x, sy - hint.size().y / 2.0), hint, c.dim);
         }
         y += SEC_H;
         if n == 0 {
-            p.text(pos2(body.left() + 6.0, y + EMPTY_H / 2.0 - 4.0), Align2::LEFT_CENTER, app.tr("inbox.none"), FontId::proportional(12.5), c.dim);
+            p.text(
+                pos2(body.left() + 6.0, y + EMPTY_H / 2.0 - 4.0),
+                Align2::LEFT_CENTER,
+                app.tr("inbox.none"),
+                FontId::proportional(12.5),
+                c.dim,
+            );
             y += EMPTY_H;
             continue;
         }
@@ -242,9 +253,20 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
     if card.group == Group::Done {
         p.set_opacity(0.55);
     }
-    let fill = if on { style::sel() } else if hover { c.hover() } else { style::card() };
+    let fill = if on {
+        style::sel()
+    } else if hover {
+        c.hover()
+    } else {
+        style::card()
+    };
     p.rect_filled(r, CornerRadius::same(8), fill);
-    p.rect_stroke(r, CornerRadius::same(8), Stroke::new(if on { 2.0 } else { 1.0 }, if on { ACCENT } else { c.border }), StrokeKind::Inside);
+    p.rect_stroke(
+        r,
+        CornerRadius::same(8),
+        Stroke::new(if on { 2.0 } else { 1.0 }, if on { ACCENT } else { c.border }),
+        StrokeKind::Inside,
+    );
     p.rect_filled(Rect::from_min_size(r.min, vec2(3.0, r.height())), CornerRadius { nw: 8, sw: 8, ne: 0, se: 0 }, tone);
     let x = r.left() + 13.0;
     let right = r.right() - 10.0;
@@ -305,10 +327,21 @@ fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, rows: usize, ou
     let c = ito_theme::colors();
     let count = |s: InboxState| s.shown(all, &app.items).len();
     let base = || InboxState { undo: Vec::new(), ..app.inbox.clone() };
-    let sts = [(Status::All, "inbox.all", None), (Status::Mine, "inbox.mine", Some(ACCENT)), (Status::Wait, "inbox.wait", Some(style::RUN)), (Status::Done, "inbox.done_chip", Some(style::OK))];
+    let sts = [
+        (Status::All, "inbox.all", None),
+        (Status::Mine, "inbox.mine", Some(ACCENT)),
+        (Status::Wait, "inbox.wait", Some(style::RUN)),
+        (Status::Done, "inbox.done_chip", Some(style::OK)),
+    ];
     let mut status: Vec<FootChip> = sts
         .into_iter()
-        .map(|(st, word, dot)| FootChip { dot, word: app.tr(word), n: count(InboxState { status: st, ..base() }), on: app.inbox.status == st, click: Click::InboxStatus(st) })
+        .map(|(st, word, dot)| FootChip {
+            dot,
+            word: app.tr(word),
+            n: count(InboxState { status: st, ..base() }),
+            on: app.inbox.status == st,
+            click: Click::InboxStatus(st),
+        })
         .collect();
     let (left, right) = (r.left() + 12.0, r.right() - 12.0);
     if status.iter().map(|f| chip_w(p, f.dot, f.word, f.n) + 5.0).sum::<f32>() - 5.0 > right - left {
@@ -372,7 +405,17 @@ fn chip_w(p: &Painter, dot: Option<Color32>, word: &str, n: usize) -> f32 {
 
 /// A chip of the foot: its dot, its words and its count; its response.
 #[allow(clippy::too_many_arguments)]
-fn chip(ui: &Ui, p: &Painter, x: f32, y: f32, dot: Option<Color32>, word: &str, n: usize, on: bool, id: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
+fn chip(
+    ui: &Ui,
+    p: &Painter,
+    x: f32,
+    y: f32,
+    dot: Option<Color32>,
+    word: &str,
+    n: usize,
+    on: bool,
+    id: impl std::hash::Hash + std::fmt::Debug,
+) -> egui::Response {
     let c = ito_theme::colors();
     let color = if on { c.fg } else { c.dim };
     let dot_g = dot.map(|d| p.layout_no_wrap("●".into(), FontId::proportional(8.0), d));
@@ -383,7 +426,21 @@ fn chip(ui: &Ui, p: &Painter, x: f32, y: f32, dot: Option<Color32>, word: &str, 
     if on {
         p.rect_filled(r, CornerRadius::same(6), style::head());
     }
-    p.rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0, if resp.hovered() { ACCENT } else if on { CHIP_ON } else { c.border }), StrokeKind::Inside);
+    p.rect_stroke(
+        r,
+        CornerRadius::same(6),
+        Stroke::new(
+            1.0,
+            if resp.hovered() {
+                ACCENT
+            } else if on {
+                CHIP_ON
+            } else {
+                c.border
+            },
+        ),
+        StrokeKind::Inside,
+    );
     let mut gx = r.left() + 9.0;
     if let Some(g) = dot_g {
         let gw = g.size().x;

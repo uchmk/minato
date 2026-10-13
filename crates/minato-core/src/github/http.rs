@@ -73,7 +73,10 @@ impl Transport for UreqTransport {
             }
             Request::Send { method, url, body } => {
                 let json = |r: ureq::RequestBuilder<ureq::typestate::WithBody>| {
-                    r.header("Authorization", &auth).header("Accept", "application/vnd.github+json").header("Content-Type", "application/json").send(body.as_bytes())
+                    r.header("Authorization", &auth)
+                        .header("Accept", "application/vnd.github+json")
+                        .header("Content-Type", "application/json")
+                        .send(body.as_bytes())
                 };
                 json(match method {
                     Method::Post => self.agent.post(url),

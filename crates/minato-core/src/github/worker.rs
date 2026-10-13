@@ -16,9 +16,16 @@ use super::token::Token;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Call {
     Get(String),
-    Graphql { query: String, variables: String },
+    Graphql {
+        query: String,
+        variables: String,
+    },
     /// A write; its key must be its own (same key = dropped as stale).
-    Send { method: super::http::Method, path: String, body: String },
+    Send {
+        method: super::http::Method,
+        path: String,
+        body: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,7 +172,8 @@ mod tests {
     #[test]
     fn a_slot_keeps_only_the_jobs_for_its_newest_tag() {
         let slot = |k: &str, t: &str| Queued { slot: Some(("run".into(), t.into())), ..q(k, "/") };
-        let waiting = vec![slot("jobs:1", "1"), slot("arts:1", "1"), q("x", "/"), slot("jobs:2", "2"), slot("jobs:3", "3"), slot("arts:3", "3")];
+        let waiting =
+            vec![slot("jobs:1", "1"), slot("arts:1", "1"), q("x", "/"), slot("jobs:2", "2"), slot("jobs:3", "3"), slot("arts:3", "3")];
         assert_eq!(keys(latest(waiting)), ["x", "jobs:3", "arts:3"]);
     }
 

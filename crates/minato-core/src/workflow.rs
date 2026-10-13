@@ -43,7 +43,11 @@ impl Node {
 fn unquote(s: &str) -> String {
     let s = s.trim();
     let q = s.len() >= 2 && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')));
-    if q { s[1..s.len() - 1].to_string() } else { s.to_string() }
+    if q {
+        s[1..s.len() - 1].to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 /// Cut a trailing ` # comment` (outside quotes, which is good enough here).
@@ -177,7 +181,13 @@ impl Workflow {
                 return 0;
             }
             seen.push(i);
-            let d = w.jobs[i].needs.iter().filter_map(|n| w.jobs.iter().position(|j| &j.key == n)).map(|k| depth(w, k, seen) + 1).max().unwrap_or(0);
+            let d = w.jobs[i]
+                .needs
+                .iter()
+                .filter_map(|n| w.jobs.iter().position(|j| &j.key == n))
+                .map(|k| depth(w, k, seen) + 1)
+                .max()
+                .unwrap_or(0);
             seen.pop();
             d
         }
@@ -328,7 +338,10 @@ jobs:
         let w = parse(YAML);
         assert_eq!(w.inputs.len(), 2);
         let l = &w.inputs[0];
-        assert_eq!((l.name.as_str(), l.description.as_str(), l.required, l.kind.as_str(), l.default.as_str()), ("level", "How loud", true, "choice", "info"));
+        assert_eq!(
+            (l.name.as_str(), l.description.as_str(), l.required, l.kind.as_str(), l.default.as_str()),
+            ("level", "How loud", true, "choice", "info")
+        );
         assert_eq!(l.options, ["info", "debug"]);
         assert_eq!((w.inputs[1].kind.as_str(), w.inputs[1].default.as_str()), ("boolean", "false"));
         assert!(parse("on: push\njobs:\n  a:\n    runs-on: x\n").inputs.is_empty());
@@ -337,7 +350,14 @@ jobs:
     #[test]
     fn a_matrix_job_comes_from_its_workflow_job() {
         let w = parse(YAML);
-        let job = |n: &str| Job { id: 1, name: n.into(), status: crate::actions::Status::Ok, started_at: String::new(), completed_at: String::new(), url: String::new() };
+        let job = |n: &str| Job {
+            id: 1,
+            name: n.into(),
+            status: crate::actions::Status::Ok,
+            started_at: String::new(),
+            completed_at: String::new(),
+            url: String::new(),
+        };
         assert_eq!(w.source_of(&job("Test (ubuntu)")), Some(1));
         assert_eq!(w.source_of(&job("lint")), Some(0));
         assert_eq!(w.source_of(&job("other")), None);

@@ -228,7 +228,19 @@ pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pi
         ("repo", repos),
         ("kind", vec![Pick::Kind(None), Pick::Kind(Some(Kind::Issue)), Pick::Kind(Some(Kind::Pr)), Pick::Kind(Some(Kind::Discussion))]),
         ("author", authors),
-        ("saved", vec![Pick::Saved(Saved::None), Pick::Saved(Saved::Assigned), Pick::Saved(Saved::Red), Pick::Saved(Saved::Mentioned), Pick::Saved(Saved::Finding)].into_iter().chain((0..searches.len()).map(Pick::Search)).collect()),
+        (
+            "saved",
+            vec![
+                Pick::Saved(Saved::None),
+                Pick::Saved(Saved::Assigned),
+                Pick::Saved(Saved::Red),
+                Pick::Saved(Saved::Mentioned),
+                Pick::Saved(Saved::Finding),
+            ]
+            .into_iter()
+            .chain((0..searches.len()).map(Pick::Search))
+            .collect(),
+        ),
     ]
 }
 
@@ -259,7 +271,15 @@ pub struct ListState {
 
 impl Default for ListState {
     fn default() -> Self {
-        ListState { col: Col::Items, filter: Filter::default(), cursor: 0, sel: 0, scroll: 0.0, searches: Vec::new(), find: Default::default() }
+        ListState {
+            col: Col::Items,
+            filter: Filter::default(),
+            cursor: 0,
+            sel: 0,
+            scroll: 0.0,
+            searches: Vec::new(),
+            find: Default::default(),
+        }
     }
 }
 
@@ -483,7 +503,13 @@ mod tests {
         f.saved = Saved::Red;
         assert_eq!(it.iter().filter(|i| f.matches(i, "me")).count(), 1);
         assert_eq!(f.query("uchmk"), "is:open user:uchmk is:pr status:failure");
-        let f = Filter { repo: Some("uchmk/kura".into()), kind: Some(Kind::Pr), author: Some("uchmk".into()), saved: Saved::Assigned, search: None };
+        let f = Filter {
+            repo: Some("uchmk/kura".into()),
+            kind: Some(Kind::Pr),
+            author: Some("uchmk".into()),
+            saved: Saved::Assigned,
+            search: None,
+        };
         assert_eq!(f.query("uchmk"), "is:open repo:uchmk/kura is:pr author:uchmk assignee:@me");
         assert!(!f.matches(&it[1], "me"));
     }

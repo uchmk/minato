@@ -2,13 +2,13 @@
 //! 「uchmk」 with their cards, folded by `minato_core::fold` (no scrollbar).
 //! A card moves with `H` `L` or by dragging it onto another column.
 
-use egui::{Align2, CornerRadius, FontId, Id, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use egui::{pos2, vec2, Align2, CornerRadius, FontId, Id, Rect, Sense, Stroke, StrokeKind, Ui};
+use minato_core::fold::{fold, Show};
 use minato_core::list::{age, epoch};
 
-use crate::app::{App, Wheel, now_epoch};
+use crate::app::{now_epoch, App, Wheel};
 use crate::list_ui::parse_hex;
-use crate::ui::{ACCENT, Out};
+use crate::ui::{Out, ACCENT};
 
 const HEAD_H: f32 = 34.0;
 const COL_HEAD_H: f32 = 30.0;
@@ -42,7 +42,11 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     // Which of them, and an arrow lit on a side with more beyond it.
     if fit < cols.len() {
         let last = first + fit;
-        let span = if app.ja() { format!("列 {}–{} / {}", first + 1, last, cols.len()) } else { format!("columns {}–{} of {}", first + 1, last, cols.len()) };
+        let span = if app.ja() {
+            format!("列 {}–{} / {}", first + 1, last, cols.len())
+        } else {
+            format!("columns {}–{} of {}", first + 1, last, cols.len())
+        };
         let cy = head.center().y;
         let ink = |more: bool| if more { ACCENT } else { c.border };
         let right = p.text(pos2(n_r.left() - 16.0, cy), Align2::RIGHT_CENTER, "›", FontId::proportional(15.0), ink(last < cols.len()));
@@ -69,7 +73,13 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             None => app.tr("board.nostatus").to_string(),
         };
         let chead = Rect::from_min_size(rect.min, vec2(rect.width(), COL_HEAD_H));
-        p.text(pos2(chead.left() + 12.0, chead.center().y), Align2::LEFT_CENTER, name, FontId::proportional(12.5), if focus { ACCENT } else { c.fg });
+        p.text(
+            pos2(chead.left() + 12.0, chead.center().y),
+            Align2::LEFT_CENTER,
+            name,
+            FontId::proportional(12.5),
+            if focus { ACCENT } else { c.fg },
+        );
         p.text(pos2(chead.right() - 12.0, chead.center().y), Align2::RIGHT_CENTER, ids.len().to_string(), FontId::monospace(11.0), c.dim);
         let body = Rect::from_min_max(chead.left_bottom(), rect.max).shrink2(vec2(6.0, 4.0));
         if ids.is_empty() {
@@ -104,7 +114,13 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             }
             // The body's start: the list's, or asked for once the mouse is here.
             if dragged.is_none() {
-                let known = app.items.iter().find(|i| i.id == card.id).map(|i| i.peek.as_str()).filter(|t| !t.is_empty()).or_else(|| app.peeks.get(&card.id).map(String::as_str));
+                let known = app
+                    .items
+                    .iter()
+                    .find(|i| i.id == card.id)
+                    .map(|i| i.peek.as_str())
+                    .filter(|t| !t.is_empty())
+                    .or_else(|| app.peeks.get(&card.id).map(String::as_str));
                 match known {
                     Some(t) => crate::ui::peek(&resp, t),
                     None if resp.hovered() => out.peek = Some(card.id.clone()),

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use egui::{Align2, Color32, CornerRadius, FontId, Galley, Painter, Pos2, Rect, Stroke, StrokeKind, pos2, vec2};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Galley, Painter, Pos2, Rect, Stroke, StrokeKind};
 use minato_core::find::Query;
 use minato_core::list::{Kind, Label};
 use minato_core::notes::Tone;
@@ -38,7 +38,11 @@ pub fn tone(t: Tone) -> Color32 {
 /// The selected row's background.
 pub fn sel() -> Color32 {
     let c = ito_theme::colors();
-    if c.light { c.selection() } else { SEL_DARK }
+    if c.light {
+        c.selection()
+    } else {
+        SEL_DARK
+    }
 }
 
 /// The background of a card (the mock's `--card`).
@@ -81,7 +85,19 @@ fn pill(p: &Painter, x: f32, y: f32, text: &str, font: FontId, pad: f32, h: f32,
 
 /// A bordered chip; its right edge.
 #[allow(clippy::too_many_arguments)]
-pub fn chip(p: &Painter, x: f32, y: f32, text: &str, font: FontId, pad: f32, h: f32, radius: u8, border: Color32, fill: Color32, color: Color32) -> f32 {
+pub fn chip(
+    p: &Painter,
+    x: f32,
+    y: f32,
+    text: &str,
+    font: FontId,
+    pad: f32,
+    h: f32,
+    radius: u8,
+    border: Color32,
+    fill: Color32,
+    color: Color32,
+) -> f32 {
     let g = p.layout_no_wrap(text.to_owned(), font, color);
     let r = Rect::from_min_size(pos2(x, y - h / 2.0), vec2(g.size().x + pad * 2.0, h));
     p.rect_filled(r, CornerRadius::same(radius), fill);
@@ -269,7 +285,19 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
         let at = if under { pos2(x + pad, r.top() + 9.0 + words_h + 8.0) } else { pos2(r.right() - pad - gw, r.center().y - 14.0) };
         let b = Rect::from_min_size(at, vec2(gw, 28.0));
         p.rect_filled(b, CornerRadius::same(6), ACCENT);
-        let kx = chip(p, b.left() + 12.0, b.center().y, k, FontId::monospace(11.0), 5.0, 18.0, 4, Color32::TRANSPARENT, Color32::from_white_alpha(128), ON_ACCENT);
+        let kx = chip(
+            p,
+            b.left() + 12.0,
+            b.center().y,
+            k,
+            FontId::monospace(11.0),
+            5.0,
+            18.0,
+            4,
+            Color32::TRANSPARENT,
+            Color32::from_white_alpha(128),
+            ON_ACCENT,
+        );
         bold(p, pos2(kx + 8.0, b.center().y), Align2::LEFT_CENTER, n.label, FontId::proportional(12.5), ON_ACCENT);
         b
     });
@@ -313,7 +341,13 @@ pub fn check_row(p: &Painter, x: f32, y: f32, w: f32, mark: &str, color: Color32
     }
     p.text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, mark, FontId::proportional(14.0), color);
     let t = p.text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, time, FontId::monospace(13.0), c.dim);
-    p.with_clip_rect(Rect::from_min_max(r.min, pos2(t.left() - 8.0, r.bottom()))).text(pos2(r.left() + 30.0, r.center().y), Align2::LEFT_CENTER, name, FontId::proportional(14.0), c.fg);
+    p.with_clip_rect(Rect::from_min_max(r.min, pos2(t.left() - 8.0, r.bottom()))).text(
+        pos2(r.left() + 30.0, r.center().y),
+        Align2::LEFT_CENTER,
+        name,
+        FontId::proportional(14.0),
+        c.fg,
+    );
     r.bottom()
 }
 

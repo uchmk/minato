@@ -27,7 +27,11 @@ impl Query {
     }
 
     fn found(&self, hay: &str, word: &str) -> bool {
-        if self.case { hay.contains(word) } else { hay.to_lowercase().contains(word) }
+        if self.case {
+            hay.contains(word)
+        } else {
+            hay.to_lowercase().contains(word)
+        }
     }
 
     /// Whether every word is in one of the item's fields (an empty query

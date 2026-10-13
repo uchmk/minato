@@ -99,7 +99,13 @@ impl Form {
                 if let Some(i) = self.inputs.iter().zip(&self.values).find(|(i, v)| i.required && v.is_empty()) {
                     return Out::Missing(i.0.name.clone());
                 }
-                let all = self.inputs.iter().zip(&self.values).filter(|(i, v)| i.required || !v.is_empty() || !i.default.is_empty()).map(|(i, v)| (i.name.clone(), v.clone())).collect();
+                let all = self
+                    .inputs
+                    .iter()
+                    .zip(&self.values)
+                    .filter(|(i, v)| i.required || !v.is_empty() || !i.default.is_empty())
+                    .map(|(i, v)| (i.name.clone(), v.clone()))
+                    .collect();
                 return Out::Send(all);
             }
             _ => {}
@@ -136,15 +142,48 @@ mod tests {
     use minato_core::actions::Status;
 
     fn run() -> Run {
-        Run { id: 1, repo: "o/r".into(), workflow_id: 5, workflow: "w".into(), number: 1, title: "t".into(), event: "push".into(), branch: "main".into(), sha: "abc".into(), actor: "a".into(), status: Status::Ok, started_at: String::new(), updated_at: String::new(), url: String::new(), pr: None, path: String::new(), head_sha: String::new() }
+        Run {
+            id: 1,
+            repo: "o/r".into(),
+            workflow_id: 5,
+            workflow: "w".into(),
+            number: 1,
+            title: "t".into(),
+            event: "push".into(),
+            branch: "main".into(),
+            sha: "abc".into(),
+            actor: "a".into(),
+            status: Status::Ok,
+            started_at: String::new(),
+            updated_at: String::new(),
+            url: String::new(),
+            pr: None,
+            path: String::new(),
+            head_sha: String::new(),
+        }
     }
 
     fn input(name: &str, kind: &str, default: &str, required: bool, options: &[&str]) -> Input {
-        Input { name: name.into(), description: String::new(), required, kind: kind.into(), default: default.into(), options: options.iter().map(|s| s.to_string()).collect() }
+        Input {
+            name: name.into(),
+            description: String::new(),
+            required,
+            kind: kind.into(),
+            default: default.into(),
+            options: options.iter().map(|s| s.to_string()).collect(),
+        }
     }
 
     fn form() -> Form {
-        Form::new(run(), vec![input("level", "choice", "info", true, &["info", "debug"]), input("dry", "boolean", "false", false, &[]), input("note", "string", "", false, &[]), input("who", "string", "", true, &[])])
+        Form::new(
+            run(),
+            vec![
+                input("level", "choice", "info", true, &["info", "debug"]),
+                input("dry", "boolean", "false", false, &[]),
+                input("note", "string", "", false, &[]),
+                input("who", "string", "", true, &[]),
+            ],
+        )
     }
 
     #[test]
@@ -172,7 +211,10 @@ mod tests {
         f.sel = 3;
         f.key(K::Char('x'));
         let Out::Send(v) = f.key(K::Send) else { panic!() };
-        assert_eq!(v, [("level".to_string(), "info".to_string()), ("dry".to_string(), "false".to_string()), ("who".to_string(), "x".to_string())]);
+        assert_eq!(
+            v,
+            [("level".to_string(), "info".to_string()), ("dry".to_string(), "false".to_string()), ("who".to_string(), "x".to_string())]
+        );
         assert_eq!(f.key(K::Esc), Out::Close);
     }
 

@@ -4,12 +4,12 @@
 //! there, the age; what happened in its tone; the title. Folded by
 //! `minato_core::fold` when they do not fit (no scrollbar).
 
-use egui::{Align2, FontId, Rect, Sense, Stroke, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use egui::{pos2, vec2, Align2, FontId, Rect, Sense, Stroke, Ui};
+use minato_core::fold::{fold, Show};
 use minato_core::list::{age, epoch};
 use minato_core::notes::{self, Note};
 
-use crate::app::{App, NoteClick, Wheel, now_epoch};
+use crate::app::{now_epoch, App, NoteClick, Wheel};
 use crate::style;
 use crate::ui::Out;
 
@@ -32,48 +32,55 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
     let mut action = None;
     let area = egui::Area::new(egui::Id::new("bell-list")).order(egui::Order::Foreground).fixed_pos(at);
     let resp = area.show(&ctx, |ui| {
-        egui::Frame::NONE.fill(c.panel).stroke(Stroke::new(1.0, c.border_strong())).corner_radius(10.0).inner_margin(MARGIN).show(ui, |ui| {
-            ui.set_width(WIDTH);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(app.tr("notes.title")).strong().color(c.fg));
-                let n = app.notes.len().to_string();
-                ui.label(egui::RichText::new(app.tr("notes.unread").replace("{}", &n)).size(12.0).color(c.dim));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add_enabled(!app.notes.is_empty(), egui::Button::new(app.tr("notes.mark_read")).small()).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                        action = Some(NoteClick::ReadAll);
-                    }
-                    ui.label(egui::RichText::new(app.tr("notes.hint")).size(11.5).color(c.dim));
+        egui::Frame::NONE.fill(c.panel).stroke(Stroke::new(1.0, c.border_strong())).corner_radius(10.0).inner_margin(MARGIN).show(
+            ui,
+            |ui| {
+                ui.set_width(WIDTH);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(app.tr("notes.title")).strong().color(c.fg));
+                    let n = app.notes.len().to_string();
+                    ui.label(egui::RichText::new(app.tr("notes.unread").replace("{}", &n)).size(12.0).color(c.dim));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_enabled(!app.notes.is_empty(), egui::Button::new(app.tr("notes.mark_read")).small())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            action = Some(NoteClick::ReadAll);
+                        }
+                        ui.label(egui::RichText::new(app.tr("notes.hint")).size(11.5).color(c.dim));
+                    });
                 });
-            });
-            ui.separator();
-            if app.notes.is_empty() {
-                ui.label(egui::RichText::new(app.tr("notes.empty")).color(c.dim));
-                return;
-            }
-            let sel = app.ns.sel.min(app.notes.len() - 1);
-            let f = fold(&vec![ROW_FULL; app.notes.len()], MORE_H, room.max(ROW_FULL), sel);
-            let now = now_epoch();
-            if f.above > 0 {
-                more(ui, app, f.above, "list.above");
-            }
-            let last = app.notes.len() - 1 - f.below;
-            for (k, n) in app.notes.iter().enumerate() {
-                if f.rows[k] == Show::Hidden {
-                    continue;
+                ui.separator();
+                if app.notes.is_empty() {
+                    ui.label(egui::RichText::new(app.tr("notes.empty")).color(c.dim));
+                    return;
                 }
-                let (rect, resp) = ui.allocate_exact_size(vec2(WIDTH, ROW_FULL), Sense::click());
-                if resp.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                let sel = app.ns.sel.min(app.notes.len() - 1);
+                let f = fold(&vec![ROW_FULL; app.notes.len()], MORE_H, room.max(ROW_FULL), sel);
+                let now = now_epoch();
+                if f.above > 0 {
+                    more(ui, app, f.above, "list.above");
                 }
-                row(ui, app, n, rect, k == sel || resp.hovered(), k != last, now);
-                if resp.clicked() {
-                    action = Some(NoteClick::Open(k));
+                let last = app.notes.len() - 1 - f.below;
+                for (k, n) in app.notes.iter().enumerate() {
+                    if f.rows[k] == Show::Hidden {
+                        continue;
+                    }
+                    let (rect, resp) = ui.allocate_exact_size(vec2(WIDTH, ROW_FULL), Sense::click());
+                    if resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    row(ui, app, n, rect, k == sel || resp.hovered(), k != last, now);
+                    if resp.clicked() {
+                        action = Some(NoteClick::Open(k));
+                    }
                 }
-            }
-            if f.below > 0 {
-                more(ui, app, f.below, "list.below");
-            }
-        });
+                if f.below > 0 {
+                    more(ui, app, f.below, "list.below");
+                }
+            },
+        );
     });
     crate::ui::wheel(&ctx, resp.response.layer_id, resp.response.rect, Wheel::Notes, out);
     // A click outside closes the list, but not the bell's own: it toggles.

@@ -219,7 +219,15 @@ pub fn parse(body: &str) -> Result<Project, String> {
                 .collect()
         })
         .unwrap_or_default();
-    Ok(Project { id: text(p, "/id"), title: text(p, "/title"), field, options, priority_field: text(p, "/priority/id"), priority_options, cards })
+    Ok(Project {
+        id: text(p, "/id"),
+        title: text(p, "/title"),
+        field,
+        options,
+        priority_field: text(p, "/priority/id"),
+        priority_options,
+        cards,
+    })
 }
 
 impl Project {
@@ -262,7 +270,11 @@ impl Project {
 
     /// The names of a field's options, and the one a card stands in.
     pub fn choices(&self, card: usize, priority: bool) -> (Vec<String>, Vec<String>) {
-        let (opts, cur) = if priority { (&self.priority_options, self.cards.get(card).and_then(|c| c.priority.as_ref())) } else { (&self.options, self.cards.get(card).and_then(|c| c.option.as_ref())) };
+        let (opts, cur) = if priority {
+            (&self.priority_options, self.cards.get(card).and_then(|c| c.priority.as_ref()))
+        } else {
+            (&self.options, self.cards.get(card).and_then(|c| c.option.as_ref()))
+        };
         let names = opts.iter().map(|o| o.name.clone()).collect();
         let chosen = opts.iter().filter(|o| o.option.as_ref() == cur).map(|o| o.name.clone()).collect();
         (names, chosen)
@@ -389,7 +401,10 @@ mod tests {
 
     #[test]
     fn errors_and_missing_fields_are_reported() {
-        assert_eq!(parse(r#"{"errors":[{"message":"Your token has not been granted the required scopes"}]}"#), Err("Your token has not been granted the required scopes".into()));
+        assert_eq!(
+            parse(r#"{"errors":[{"message":"Your token has not been granted the required scopes"}]}"#),
+            Err("Your token has not been granted the required scopes".into())
+        );
         assert!(parse(r#"{"data":{"viewer":{"projectsV2":{"nodes":[]}}}}"#).is_err());
         let gone = r#"{"data":{"viewer":{"projectV2":null}},"errors":[{"message":"Could not resolve to a ProjectV2 with the number 9."}]}"#;
         assert_eq!(parse(gone), Err("Could not resolve to a ProjectV2 with the number 9.".into()));
@@ -422,7 +437,8 @@ mod tests {
         assert_eq!(pick_query(None), "query { viewer { projectsV2(first: 20) { nodes { number title } } } }");
         let q = pick_query(Some("rust-lang"));
         assert!(q.starts_with(r#"query { viewer: repositoryOwner(login: "rust-lang") { ... on ProjectV2Owner { projectsV2("#), "{q}");
-        assert!(query(Some("rust-lang")).contains(r#"viewer: repositoryOwner(login: "rust-lang") { ... on ProjectV2Owner { projectV2(number: $n)"#));
+        assert!(query(Some("rust-lang"))
+            .contains(r#"viewer: repositoryOwner(login: "rust-lang") { ... on ProjectV2Owner { projectV2(number: $n)"#));
     }
 
     #[test]
@@ -433,7 +449,10 @@ mod tests {
                 Some(c) => format!(r#"{{"hasNextPage":true,"endCursor":"{c}"}}"#),
                 None => r#"{"hasNextPage":false,"endCursor":null}"#.to_string(),
             };
-            format!(r#"{{"data":{{"viewer":{{"projectV2":{{"id":"P1","title":"uchmk","field":{{"id":"F1","options":[{{"id":"o1","name":"Todo"}}]}},"items":{{"pageInfo":{info},"nodes":[{}]}}}}}}}}}}"#, nodes.join(","))
+            format!(
+                r#"{{"data":{{"viewer":{{"projectV2":{{"id":"P1","title":"uchmk","field":{{"id":"F1","options":[{{"id":"o1","name":"Todo"}}]}},"items":{{"pageInfo":{info},"nodes":[{}]}}}}}}}}}}"#,
+                nodes.join(",")
+            )
         };
         let (a, b) = (page(&["I1", "I2"], Some("c1")), page(&["I3"], None));
         assert_eq!(next_page(&a).as_deref(), Some("c1"));
@@ -456,9 +475,17 @@ mod tests {
 
     #[test]
     fn priority_is_read_and_set_by_name() {
-        let body = BODY.replace(r#""field":{"id":"F1","#, r#""priority":{"id":"PF","options":[{"id":"p1","name":"High"},{"id":"p2","name":"Low"}]},"field":{"id":"F1","#).replace(r#""fieldValueByName":{"optionId":"o1"}},
-        {"id":"I2""#, r#""fieldValueByName":{"optionId":"o1"},"priority":{"optionId":"p2"}},
-        {"id":"I2""#);
+        let body = BODY
+            .replace(
+                r#""field":{"id":"F1","#,
+                r#""priority":{"id":"PF","options":[{"id":"p1","name":"High"},{"id":"p2","name":"Low"}]},"field":{"id":"F1","#,
+            )
+            .replace(
+                r#""fieldValueByName":{"optionId":"o1"}},
+        {"id":"I2""#,
+                r#""fieldValueByName":{"optionId":"o1"},"priority":{"optionId":"p2"}},
+        {"id":"I2""#,
+            );
         let mut p = parse(&body).unwrap();
         assert_eq!(p.card_of("N1"), Some(0));
         assert_eq!(p.choices(0, true), (vec!["High".to_string(), "Low".to_string()], vec!["Low".to_string()]));

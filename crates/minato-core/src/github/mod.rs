@@ -9,8 +9,8 @@ pub mod rate;
 pub mod search;
 pub mod token;
 pub mod types;
-pub mod write;
 pub mod worker;
+pub mod write;
 
 pub use client::{Client, Etags, Fetched};
 pub use http::{Method, Request, Response, Transport, UreqTransport};

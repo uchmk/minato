@@ -6,18 +6,18 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod actions_ui;
-mod board_ui;
 mod app;
-mod fonts;
-mod i18n;
+mod board_ui;
 mod compose_ui;
 mod detail_ui;
+mod fonts;
+mod i18n;
 mod icon;
 mod inbox_ui;
 mod list_ui;
 mod md_ui;
-mod notes_ui;
 mod net;
+mod notes_ui;
 mod overlay;
 mod overlay_ui;
 mod prefs;
@@ -79,11 +79,21 @@ impl Minato {
             return;
         };
         let app = &self.app;
-        let hidden = app.mode == Mode::Notes || app.palette.is_some() || app.overlay.is_some() || app.confirm.is_some() || app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
+        let hidden = app.mode == Mode::Notes
+            || app.palette.is_some()
+            || app.overlay.is_some()
+            || app.confirm.is_some()
+            || app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
         ui.painter().rect_filled(at, 0.0, ito_theme::colors().side);
         // The right 6 px are the window's edge to resize by.
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(at.shrink(6.0)));
-        let words = ito_browser::Words { back: app.tr("browser.back"), reload: app.tr("browser.reload"), external: app.tr("browser.external"), close: app.tr("browser.close"), failed: app.tr("browser.failed") };
+        let words = ito_browser::Words {
+            back: app.tr("browser.back"),
+            reload: app.tr("browser.reload"),
+            external: app.tr("browser.external"),
+            close: app.tr("browser.close"),
+            failed: app.tr("browser.failed"),
+        };
         let answer = b.show(&mut child, frame, hidden, &words);
         if let Some(url) = answer.external {
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
@@ -140,7 +150,9 @@ impl Minato {
                 egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
                     self.app.enter();
                 }
-                egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. } if !modifiers.ctrl && !modifiers.alt && !modifiers.command => {
+                egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. }
+                    if !modifiers.ctrl && !modifiers.alt && !modifiers.command =>
+                {
                     self.app.cycle_view(modifiers.shift);
                 }
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
@@ -169,10 +181,15 @@ impl Minato {
 /// The events without the letters an Alt key also sends on Windows: `Alt+A`
 /// is not `a` (AltGr, which comes with Ctrl, still types).
 fn no_alt_letters(events: Vec<egui::Event>) -> Vec<egui::Event> {
-    let alt: Vec<String> = events.iter().filter_map(|e| match e {
-        egui::Event::Key { key, pressed: true, modifiers, .. } if modifiers.alt && !modifiers.ctrl && key.name().len() == 1 => Some(key.name().to_ascii_lowercase()),
-        _ => None,
-    }).collect();
+    let alt: Vec<String> = events
+        .iter()
+        .filter_map(|e| match e {
+            egui::Event::Key { key, pressed: true, modifiers, .. } if modifiers.alt && !modifiers.ctrl && key.name().len() == 1 => {
+                Some(key.name().to_ascii_lowercase())
+            }
+            _ => None,
+        })
+        .collect();
     events.into_iter().filter(|e| !matches!(e, egui::Event::Text(t) if alt.contains(&t.to_ascii_lowercase()))).collect()
 }
 
@@ -180,7 +197,14 @@ fn no_alt_letters(events: Vec<egui::Event>) -> Vec<egui::Event> {
 fn palette_show(ctx: &egui::Context, app: &mut App) {
     let Some(mut view) = app.palette.take() else { return };
     let c = ito_theme::colors();
-    let style = ito_palette::Style { panel: c.panel, border: c.border, text: c.fg, dim: c.dim, selected_bg: ui::ACCENT.gamma_multiply(0.22), selected_text: c.fg };
+    let style = ito_palette::Style {
+        panel: c.panel,
+        border: c.border,
+        text: c.fg,
+        dim: c.dim,
+        selected_bg: ui::ACCENT.gamma_multiply(0.22),
+        selected_text: c.fg,
+    };
     let words = ito_palette::Words { hint: app.tr("palette.hint"), none: app.tr("palette.none") };
     match ito_palette::show(ctx, &mut view, &app.palette_entries(), &style, &words) {
         None => app.palette = Some(view),
@@ -218,7 +242,10 @@ impl eframe::App for Minato {
             let was = self.app.mode;
             self.app.find_check();
             // A box over the view keeps the cards' peeks from showing over it.
-            let boxed = self.app.palette.is_some() || self.app.overlay.is_some() || self.app.confirm.is_some() || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
+            let boxed = self.app.palette.is_some()
+                || self.app.overlay.is_some()
+                || self.app.confirm.is_some()
+                || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
             ui.ctx().data_mut(|d| d.insert_temp(ui::BOXED.into(), boxed));
             let out = ui::frame(ui, &self.app);
             self.app.detail_max = out.detail_max;
@@ -230,7 +257,13 @@ impl eframe::App for Minato {
             // The box in the detail is left (its text kept as the item's
             // draft) for anything else the mouse does.
             let inline = self.app.compose.as_ref().is_some_and(|c| !c.id.starts_with("new:"));
-            let elsewhere = out.view.is_some() || out.click.as_ref().is_some_and(|c| !c.is_compose()) || out.note.is_some() || out.pick.is_some() || out.drop.is_some() || out.bell || out.palette;
+            let elsewhere = out.view.is_some()
+                || out.click.as_ref().is_some_and(|c| !c.is_compose())
+                || out.note.is_some()
+                || out.pick.is_some()
+                || out.drop.is_some()
+                || out.bell
+                || out.palette;
             if inline && elsewhere {
                 self.app.close_compose();
             }
@@ -298,7 +331,12 @@ impl eframe::App for Minato {
 /// a keyboard that needs it for the key still counts.
 fn scale_key(i: &mut egui::InputState) -> Option<ito_common::ScaleTo> {
     use ito_common::ScaleTo;
-    let keys = [(egui::Key::Plus, ScaleTo::In), (egui::Key::Equals, ScaleTo::In), (egui::Key::Minus, ScaleTo::Out), (egui::Key::Num0, ScaleTo::Reset)];
+    let keys = [
+        (egui::Key::Plus, ScaleTo::In),
+        (egui::Key::Equals, ScaleTo::In),
+        (egui::Key::Minus, ScaleTo::Out),
+        (egui::Key::Num0, ScaleTo::Reset),
+    ];
     let mut got = None;
     for (key, to) in keys {
         for m in [egui::Modifiers::COMMAND, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT] {
@@ -444,7 +482,10 @@ mod tests {
     #[test]
     fn the_arrows_are_hjkl() {
         let none = egui::Modifiers::NONE;
-        let got: Vec<_> = [egui::Key::ArrowLeft, egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::ArrowRight].into_iter().map(|k| arrow_char(k, &none)).collect();
+        let got: Vec<_> = [egui::Key::ArrowLeft, egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::ArrowRight]
+            .into_iter()
+            .map(|k| arrow_char(k, &none))
+            .collect();
         assert_eq!(got, [Some('h'), Some('j'), Some('k'), Some('l')]);
         assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::SHIFT), Some('J'));
         assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::CTRL), None);

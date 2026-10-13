@@ -29,7 +29,10 @@ const RED: &str = "CI is red on ";
 /// A stub for each repository whose default branch is red.
 pub fn parse(body: &str) -> Result<Vec<Item>, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
-    let nodes = v.pointer("/data/viewer/repositories/nodes").and_then(Value::as_array).ok_or_else(|| v.pointer("/errors/0/message").and_then(Value::as_str).unwrap_or("no repositories in the answer").to_string())?;
+    let nodes = v
+        .pointer("/data/viewer/repositories/nodes")
+        .and_then(Value::as_array)
+        .ok_or_else(|| v.pointer("/errors/0/message").and_then(Value::as_str).unwrap_or("no repositories in the answer").to_string())?;
     let text = |n: &Value, p: &str| n.pointer(p).and_then(Value::as_str).unwrap_or_default().to_string();
     Ok(nodes
         .iter()

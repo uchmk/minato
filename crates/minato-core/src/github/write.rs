@@ -1,7 +1,7 @@
 //! What minato writes to GitHub, as ready-to-send calls. Nothing here sends;
 //! the tests check the paths and the JSON.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use super::http::Method;
 use super::worker::Call;
@@ -153,17 +153,30 @@ mod tests {
 
     #[test]
     fn a_new_issue_takes_its_title_from_the_first_line() {
-        let (m, path, body) = parts(create_issue("uchmk/kura", "
+        let (m, path, body) = parts(
+            create_issue(
+                "uchmk/kura",
+                "
  Title here 
 Body
 more
-").unwrap());
+",
+            )
+            .unwrap(),
+        );
         assert!(matches!(m, Method::Post));
         assert_eq!(path, "/repos/uchmk/kura/issues");
-        assert_eq!(body, json!({ "title": "Title here", "body": "Body
-more" }));
-        assert!(create_issue("uchmk/kura", " 
- ").is_none());
+        assert_eq!(
+            body,
+            json!({ "title": "Title here", "body": "Body
+more" })
+        );
+        assert!(create_issue(
+            "uchmk/kura",
+            " 
+ "
+        )
+        .is_none());
     }
 
     fn parts(c: Call) -> (Method, String, Value) {

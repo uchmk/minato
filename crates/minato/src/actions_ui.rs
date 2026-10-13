@@ -3,14 +3,14 @@
 //! next step, jobs, the last ten results and artifacts. Painted on rects; no
 //! scrollbar anywhere.
 
-use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
 use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{fold, Show};
 use minato_core::list::{age, epoch};
 
-use crate::app::{App, Click, Pane, Wheel, now_epoch};
+use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::list_ui::LINE;
-use crate::style::{self, ACCENT, Next};
+use crate::style::{self, Next, ACCENT};
 use crate::ui::{self, Out};
 
 /// A run.
@@ -115,7 +115,11 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         for pick in picks {
             let row = Rect::from_min_size(pos2(r.left(), y), vec2(r.width(), ENT_H));
             if row.top() < top || row.bottom() > bottom {
-                if row.top() < top { above += 1 } else { below += 1 }
+                if row.top() < top {
+                    above += 1
+                } else {
+                    below += 1
+                }
                 y += ENT_H;
                 flat += 1;
                 continue;
@@ -161,7 +165,13 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let p = ui.painter().with_clip_rect(r);
     p.rect_filled(r, 0.0, c.side);
     let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));
-    let n = p.text(pos2(head.right() - 12.0, head.center().y), Align2::RIGHT_CENTER, app.tr("list.count").replace("{}", &shown.len().to_string()), FontId::proportional(12.0), c.dim);
+    let n = p.text(
+        pos2(head.right() - 12.0, head.center().y),
+        Align2::RIGHT_CENTER,
+        app.tr("list.count").replace("{}", &shown.len().to_string()),
+        FontId::proportional(12.0),
+        c.dim,
+    );
     let q = Rect::from_min_max(pos2(head.left() + 12.0, head.center().y - 11.0), pos2(n.left() - 8.0, head.center().y + 11.0));
     p.rect_filled(q, CornerRadius::same(6), c.bg);
     p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
@@ -253,7 +263,13 @@ fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64) {
     let g = style::truncated(&p, format!("{}  · {}", run.event, run.branch), FontId::monospace(11.0), c.dim, rx - wx);
     p.galley(pos2(wx, y2 - g.size().y / 2.0), g, c.dim);
     let y3 = y2 + 9.0 + 3.0 + 8.0;
-    let g = style::truncated(&p, format!("{} · #{} · {} · {}", run.repo, run.number, run.actor, ago(&run.started_at, now)), FontId::proportional(12.0), c.dim, right - x);
+    let g = style::truncated(
+        &p,
+        format!("{} · #{} · {} · {}", run.repo, run.number, run.actor, ago(&run.started_at, now)),
+        FontId::proportional(12.0),
+        c.dim,
+        right - x,
+    );
     p.galley(pos2(x, y3 - g.size().y / 2.0), g, c.dim);
 }
 
@@ -315,8 +331,12 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         (false, n) => format!("{bad} of the last {n} runs of this workflow failed"),
     };
     let next = match run.status {
-        Status::Bad => Some(Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some("R") }),
-        Status::Running | Status::Queued => Some(Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some("X") }),
+        Status::Bad => {
+            Some(Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some("R") })
+        }
+        Status::Running | Status::Queued => {
+            Some(Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some("X") })
+        }
         Status::Ok | Status::Idle => None,
     };
     if let Some(n) = next {
@@ -341,7 +361,10 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             p.text(pos2(x, y + 9.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(13.5), c.dim);
             y += 18.0;
         }
-        Some(jobs) => match have.and_then(|d| d.workflow.as_ref()).filter(|w| w.layers().iter().all(|&l| l < MAX_COLS) && w.jobs.iter().any(|j| !j.needs.is_empty())) {
+        Some(jobs) => match have
+            .and_then(|d| d.workflow.as_ref())
+            .filter(|w| w.layers().iter().all(|&l| l < MAX_COLS) && w.jobs.iter().any(|j| !j.needs.is_empty()))
+        {
             Some(wf) => y += graph(&p, jobs, wf, pos2(x, y), w, now),
             None => {
                 for j in jobs {
@@ -364,7 +387,13 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     }
     let hx = x + 10.0 + hist.len() as f32 * 18.0 + 8.0;
     if bad > 0 {
-        p.text(pos2(hx, y + 7.0), Align2::LEFT_CENTER, if app.ja() { format!("落ちたのは {bad} 回") } else { format!("{bad} failed") }, FontId::proportional(12.0), c.dim);
+        p.text(
+            pos2(hx, y + 7.0),
+            Align2::LEFT_CENTER,
+            if app.ja() { format!("落ちたのは {bad} 回") } else { format!("{bad} failed") },
+            FontId::proportional(12.0),
+            c.dim,
+        );
     } else if !hist.is_empty() {
         p.text(pos2(hx, y + 7.0), Align2::LEFT_CENTER, app.tr("run.all_ok"), FontId::proportional(12.0), c.dim);
     }
@@ -424,7 +453,13 @@ fn graph(p: &Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::work
         p.rect_filled(*r, CornerRadius::same(5), t.gamma_multiply(0.16));
         p.rect_stroke(*r, CornerRadius::same(5), Stroke::new(1.0, t), egui::StrokeKind::Inside);
         let clip = p.with_clip_rect(r.shrink(3.0));
-        clip.text(pos2(r.left() + 7.0, r.top() + 12.0), Align2::LEFT_CENTER, format!("{} {}", job.status.mark(), job.name), FontId::proportional(11.5), c.fg);
+        clip.text(
+            pos2(r.left() + 7.0, r.top() + 12.0),
+            Align2::LEFT_CENTER,
+            format!("{} {}", job.status.mark(), job.name),
+            FontId::proportional(11.5),
+            c.fg,
+        );
         let d = job.seconds(now).map(actions::duration).unwrap_or_default();
         clip.text(pos2(r.left() + 7.0, r.top() + 27.0), Align2::LEFT_CENTER, d, FontId::monospace(10.5), c.dim);
     }

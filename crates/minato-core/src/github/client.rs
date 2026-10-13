@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use super::http::{API, Request, Transport};
+use super::http::{Request, Transport, API};
 use super::rate::Rate;
 use super::token::Token;
 
@@ -31,7 +31,11 @@ pub struct Client<T: Transport> {
 
 /// The URL of `path` ("/user" or a full URL).
 pub fn url(path: &str) -> String {
-    if path.starts_with("http") { path.to_string() } else { format!("{API}{path}") }
+    if path.starts_with("http") {
+        path.to_string()
+    } else {
+        format!("{API}{path}")
+    }
 }
 
 impl<T: Transport> Client<T> {
@@ -146,11 +150,13 @@ mod tests {
         let etags = Etags::default();
         etags.lock().unwrap().insert(url("/user"), ("\"d\"".into(), "kept".into()));
         let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut c = Client::sharing(Fake { answers: vec![resp(304, None, "")], asked: asked.clone() }, Token::new("t").unwrap(), etags.clone());
+        let mut c =
+            Client::sharing(Fake { answers: vec![resp(304, None, "")], asked: asked.clone() }, Token::new("t").unwrap(), etags.clone());
         let got = c.get("/user").unwrap();
         assert_eq!((got.body.as_str(), got.cached), ("kept", true));
         assert_eq!(asked.lock().unwrap()[0], Request::Get { url: "https://api.github.com/user".into(), etag: Some("\"d\"".into()) });
-        let mut other = Client::sharing(Fake { answers: vec![resp(200, Some("\"e\""), "new")], asked }, Token::new("t").unwrap(), etags.clone());
+        let mut other =
+            Client::sharing(Fake { answers: vec![resp(200, Some("\"e\""), "new")], asked }, Token::new("t").unwrap(), etags.clone());
         other.get("/user").unwrap();
         assert_eq!(etags.lock().unwrap()[&url("/user")], ("\"e\"".into(), "new".into()));
     }
@@ -160,9 +166,13 @@ mod tests {
         let (mut c, _) = client(vec![resp(401, None, "{}"), resp(404, None, "Not Found\nmore")]);
         assert_eq!(c.get("/user").unwrap_err(), "GitHub refused the token (401)");
         assert_eq!(c.get("/x").unwrap_err(), "GitHub answered 404: Not Found");
-        let (mut g, _) = client(vec![resp(401, None, "{
+        let (mut g, _) = client(vec![resp(
+            401,
+            None,
+            "{
   \"message\": \"Bad credentials\"
-}")]);
+}",
+        )]);
         assert_eq!(g.graphql("q", "{}").unwrap_err(), REFUSED);
     }
 

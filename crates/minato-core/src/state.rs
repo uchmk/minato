@@ -49,12 +49,15 @@ pub fn parse(text: &str) -> State {
 /// `[0.2, 0.5]` as numbers; nothing if any of them does not read.
 fn ratios(value: &str) -> Vec<f32> {
     let Some(inner) = value.trim().strip_prefix('[').and_then(|v| v.strip_suffix(']')) else { return Vec::new() };
-    let got: Option<Vec<f32>> = inner.split(',').map(str::trim).filter(|s| !s.is_empty()).map(|s| s.parse::<f32>().ok().filter(|r| *r > 0.0 && *r < 1.0)).collect();
+    let got: Option<Vec<f32>> =
+        inner.split(',').map(str::trim).filter(|s| !s.is_empty()).map(|s| s.parse::<f32>().ok().filter(|r| *r > 0.0 && *r < 1.0)).collect();
     got.unwrap_or_default()
 }
 
 pub fn format(s: &State) -> String {
-    let list = |v: &[f32]| v.iter().map(|r| format!("{:.4}", r).trim_end_matches('0').trim_end_matches('.').to_string()).collect::<Vec<_>>().join(", ");
+    let list = |v: &[f32]| {
+        v.iter().map(|r| format!("{:.4}", r).trim_end_matches('0').trim_end_matches('.').to_string()).collect::<Vec<_>>().join(", ")
+    };
     format!("[columns]\ninbox = [{}]\nlist = [{}]\nactions = [{}]\n", list(&s.inbox), list(&s.list), list(&s.actions))
 }
 
@@ -72,7 +75,9 @@ mod tests {
 
     #[test]
     fn skips_what_does_not_read() {
-        let s = parse("# minato\n[other]\ninbox = [0.5]\n[columns]\ninbox = [0.4, x]\nlist = [1.5]\nactions = 0.3\nweird\nlist = [ 0.25 , 0.5 ]\n");
+        let s = parse(
+            "# minato\n[other]\ninbox = [0.5]\n[columns]\ninbox = [0.4, x]\nlist = [1.5]\nactions = 0.3\nweird\nlist = [ 0.25 , 0.5 ]\n",
+        );
         assert_eq!(s.inbox, Vec::<f32>::new());
         assert_eq!(s.list, vec![0.25, 0.5]);
         assert!(s.actions.is_empty());

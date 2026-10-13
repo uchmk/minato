@@ -26,14 +26,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use minato_core::actions::{self, Run};
 use minato_core::board;
 use minato_core::cache;
-use minato_core::notes;
-use minato_core::workflow;
+use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items};
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
-use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
 use minato_core::github::write::{self, parse_names};
-use minato_core::github::{Bucket, client, Client, Etags, Rate, Token, UreqTransport};
+use minato_core::github::{client, Bucket, Client, Etags, Rate, Token, UreqTransport};
+use minato_core::notes;
+use minato_core::workflow;
 
 use minato_core::list::Item;
 use minato_core::mainci;
@@ -215,7 +215,48 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rates: [None; 2], next_search: now, searched_closed: false, searched_custom: None, stash: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, runs_away: false, board_away: false, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
+        Net {
+            token_rx,
+            worker: None,
+            quick: None,
+            back: None,
+            runs: Vec::new(),
+            etags: Etags::default(),
+            back_busy: 0,
+            back_tried: HashSet::new(),
+            next_poll: now,
+            rates: [None; 2],
+            next_search: now,
+            searched_closed: false,
+            searched_custom: None,
+            stash: None,
+            found: [Vec::new(), Vec::new()],
+            mentioned: Default::default(),
+            stubs: Vec::new(),
+            asked: None,
+            refetch: false,
+            pending: Default::default(),
+            repos: Vec::new(),
+            run_found: Default::default(),
+            runs_asked: None,
+            board_asked: None,
+            runs_away: false,
+            board_away: false,
+            board_no: None,
+            next_notes: now,
+            asked_run: None,
+            run_retry: now,
+            run_kept: Default::default(),
+            yaml_by: HashMap::new(),
+            run_refetch: false,
+            board_pages: Vec::new(),
+            peek_asked: None,
+            cache_rx,
+            cache_tx,
+            kept: Default::default(),
+            live: Default::default(),
+            scope: None,
+        }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -237,7 +278,11 @@ impl Net {
         for e in entries {
             // A GET kept with its ETag: the first ask may be a 304.
             if let Some(path) = rest_path(&e.key, other.as_deref()).filter(|_| !e.stamp.is_empty()) {
-                self.etags.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entry(client::url(&path)).or_insert_with(|| (e.stamp.clone(), e.body.clone()));
+                self.etags
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .entry(client::url(&path))
+                    .or_insert_with(|| (e.stamp.clone(), e.body.clone()));
             }
             if !same && scoped(&e.key) {
                 continue;
@@ -523,7 +568,10 @@ impl Net {
         self.board_pages.push(body.to_string());
         let next = board::next_page(body).filter(|_| self.board_pages.len() < PAGES);
         if let (Some(after), Some(n), Some(w)) = (next, self.board_no, &self.worker) {
-            let job = Job { key: "board-more".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, Some(&after)) } };
+            let job = Job {
+                key: "board-more".into(),
+                call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, Some(&after)) },
+            };
             if app.view == View::Board {
                 w.send_first(job);
             } else {
@@ -558,7 +606,11 @@ impl Net {
         if kept.is_none() && done && !stamp.is_empty() {
             self.keep(key, &stamp, body);
         }
-        let m = self.run_kept.entry(id).or_insert_with(|| RunMemo { stamp: stamp.clone(), detail: RunDetail { id, ..Default::default() }, got: [false; 3] });
+        let m = self.run_kept.entry(id).or_insert_with(|| RunMemo {
+            stamp: stamp.clone(),
+            detail: RunDetail { id, ..Default::default() },
+            got: [false; 3],
+        });
         // A newer state of the run: what is kept shows until the new comes.
         if m.stamp != stamp {
             m.stamp = stamp;
@@ -599,7 +651,11 @@ impl Net {
             return true;
         }
         let Some(w) = workflow::contents_path(r).and_then(|p| self.yaml_by.get(&p)) else { return false };
-        let m = self.run_kept.entry(r.id).or_insert_with(|| RunMemo { stamp: r.updated_at.clone(), detail: RunDetail { id: r.id, ..Default::default() }, got: [false; 3] });
+        let m = self.run_kept.entry(r.id).or_insert_with(|| RunMemo {
+            stamp: r.updated_at.clone(),
+            detail: RunDetail { id: r.id, ..Default::default() },
+            got: [false; 3],
+        });
         m.detail.workflow = Some(w.clone());
         m.got[2] = true;
         m.detail.yaml_tried = true;
@@ -750,7 +806,11 @@ impl Net {
                     // `D` then starts the run with no inputs.
                     if let Some(id) = reply.key.strip_prefix("a-yaml:").and_then(|n| n.parse::<u64>().ok()) {
                         let stamp = app.runs.iter().find(|r| r.id == id).map(|r| r.updated_at.clone()).unwrap_or_default();
-                        let m = self.run_kept.entry(id).or_insert_with(|| RunMemo { stamp, detail: RunDetail { id, ..Default::default() }, got: [false; 3] });
+                        let m = self.run_kept.entry(id).or_insert_with(|| RunMemo {
+                            stamp,
+                            detail: RunDetail { id, ..Default::default() },
+                            got: [false; 3],
+                        });
                         m.detail.yaml_tried = true;
                         if let Some(d) = app.run_detail.as_mut().filter(|d| d.id == id) {
                             d.yaml_tried = true;
@@ -777,7 +837,11 @@ impl Net {
         if let Some(id) = app.peek_wanted.take() {
             if self.peek_asked.as_ref() != Some(&id) && !app.peeks.contains_key(&id) {
                 let vars = format!("{{\"id\":{}}}", json_str(&id));
-                quick.send_in("peek", &id, Job { key: format!("peek:{id}"), call: Call::Graphql { query: board::peek_query().into(), variables: vars } });
+                quick.send_in(
+                    "peek",
+                    &id,
+                    Job { key: format!("peek:{id}"), call: Call::Graphql { query: board::peek_query().into(), variables: vars } },
+                );
                 self.peek_asked = Some(id);
             }
         }
@@ -820,7 +884,11 @@ impl Net {
             // The searches are of the owner's repositories; the mentions
             // and the authors stay the viewer's.
             let owner = app.owner().unwrap_or(&me).to_string();
-            let custom = if app.view == crate::app::View::List { app.list.active_search().map(|t| minato_core::list::search_query(t, &owner)) } else { None };
+            let custom = if app.view == crate::app::View::List {
+                app.list.active_search().map(|t| minato_core::list::search_query(t, &owner))
+            } else {
+                None
+            };
             let closed = app.closed_shown();
             if closed != self.searched_closed || custom != self.searched_custom {
                 // The open items' answers are kept while the list shows
@@ -857,7 +925,10 @@ impl Net {
                     let q = format!("user:{owner} is:open mentions:{me} -author:{me} sort:updated-desc");
                     let mvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                     worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: mvars } });
-                    worker.send(Job { key: "mainci".into(), call: Call::Graphql { query: mainci::query(self.other()), variables: "{}".into() } });
+                    worker.send(Job {
+                        key: "mainci".into(),
+                        call: Call::Graphql { query: mainci::query(self.other()), variables: "{}".into() },
+                    });
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
                 }
                 self.next_search = now + SEARCH;
@@ -882,8 +953,17 @@ impl Net {
         }
         if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }, now) <= now {
             match self.board_no {
-                None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query(self.other()), variables: "{}".into() } }, open),
-                Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, None) } }, open),
+                None => send(
+                    Job {
+                        key: "board-pick".into(),
+                        call: Call::Graphql { query: board::pick_query(self.other()), variables: "{}".into() },
+                    },
+                    open,
+                ),
+                Some(n) => send(
+                    Job { key: "board".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, None) } },
+                    open,
+                ),
             }
             self.board_asked = Some(now);
             self.board_away = !open;

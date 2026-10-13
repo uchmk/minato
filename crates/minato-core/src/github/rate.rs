@@ -31,7 +31,12 @@ impl Rate {
             Some("graphql") => Bucket::Graphql,
             Some(_) => Bucket::Other,
         };
-        Some(Rate { remaining: n("x-ratelimit-remaining")? as u32, limit: n("x-ratelimit-limit")? as u32, reset: n("x-ratelimit-reset")?, bucket })
+        Some(Rate {
+            remaining: n("x-ratelimit-remaining")? as u32,
+            limit: n("x-ratelimit-limit")? as u32,
+            reset: n("x-ratelimit-reset")?,
+            bucket,
+        })
     }
 
     /// Of REST's and GraphQL's, the one with the smaller share left: the one

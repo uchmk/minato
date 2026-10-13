@@ -39,7 +39,8 @@ pub fn fold(heights: &[f32], more: f32, box_h: f32, selected: usize) -> Fold {
     rows[on] = Show::Full;
     let (mut above, mut below) = (on, n - 1 - on);
     let mut total = heights[on];
-    let fits = |total: f32, above: usize, below: usize| total + if above > 0 { more } else { 0.0 } + if below > 0 { more } else { 0.0 } <= box_h;
+    let fits =
+        |total: f32, above: usize, below: usize| total + if above > 0 { more } else { 0.0 } + if below > 0 { more } else { 0.0 } <= box_h;
     for &at in &near[1..] {
         let (a, b) = if at < on { (above - 1, below) } else { (above, below - 1) };
         if !fits(total + heights[at], a, b) {

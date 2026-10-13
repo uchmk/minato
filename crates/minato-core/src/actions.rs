@@ -2,10 +2,10 @@
 //! as GitHub sends them, the filters and the selection, and the calls that
 //! change a run (re-run, cancel, dispatch).
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::github::Method;
 use crate::github::worker::Call;
+use crate::github::Method;
 use crate::list::epoch;
 
 /// How a run stands, for the mark and the colour.
@@ -154,7 +154,10 @@ fn list(body: &str, key: &str) -> Result<Vec<Value>, String> {
 pub fn parse_repos(body: &str) -> Result<Vec<String>, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
     let a = v.as_array().ok_or("not a list")?;
-    Ok(a.iter().filter(|r| !r.get("archived").and_then(Value::as_bool).unwrap_or(false)).filter_map(|r| r.get("full_name")?.as_str().map(str::to_string)).collect())
+    Ok(a.iter()
+        .filter(|r| !r.get("archived").and_then(Value::as_bool).unwrap_or(false))
+        .filter_map(|r| r.get("full_name")?.as_str().map(str::to_string))
+        .collect())
 }
 
 pub fn parse_runs(body: &str) -> Result<Vec<Run>, String> {
@@ -176,7 +179,11 @@ pub fn parse_runs(body: &str) -> Result<Vec<Run>, String> {
                 status: Status::from(&text(r, "status"), conclusion),
                 started_at: {
                     let s = text(r, "run_started_at");
-                    if s.is_empty() { text(r, "created_at") } else { s }
+                    if s.is_empty() {
+                        text(r, "created_at")
+                    } else {
+                        s
+                    }
                 },
                 updated_at: text(r, "updated_at"),
                 url: text(r, "html_url"),
@@ -340,14 +347,19 @@ pub fn options(runs: &[Run]) -> Vec<(&'static str, Vec<Pick>)> {
     }
     vec![
         ("repo", distinct(runs.iter().map(|r| r.repo.clone())).into_iter().map(Pick::Repo).collect()),
-        ("state", [None, Some(Bucket::Bad), Some(Bucket::Active), Some(Bucket::Ok), Some(Bucket::Idle)].into_iter().map(Pick::State).collect()),
+        (
+            "state",
+            [None, Some(Bucket::Bad), Some(Bucket::Active), Some(Bucket::Ok), Some(Bucket::Idle)].into_iter().map(Pick::State).collect(),
+        ),
         ("workflow", distinct(runs.iter().map(|r| r.workflow.clone())).into_iter().map(Pick::Workflow).collect()),
     ]
 }
 
 impl ActState {
     pub fn matches(&self, r: &Run) -> bool {
-        self.repo.as_ref().is_none_or(|x| *x == r.repo) && self.state.is_none_or(|b| b.holds(r.status)) && self.workflow.as_ref().is_none_or(|w| *w == r.workflow)
+        self.repo.as_ref().is_none_or(|x| *x == r.repo)
+            && self.state.is_none_or(|b| b.holds(r.status))
+            && self.workflow.as_ref().is_none_or(|w| *w == r.workflow)
     }
 
     pub fn shown<'a>(&self, runs: &'a [Run]) -> Vec<&'a Run> {

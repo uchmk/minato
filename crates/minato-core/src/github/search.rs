@@ -4,13 +4,14 @@
 
 use serde::Deserialize;
 
-use crate::list::{Check, Ci, Detail, Entry, Item, Kind, Label, peek_of};
+use crate::list::{peek_of, Check, Ci, Detail, Entry, Item, Kind, Label};
 
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
 labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
 
 /// Who a PR asks for a review: people by login, teams by name.
-const REVIEWERS: &str = "reviewRequests(first: 5) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }";
+const REVIEWERS: &str =
+    "reviewRequests(first: 5) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }";
 
 /// The search for issues and PRs. Variables: `q` (the query text), `n`.
 pub fn items_query() -> String {
@@ -210,11 +211,7 @@ fn item_of(n: RawItem) -> Option<Item> {
         _ => return None,
     };
     let (Some(id), Some(number), Some(title), Some(repo)) = (n.id, n.number, n.title, n.repository) else { return None };
-    let ci = n
-        .commits
-        .and_then(|c| c.nodes.into_iter().next())
-        .and_then(|c| c.commit.rollup)
-        .map(|r| ci_of(&r.state));
+    let ci = n.commits.and_then(|c| c.nodes.into_iter().next()).and_then(|c| c.commit.rollup).map(|r| ci_of(&r.state));
     Some(Item {
         id,
         kind,
@@ -226,7 +223,9 @@ fn item_of(n: RawItem) -> Option<Item> {
         labels: n.labels.map_or_else(Vec::new, |l| l.nodes.into_iter().map(|l| Label { name: l.name, color: l.color }).collect()),
         assignees: n.assignees.map_or_else(Vec::new, |a| a.nodes.into_iter().map(|a| a.login).collect()),
         milestone: n.milestone.map(|m| m.title).unwrap_or_default(),
-        reviewers: n.review_requests.map_or_else(Vec::new, |r| r.nodes.into_iter().filter_map(|r| r.reviewer.and_then(|v| v.login.or(v.name))).collect()),
+        reviewers: n
+            .review_requests
+            .map_or_else(Vec::new, |r| r.nodes.into_iter().filter_map(|r| r.reviewer.and_then(|v| v.login.or(v.name))).collect()),
         comments: n.comments.map_or(0, |c| c.total_count),
         created_at: n.created_at.unwrap_or_default(),
         updated_at: n.updated_at.unwrap_or_default(),
@@ -323,7 +322,13 @@ pub fn parse_detail(body: &str) -> Result<Detail, String> {
         .map(|c| {
             c.nodes
                 .into_iter()
-                .map(|c| Entry { id: c.id, answer: c.is_answer, author: c.author.map_or_else(|| "ghost".to_string(), |a| a.login), created_at: c.created_at, body: c.body })
+                .map(|c| Entry {
+                    id: c.id,
+                    answer: c.is_answer,
+                    author: c.author.map_or_else(|| "ghost".to_string(), |a| a.login),
+                    created_at: c.created_at,
+                    body: c.body,
+                })
                 .collect()
         })
         .unwrap_or_default();

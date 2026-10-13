@@ -6,8 +6,8 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use egui::text::{LayoutJob, TextFormat};
-use egui::{Align2, Color32, CornerRadius, FontId, Galley, Painter, Rect, Stroke, StrokeKind, pos2, vec2};
-use minato_core::composer::{Block, Span, blocks, spans};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Galley, Painter, Rect, Stroke, StrokeKind};
+use minato_core::composer::{blocks, spans, Block, Span};
 use minato_core::find::Query;
 
 use crate::style::{self, ACCENT};
@@ -165,7 +165,8 @@ fn table(p: &Painter, rows: &[Vec<String>], w: f32, size: f32) -> (Vec<(f32, f32
     let mut cells = Vec::new();
     let mut y = 0.0;
     for (r, row) in rows.iter().enumerate() {
-        let laid: Vec<Text> = row.iter().enumerate().map(|(k, s)| inline(p, s, (widths[k] - pad * 2.0).max(10.0), size - 0.5, c.fg, r == 0)).collect();
+        let laid: Vec<Text> =
+            row.iter().enumerate().map(|(k, s)| inline(p, s, (widths[k] - pad * 2.0).max(10.0), size - 0.5, c.fg, r == 0)).collect();
         let h = laid.iter().map(|t| t.galley.size().y).fold(0.0, f32::max) + 8.0;
         let mut x = 0.0;
         for (k, t) in laid.into_iter().enumerate() {
@@ -239,7 +240,13 @@ impl Md {
                     p.circle_filled(pos2(at.x - GUTTER + 8.0, at.y + line_mid(&part.text)), 2.2, c.dim);
                 }
                 Deco::Number(n) => {
-                    p.text(pos2(at.x - 5.0, at.y + line_mid(&part.text)), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(13.5), c.dim);
+                    p.text(
+                        pos2(at.x - 5.0, at.y + line_mid(&part.text)),
+                        Align2::RIGHT_CENTER,
+                        format!("{n}."),
+                        FontId::proportional(13.5),
+                        c.dim,
+                    );
                 }
                 Deco::Task(on) => {
                     let b = Rect::from_center_size(pos2(at.x - GUTTER + 8.0, at.y + line_mid(&part.text)), vec2(11.0, 11.0));

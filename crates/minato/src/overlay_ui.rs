@@ -1,6 +1,6 @@
 //! Painting of the dispatch form and the job log (see `overlay.rs`).
 
-use egui::{Align2, Color32, CornerRadius, FontId, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Rect, Stroke, StrokeKind, Ui};
 
 use crate::app::App;
 use crate::overlay::{Form, LogView, Overlay};
@@ -28,7 +28,13 @@ pub fn show(ui: &mut Ui, app: &App) {
 
 fn form(p: &egui::Painter, app: &App, f: &Form, r: Rect) {
     let c = ito_theme::colors();
-    p.text(r.left_top() + vec2(0.0, 10.0), Align2::LEFT_CENTER, format!("{}  {} · {}", app.tr("dispatch.title"), f.run.workflow, f.run.branch), FontId::proportional(14.0), c.fg);
+    p.text(
+        r.left_top() + vec2(0.0, 10.0),
+        Align2::LEFT_CENTER,
+        format!("{}  {} · {}", app.tr("dispatch.title"), f.run.workflow, f.run.branch),
+        FontId::proportional(14.0),
+        c.fg,
+    );
     p.text(pos2(r.left(), r.bottom() - 8.0), Align2::LEFT_CENTER, app.tr("dispatch.hint"), FontId::proportional(11.0), c.dim);
     let mut y = r.top() + 30.0;
     let fit = (((r.height() - 56.0) / FIELD_H) as usize).max(1);
@@ -40,11 +46,21 @@ fn form(p: &egui::Painter, app: &App, f: &Form, r: Rect) {
             p.rect_filled(row, CornerRadius::same(4), ACCENT.gamma_multiply(0.14));
         }
         let req = if i.required { " *" } else { "" };
-        p.text(row.left_top() + vec2(8.0, 12.0), Align2::LEFT_CENTER, format!("{}{req}", i.name), FontId::proportional(12.5), if on { ACCENT } else { c.fg });
+        p.text(
+            row.left_top() + vec2(8.0, 12.0),
+            Align2::LEFT_CENTER,
+            format!("{}{req}", i.name),
+            FontId::proportional(12.5),
+            if on { ACCENT } else { c.fg },
+        );
         p.text(row.right_top() + vec2(-8.0, 12.0), Align2::RIGHT_CENTER, &i.description, FontId::proportional(11.0), c.dim);
         let v = &f.values[k];
         let shown = if Form::picks(i) {
-            if i.kind == "boolean" { format!("{} {}", if v == "true" { "[x]" } else { "[ ]" }, v) } else { format!("< {v} >") }
+            if i.kind == "boolean" {
+                format!("{} {}", if v == "true" { "[x]" } else { "[ ]" }, v)
+            } else {
+                format!("< {v} >")
+            }
         } else if on {
             format!("{v}▏")
         } else {
@@ -75,7 +91,13 @@ fn log(p: &egui::Painter, app: &App, l: &LogView, r: Rect) {
         .iter()
         .flat_map(|line| {
             let error = ["##[error]", "error:", "error["].iter().any(|e| line.starts_with(e));
-            let color = if error { crate::style::BAD } else if line.starts_with("##[") { c.dim } else { c.fg };
+            let color = if error {
+                crate::style::BAD
+            } else if line.starts_with("##[") {
+                c.dim
+            } else {
+                c.fg
+            };
             wrap(line, cols).into_iter().map(move |s| (s, color))
         })
         .collect();

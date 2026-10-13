@@ -12,16 +12,16 @@ use minato_core::github::search;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
 use minato_core::inbox::{Card, Group, InboxState, Mark, Rule, Status};
-use minato_core::prefs::Settings;
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::mainci;
 use minato_core::notes::{self, Note, NotesState};
+use minato_core::prefs::Settings;
 
 use minato_core::workflow::{self, Workflow};
 
 use ito_layout::{Dir, Node};
 
-use crate::overlay::{Form, K, LogView, Out, Overlay};
+use crate::overlay::{Form, LogView, Out, Overlay, K};
 use crate::prefs::Prefs;
 
 /// The four views, opened by `1` to `4` (docs/design.md).
@@ -128,7 +128,15 @@ impl View {
                 ("o", "key.browser"),
                 ("O", "key.outside"),
             ],
-            View::Board => &[("h l", "key.columns"), ("j k", "key.next"), ("H L", "key.card"), ("Enter", "key.open"), ("u", "key.undo"), ("o", "key.browser"), ("O", "key.outside")],
+            View::Board => &[
+                ("h l", "key.columns"),
+                ("j k", "key.next"),
+                ("H L", "key.card"),
+                ("Enter", "key.open"),
+                ("u", "key.undo"),
+                ("o", "key.browser"),
+                ("O", "key.outside"),
+            ],
         }
     }
 }
@@ -171,7 +179,8 @@ pub fn two(left: f32) -> Node<Pane> {
 
 /// Three columns: the left one's share, then the middle one's of the rest.
 pub fn three(left: f32, mid: f32) -> Node<Pane> {
-    let rest = Node::Split { dir: Dir::Right, ratio: mid, first: Box::new(Node::Leaf(Pane::Mid)), second: Box::new(Node::Leaf(Pane::Right)) };
+    let rest =
+        Node::Split { dir: Dir::Right, ratio: mid, first: Box::new(Node::Leaf(Pane::Mid)), second: Box::new(Node::Leaf(Pane::Right)) };
     Node::Split { dir: Dir::Right, ratio: left, first: Box::new(Node::Leaf(Pane::Left)), second: Box::new(rest) }
 }
 
@@ -712,7 +721,11 @@ impl App {
     /// shortcuts). Returns whether it was used.
     pub fn feed(&mut self, c: char) -> bool {
         let g = std::mem::take(&mut self.pending_g);
-        let free = self.compose.is_none() && self.confirm.is_none() && self.palette.is_none() && self.overlay.is_none() && matches!(self.mode, Mode::Main | Mode::Notes);
+        let free = self.compose.is_none()
+            && self.confirm.is_none()
+            && self.palette.is_none()
+            && self.overlay.is_none()
+            && matches!(self.mode, Mode::Main | Mode::Notes);
         let used = match c {
             'g' if free => {
                 if g {
@@ -845,12 +858,13 @@ impl App {
         if self.mode == Mode::Notes {
             return self.notes_key('\n');
         }
-        self.mode == Mode::Main && match self.view {
-            View::List => self.list_key(' '),
-            View::Actions => self.actions_key(' '),
-            View::Board => self.board_key('\n'),
-            _ => false,
-        }
+        self.mode == Mode::Main
+            && match self.view {
+                View::List => self.list_key(' '),
+                View::Actions => self.actions_key(' '),
+                View::Board => self.board_key('\n'),
+                _ => false,
+            }
     }
 
     /// The run under the cursor of the Actions view.
@@ -883,12 +897,20 @@ impl App {
             return vec![("Enter", "bar.tick"), ("↑ ↓", "bar.move"), ("Esc", "bar.apply")];
         }
         if c.id.starts_with("new:") {
-            return vec![("Ctrl+Enter", "bar.create"), ("Ctrl+P", "compose.preview"), ("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.no" })];
+            return vec![
+                ("Ctrl+Enter", "bar.create"),
+                ("Ctrl+P", "compose.preview"),
+                ("Ctrl+B I K", "bar.format"),
+                ("Esc", if c.preview { "bar.edit" } else { "bar.no" }),
+            ];
         }
         let mut keys = vec![("Ctrl+Enter", "bar.send"), ("Ctrl+P", "compose.preview"), ("Ctrl+Shift+Enter", "bar.send_close")];
         for k in self.settings.order {
             if self.settings.fields[k] {
-                keys.push((["Alt+L", "Alt+A", "Alt+S", "Alt+M", "Alt+P", "Alt+R"][k], ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k]));
+                keys.push((
+                    ["Alt+L", "Alt+A", "Alt+S", "Alt+M", "Alt+P", "Alt+R"][k],
+                    ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k],
+                ));
             }
         }
         keys.extend([("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.leave" })]);
@@ -916,7 +938,9 @@ impl App {
             return vec![("Enter", "bar.do"), ("↑ ↓", "bar.choose"), ("Esc", "key.close")];
         }
         match &self.overlay {
-            Some(Overlay::Form(_)) => return vec![("Ctrl+Enter", "bar.start"), ("↑ ↓", "bar.input"), ("Enter", "bar.change"), ("Esc", "bar.no")],
+            Some(Overlay::Form(_)) => {
+                return vec![("Ctrl+Enter", "bar.start"), ("↑ ↓", "bar.input"), ("Enter", "bar.change"), ("Esc", "bar.no")]
+            }
             Some(Overlay::Log(_)) => return vec![("j k", "bar.scroll"), ("Space", "bar.page"), ("g G", "bar.ends"), ("Esc", "key.close")],
             None => {}
         }
@@ -939,7 +963,9 @@ impl App {
             return self.acts.key(c, &self.runs);
         }
         match c {
-            'R' if run.status == actions::Status::Bad => self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran")),
+            'R' if run.status == actions::Status::Bad => {
+                self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran"))
+            }
             'R' => self.say_key("run.not_failed"),
             'X' if run.status.active() => {
                 self.confirm = Some(run.id.to_string());
@@ -964,7 +990,12 @@ impl App {
             }
             'L' => self.open_log(&run),
             'e' => {
-                let failed = self.run_detail.as_ref().filter(|d| d.id == run.id).and_then(|d| d.jobs.as_ref()).and_then(|j| j.iter().find(|j| j.status == actions::Status::Bad));
+                let failed = self
+                    .run_detail
+                    .as_ref()
+                    .filter(|d| d.id == run.id)
+                    .and_then(|d| d.jobs.as_ref())
+                    .and_then(|j| j.iter().find(|j| j.status == actions::Status::Bad));
                 self.open_url = Some(failed.map_or_else(|| run.url.clone(), |j| j.url.clone()));
             }
             'p' => match actions::pr_url(&run) {
@@ -1105,7 +1136,11 @@ impl App {
                 if notes::number(&note.url).is_some() {
                     // Not one the searches list (merged, closed): fetched
                     // and shown in the list (see `show_fetched`).
-                    self.queue(&format!("fetch:{}", note.url), Call::Graphql { query: search::item_query(), variables: search::item_vars(&note.url) }, None);
+                    self.queue(
+                        &format!("fetch:{}", note.url),
+                        Call::Graphql { query: search::item_query(), variables: search::item_vars(&note.url) },
+                        None,
+                    );
                     self.say_key("notes.fetching");
                 } else {
                     self.open_url = Some(page);
@@ -1121,7 +1156,14 @@ impl App {
     fn note_run(&self, note: &Note) -> Option<usize> {
         let (workflow, branch) = notes::workflow_run(note)?;
         let of = |r: &&Run| r.repo == note.repo && r.workflow == workflow && r.branch == branch;
-        let newest = |done: bool| self.runs.iter().enumerate().filter(|(_, r)| of(r) && (!done || r.updated_at <= note.updated_at)).max_by(|a, b| a.1.started_at.cmp(&b.1.started_at)).map(|(k, _)| k);
+        let newest = |done: bool| {
+            self.runs
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| of(r) && (!done || r.updated_at <= note.updated_at))
+                .max_by(|a, b| a.1.started_at.cmp(&b.1.started_at))
+                .map(|(k, _)| k)
+        };
         newest(true).or_else(|| newest(false))
     }
 
@@ -1708,7 +1750,11 @@ impl App {
             self.say_key("write.not_discussion");
             return;
         }
-        let entry = self.detail.as_ref().filter(|(id, _)| *id == item.id).and_then(|(_, d)| d.timeline.iter().rev().find(|e| e.author != item.author && !e.id.is_empty()));
+        let entry = self
+            .detail
+            .as_ref()
+            .filter(|(id, _)| *id == item.id)
+            .and_then(|(_, d)| d.timeline.iter().rev().find(|e| e.author != item.author && !e.id.is_empty()));
         match entry {
             Some(e) if e.answer => self.say_key("write.already_answer"),
             Some(e) => {
@@ -1732,7 +1778,17 @@ impl App {
     fn new_issue(&mut self) {
         let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
         self.close_compose();
-        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), came: [false; 3], tool: None });
+        self.compose = Some(Compose {
+            id: format!("new:{repo}"),
+            text: String::new(),
+            preview: false,
+            picker: None,
+            labels: Vec::new(),
+            people: Vec::new(),
+            milestones: Vec::new(),
+            came: [false; 3],
+            tool: None,
+        });
     }
 
     /// Send the comment; `close` also closes the item.
@@ -1776,9 +1832,12 @@ impl App {
         let n = self.outbox.len();
         match kind {
             Pick::Labels => self.queue(&format!("write:{n}:labels"), write::set_labels(&item, &picker.chosen), Some("write.labels")),
-            Pick::Assignees => self.queue(&format!("write:{n}:people"), write::set_assignees(&item, &picker.chosen), Some("write.assignees")),
+            Pick::Assignees => {
+                self.queue(&format!("write:{n}:people"), write::set_assignees(&item, &picker.chosen), Some("write.assignees"))
+            }
             Pick::Milestone => {
-                let number = picker.chosen.first().and_then(|t| self.compose.as_ref()?.milestones.iter().find(|(_, m)| m == t).map(|(n, _)| *n));
+                let number =
+                    picker.chosen.first().and_then(|t| self.compose.as_ref()?.milestones.iter().find(|(_, m)| m == t).map(|(n, _)| *n));
                 self.queue(&format!("write:{n}:milestone"), write::set_milestone(&item, number), Some("write.milestone"));
             }
             Pick::Reviewers => {
@@ -1813,7 +1872,10 @@ impl App {
                 let item = self.item(&c.id);
                 let Some(c) = self.compose.as_mut() else { return };
                 c.picker = Some(if k == 0 {
-                    (Pick::Labels, Picker::new(c.labels.clone(), item.map(|i| i.labels.iter().map(|l| l.name.clone()).collect()).unwrap_or_default()))
+                    (
+                        Pick::Labels,
+                        Picker::new(c.labels.clone(), item.map(|i| i.labels.iter().map(|l| l.name.clone()).collect()).unwrap_or_default()),
+                    )
                 } else {
                     (Pick::Assignees, Picker::new(c.people.clone(), item.map(|i| i.assignees).unwrap_or_default()))
                 });
@@ -2117,7 +2179,15 @@ mod tests {
             option: Some(option.into()),
             priority: None,
         };
-        board::Project { id: "P".into(), title: "uchmk".into(), field: "F".into(), options: vec![col("o1", "Todo"), col("o2", "Doing")], priority_field: "PF".into(), priority_options: vec![col("p1", "High")], cards: vec![card("I1", "o1"), card("I2", "o1")] }
+        board::Project {
+            id: "P".into(),
+            title: "uchmk".into(),
+            field: "F".into(),
+            options: vec![col("o1", "Todo"), col("o2", "Doing")],
+            priority_field: "PF".into(),
+            priority_options: vec![col("p1", "High")],
+            cards: vec![card("I1", "o1"), card("I2", "o1")],
+        }
     }
 
     #[test]
@@ -2162,7 +2232,15 @@ mod tests {
     }
 
     fn note(id: &str) -> Note {
-        Note { id: id.into(), repo: "o/r".into(), title: "t".into(), kind: "Issue".into(), reason: "mention".into(), updated_at: String::new(), url: format!("https://example.test/{id}") }
+        Note {
+            id: id.into(),
+            repo: "o/r".into(),
+            title: "t".into(),
+            kind: "Issue".into(),
+            reason: "mention".into(),
+            updated_at: String::new(),
+            url: format!("https://example.test/{id}"),
+        }
     }
 
     #[test]
@@ -2225,7 +2303,14 @@ mod tests {
         let other = Run { branch: "dev".into(), ..run(4, actions::Status::Bad, None) };
         a.runs = vec![run(2, actions::Status::Ok, None), later, old, other];
         a.acts.state = Some(actions::Bucket::Bad);
-        let ci = Note { repo: "uchmk/kura".into(), kind: "CheckSuite".into(), title: "check workflow run failed for main branch".into(), updated_at: "2026-10-12T09:01:00Z".into(), url: "https://github.com/uchmk/kura/actions".into(), ..note("1") };
+        let ci = Note {
+            repo: "uchmk/kura".into(),
+            kind: "CheckSuite".into(),
+            title: "check workflow run failed for main branch".into(),
+            updated_at: "2026-10-12T09:01:00Z".into(),
+            url: "https://github.com/uchmk/kura/actions".into(),
+            ..note("1")
+        };
         a.notes = vec![ci.clone(), Note { title: "gone workflow run failed for main branch".into(), ..ci }];
         a.feed('n');
         a.note_click(NoteClick::Open(0));
@@ -2256,9 +2341,21 @@ mod tests {
     #[test]
     fn a_runs_note_opens_the_red_main_card_before_actions() {
         let mut a = with_pr();
-        a.items.push(Item { id: "main:uchmk/kura".into(), title: "CI is red on main".into(), number: 0, author: String::new(), ..pr("main:uchmk/kura") });
+        a.items.push(Item {
+            id: "main:uchmk/kura".into(),
+            title: "CI is red on main".into(),
+            number: 0,
+            author: String::new(),
+            ..pr("main:uchmk/kura")
+        });
         a.runs = vec![run(1, actions::Status::Bad, None)];
-        let ci = Note { repo: "uchmk/kura".into(), kind: "CheckSuite".into(), title: "check workflow run failed for main branch".into(), url: "https://github.com/uchmk/kura/actions".into(), ..note("1") };
+        let ci = Note {
+            repo: "uchmk/kura".into(),
+            kind: "CheckSuite".into(),
+            title: "check workflow run failed for main branch".into(),
+            url: "https://github.com/uchmk/kura/actions".into(),
+            ..note("1")
+        };
         a.notes = vec![Note { title: "check workflow run failed for dev branch".into(), ..ci.clone() }, ci];
         a.feed('n');
         a.note_click(NoteClick::Open(1));
@@ -2872,14 +2969,29 @@ mod tests {
         a.feed('3');
         a.runs = vec![run(1, actions::Status::Bad, None)];
         a.acts.col = actions::Col::Runs;
-        let job = |id, name: &str, status| actions::Job { id, name: name.into(), status, started_at: String::new(), completed_at: String::new(), url: String::new() };
-        a.run_detail = Some(RunDetail { id: 1, jobs: Some(vec![job(10, "lint", actions::Status::Ok), job(11, "Test (linux)", actions::Status::Bad)]), workflow: Some(workflow::parse(yaml)), yaml_tried: true, ..Default::default() });
+        let job = |id, name: &str, status| actions::Job {
+            id,
+            name: name.into(),
+            status,
+            started_at: String::new(),
+            completed_at: String::new(),
+            url: String::new(),
+        };
+        a.run_detail = Some(RunDetail {
+            id: 1,
+            jobs: Some(vec![job(10, "lint", actions::Status::Ok), job(11, "Test (linux)", actions::Status::Bad)]),
+            workflow: Some(workflow::parse(yaml)),
+            yaml_tried: true,
+            ..Default::default()
+        });
     }
 
     #[test]
     fn d_opens_the_form_when_the_workflow_has_inputs_and_sends_them() {
         let mut a = app();
-        with_detail(&mut a, "on:
+        with_detail(
+            &mut a,
+            "on:
   workflow_dispatch:
     inputs:
       who:
@@ -2887,7 +2999,8 @@ mod tests {
 jobs:
   lint:
     runs-on: x
-");
+",
+        );
         a.feed('D');
         assert!(matches!(a.overlay, Some(Overlay::Form(_))));
         assert!(a.outbox.is_empty());
@@ -2903,10 +3016,13 @@ jobs:
     #[test]
     fn d_asks_before_starting_without_inputs_and_l_opens_the_failed_log() {
         let mut a = app();
-        with_detail(&mut a, "jobs:
+        with_detail(
+            &mut a,
+            "jobs:
   lint:
     runs-on: x
-");
+",
+        );
         a.feed('D');
         assert!(a.overlay.is_none());
         assert_eq!((a.confirm.as_deref(), a.confirm_act), (Some("1"), Confirm::Dispatch));

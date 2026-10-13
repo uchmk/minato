@@ -44,7 +44,19 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 11] = [Tool::Heading, Tool::Bold, Tool::Italic, Tool::Quote, Tool::Code, Tool::Link, Tool::Bullets, Tool::Numbers, Tool::Tasks, Tool::Mention, Tool::Reference];
+    pub const ALL: [Tool; 11] = [
+        Tool::Heading,
+        Tool::Bold,
+        Tool::Italic,
+        Tool::Quote,
+        Tool::Code,
+        Tool::Link,
+        Tool::Bullets,
+        Tool::Numbers,
+        Tool::Tasks,
+        Tool::Mention,
+        Tool::Reference,
+    ];
 }
 
 /// What a toolbar button does to `text` with the characters `a..b`
@@ -175,7 +187,8 @@ pub fn blocks(text: &str) -> Vec<Block> {
         } else if let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")).or_else(|| t.strip_prefix("+ ")) {
             flush(&mut para, &mut table, &mut out);
             let rest = rest.trim();
-            let task = [("[ ] ", false), ("[x] ", true), ("[X] ", true)].into_iter().find_map(|(m, on)| rest.strip_prefix(m).map(|r| (on, r)));
+            let task =
+                [("[ ] ", false), ("[x] ", true), ("[X] ", true)].into_iter().find_map(|(m, on)| rest.strip_prefix(m).map(|r| (on, r)));
             out.push(match task {
                 Some((on, r)) => Block::Task(on, r.trim().to_string()),
                 None => Block::Bullet(rest.to_string()),
@@ -199,7 +212,13 @@ pub fn blocks(text: &str) -> Vec<Block> {
     flush(&mut para, &mut table, &mut out);
     for b in &mut out {
         match b {
-            Block::Heading(_, s) | Block::Bullet(s) | Block::Numbered(_, s) | Block::Task(_, s) | Block::Quote(s) | Block::Summary(s) | Block::Para(s) => {
+            Block::Heading(_, s)
+            | Block::Bullet(s)
+            | Block::Numbered(_, s)
+            | Block::Task(_, s)
+            | Block::Quote(s)
+            | Block::Summary(s)
+            | Block::Para(s) => {
                 *s = s.replace(BR, "\n");
             }
             Block::Table(rows) => rows.iter_mut().flatten().for_each(|s| *s = s.replace(BR, "\n")),
@@ -312,8 +331,8 @@ const BR: char = '\u{2028}';
 
 /// The tags [`html_inline`] knows.
 const TAGS: [&str; 31] = [
-    "a", "b", "strong", "i", "em", "code", "kbd", "samp", "tt", "s", "del", "strike", "br", "img", "details", "summary", "p", "div", "span", "sub", "sup",
-    "ins", "u", "small", "picture", "source", "center", "ul", "ol", "li", "hr",
+    "a", "b", "strong", "i", "em", "code", "kbd", "samp", "tt", "s", "del", "strike", "br", "img", "details", "summary", "p", "div",
+    "span", "sub", "sup", "ins", "u", "small", "picture", "source", "center", "ul", "ol", "li", "hr",
 ];
 
 /// A known tag at the start of `s`: its length in bytes, whether it closes,
@@ -357,7 +376,10 @@ fn attr(tag: &str, name: &str) -> Option<String> {
 
 /// A line that is only an HTML tag (`<details>`, `</summary>`, `<br/>`).
 fn is_tag(t: &str) -> bool {
-    t.starts_with('<') && t.ends_with('>') && t.matches('<').count() == 1 && t[1..].starts_with(|c: char| c.is_ascii_alphabetic() || c == '/')
+    t.starts_with('<')
+        && t.ends_with('>')
+        && t.matches('<').count() == 1
+        && t[1..].starts_with(|c: char| c.is_ascii_alphabetic() || c == '/')
 }
 
 /// `12. text` as its number and text.
@@ -598,7 +620,9 @@ mod tests {
 
     #[test]
     fn markdown_lists_tables_and_comments() {
-        let got = blocks("<!-- template\nhint -->\n1. one\n2) two\n- [ ] todo\n- [x] done\n---\n<details>\n| a | b |\n|---|:-:|\n| 1 | 2 |\nafter");
+        let got = blocks(
+            "<!-- template\nhint -->\n1. one\n2) two\n- [ ] todo\n- [x] done\n---\n<details>\n| a | b |\n|---|:-:|\n| 1 | 2 |\nafter",
+        );
         assert_eq!(
             got,
             vec![
@@ -616,7 +640,9 @@ mod tests {
 
     #[test]
     fn details_and_inline_html() {
-        let got = blocks("<details><summary>Last <b>24</b> runs</summary>\n\n- one\n</details>\n<p align=\"center\">a<br>b <code>x<y</code></p>\n");
+        let got = blocks(
+            "<details><summary>Last <b>24</b> runs</summary>\n\n- one\n</details>\n<p align=\"center\">a<br>b <code>x<y</code></p>\n",
+        );
         assert_eq!(got, vec![Block::Summary("Last **24** runs".into()), Block::Bullet("one".into()), Block::Para("a\nb `x<y`".into())]);
         let got = blocks("<details>\n<summary>Log</summary>\n\n```\n<b>kept</b>\n```\n</details>");
         assert_eq!(got, vec![Block::Summary("Log".into()), Block::Code("<b>kept</b>".into())]);

@@ -2,12 +2,12 @@
 //! rows folded by `minato_core::fold`, and the detail. Painted on rects; no
 //! scrollbar anywhere.
 
-use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
+use minato_core::fold::{fold, Show};
 use minato_core::inbox::Group;
-use minato_core::list::{Ci, Col, Item, Kind, Pick, Saved, age, epoch, options};
+use minato_core::list::{age, epoch, options, Ci, Col, Item, Kind, Pick, Saved};
 
-use crate::app::{App, Click, Pane, Wheel, now_epoch};
+use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::style::{self, ACCENT};
 use crate::ui::{self, Out};
 
@@ -115,7 +115,11 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         for pick in picks {
             let row = Rect::from_min_size(pos2(r.left(), y), vec2(r.width(), ENT_H));
             if row.top() < top || row.bottom() > bottom {
-                if row.top() < top { above += 1 } else { below += 1 }
+                if row.top() < top {
+                    above += 1
+                } else {
+                    below += 1
+                }
                 y += ENT_H;
                 flat += 1;
                 continue;
@@ -135,7 +139,9 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
                 p.text(pos2(row.left() + 14.0, cy), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), ACCENT);
             }
             let n = match pick {
-                Pick::Repo(repo) => Some(app.items.iter().filter(|i| !minato_core::mainci::is_stub(i) && repo.as_ref().is_none_or(|r| *r == i.repo)).count()),
+                Pick::Repo(repo) => Some(
+                    app.items.iter().filter(|i| !minato_core::mainci::is_stub(i) && repo.as_ref().is_none_or(|r| *r == i.repo)).count(),
+                ),
                 _ => None,
             };
             filter_words(&p, row, row.left() + 14.0 + 18.0, pick_label(app, pick), n);
@@ -188,14 +194,24 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     p.rect_filled(r, 0.0, c.side);
     // The bar: the query in a box, then how many.
     let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));
-    let n = p.text(pos2(head.right() - 12.0, head.center().y), Align2::RIGHT_CENTER, app.tr("list.count").replace("{}", &shown.len().to_string()), FontId::proportional(12.0), c.dim);
+    let n = p.text(
+        pos2(head.right() - 12.0, head.center().y),
+        Align2::RIGHT_CENTER,
+        app.tr("list.count").replace("{}", &shown.len().to_string()),
+        FontId::proportional(12.0),
+        c.dim,
+    );
     let q = Rect::from_min_max(pos2(head.left() + 12.0, head.center().y - 11.0), pos2(n.left() - 8.0, head.center().y + 11.0));
     p.rect_filled(q, CornerRadius::same(6), c.bg);
     p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
     let owner = app.owner().unwrap_or("");
     let filter = || {
         let q = app.list.filter.query(owner);
-        if app.show_closed { q.replacen("is:open", "is:closed", 1) } else { q }
+        if app.show_closed {
+            q.replacen("is:open", "is:closed", 1)
+        } else {
+            q
+        }
     };
     let query = app.list.active_search().map_or_else(filter, |t| minato_core::list::search_query(t, owner));
     let g = style::truncated(&p, query, FontId::monospace(12.0), c.fg, q.width() - 18.0);

@@ -14,7 +14,8 @@ pub fn lines(body: &str) -> Result<Vec<String>, String> {
     }
     let text = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("-").to_string();
     let flag = |k: &str| if v.get(k).and_then(Value::as_bool) == Some(true) { "on" } else { "off" };
-    let topics: Vec<&str> = v.get("topics").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let topics: Vec<&str> =
+        v.get("topics").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     Ok(vec![
         format!("description: {}", text("description")),
         format!("visibility: {}", text("visibility")),

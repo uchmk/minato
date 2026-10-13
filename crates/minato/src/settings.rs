@@ -3,9 +3,9 @@
 //! the theme) write common.toml. minato's own (whose repositories, the
 //! inbox rules, the saved searches, the writing box's fields) are on its page.
 
-use egui::{Align2, FontId, Sense, Stroke, StrokeKind, Ui, vec2};
-use ito_common::{CommonChange, themes_dir};
-use ito_prefs::{Words, section};
+use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
+use ito_common::{themes_dir, CommonChange};
+use ito_prefs::{section, Words};
 
 use crate::app::App;
 
@@ -88,7 +88,10 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                     // Taken on Enter (or on leaving the box), not on each key:
                     // each change asks GitHub again.
                     let done = ito_prefs::row(ui, l, tr(label), tr(note), |ui| {
-                        let edit = egui::TextEdit::singleline(&mut scope_text[k]).hint_text(hint).desired_width(200.0).font(FontId::monospace(12.5));
+                        let edit = egui::TextEdit::singleline(&mut scope_text[k])
+                            .hint_text(hint)
+                            .desired_width(200.0)
+                            .font(FontId::monospace(12.5));
                         ui.add(edit).lost_focus()
                     });
                     if done && k == 0 {
@@ -124,7 +127,8 @@ pub fn show(ui: &mut Ui, app: &mut App) {
             });
             section(ui, l, tr("settings.searches"), |ui| {
                 ui.label(egui::RichText::new(tr("settings.searches_note")).color(ito_theme::colors().dim).size(12.0));
-                let edit = egui::TextEdit::multiline(searches_text).desired_rows(4).desired_width(f32::INFINITY).font(FontId::monospace(12.5));
+                let edit =
+                    egui::TextEdit::multiline(searches_text).desired_rows(4).desired_width(f32::INFINITY).font(FontId::monospace(12.5));
                 searches_changed |= ui.add(edit).changed();
             });
             section(ui, l, tr("settings.fields"), |ui| {

@@ -9,8 +9,8 @@
 
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
-use egui::{Align2, CornerRadius, Event, FontId, Id, Key, Modifiers, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
-use minato_core::composer::{Tool, tool};
+use egui::{pos2, vec2, Align2, CornerRadius, Event, FontId, Id, Key, Modifiers, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder};
+use minato_core::composer::{tool, Tool};
 
 use crate::app::{App, Compose, Confirm, Pick};
 use crate::ui::ACCENT;
@@ -58,7 +58,13 @@ fn confirm(ui: &mut Ui, app: &App) {
         Confirm::Dispatch => ("confirm.dispatch", "confirm.dispatch_hint"),
         Confirm::Cancel => ("confirm.cancel", "confirm.cancel_hint"),
     };
-    p.with_clip_rect(b.shrink(14.0)).text(pos2(b.left() + 18.0, b.top() + 32.0), Align2::LEFT_CENTER, title.unwrap_or_default(), FontId::proportional(12.5), c.dim);
+    p.with_clip_rect(b.shrink(14.0)).text(
+        pos2(b.left() + 18.0, b.top() + 32.0),
+        Align2::LEFT_CENTER,
+        title.unwrap_or_default(),
+        FontId::proportional(12.5),
+        c.dim,
+    );
     p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, app.tr(ask), FontId::proportional(14.0), c.fg);
     p.text(pos2(b.left() + 18.0, b.top() + 94.0), Align2::LEFT_CENTER, app.tr(hint), FontId::proportional(11.5), ACCENT);
 }
@@ -102,7 +108,13 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
         let empty = if c.picker_ready() { app.tr("pick.none") } else { app.tr("pick.loading") };
         picker(ui, &p, &mut c, [pick_at, outer], &mut act, [empty, title]);
         if inline.is_some() {
-            p.text(pos2(pick_at.right(), pick_at.top() + 10.0), Align2::RIGHT_CENTER, app.tr("pick.hint"), FontId::proportional(11.0), colors.dim);
+            p.text(
+                pos2(pick_at.right(), pick_at.top() + 10.0),
+                Align2::RIGHT_CENTER,
+                app.tr("pick.hint"),
+                FontId::proportional(11.0),
+                colors.dim,
+            );
         }
     } else {
         // The shortcuts go first, so the field never sees them.
@@ -124,7 +136,11 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             )
         });
         // On Windows an Alt key comes as its letter too: not for the field.
-        let letters: Vec<char> = [(labels, 'l'), (people, 'a'), (status, 's'), (priority, 'p'), (mile, 'm'), (review, 'r')].into_iter().filter(|(on, _)| *on).map(|(_, ch)| ch).collect();
+        let letters: Vec<char> = [(labels, 'l'), (people, 'a'), (status, 's'), (priority, 'p'), (mile, 'm'), (review, 'r')]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, ch)| ch)
+            .collect();
         if !letters.is_empty() {
             ctx.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Text(t) if t.chars().count() == 1 && t.chars().all(|ch| letters.contains(&ch.to_ascii_lowercase())))));
         }
@@ -181,13 +197,29 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             let mut child = ui.new_child(UiBuilder::new().max_rect(field));
             child.set_clip_rect(field);
             let rows = ((field.height() / 19.0) as usize).max(2);
-            let edit = egui::TextEdit::multiline(&mut c.text).id(id).frame(egui::Frame::NONE).desired_width(field.width()).desired_rows(rows).lock_focus(true).font(FontId::proportional(13.5));
+            let edit = egui::TextEdit::multiline(&mut c.text)
+                .id(id)
+                .frame(egui::Frame::NONE)
+                .desired_width(field.width())
+                .desired_rows(rows)
+                .lock_focus(true)
+                .font(FontId::proportional(13.5));
             // A text longer than the field scrolls in it, after the caret
             // (no bar: the field shows where the caret is).
             let hidden = egui::scroll_area::ScrollBarVisibility::AlwaysHidden;
-            egui::ScrollArea::vertical().id_salt("minato-compose-scroll").max_height(field.height()).min_scrolled_height(field.height()).auto_shrink([false, false]).scroll_bar_visibility(hidden).show(&mut child, |ui| ui.add(edit));
+            egui::ScrollArea::vertical()
+                .id_salt("minato-compose-scroll")
+                .max_height(field.height())
+                .min_scrolled_height(field.height())
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(hidden)
+                .show(&mut child, |ui| ui.add(edit));
             // Only when it has lost it: asking again ends an IME composition.
-            ctx.memory_mut(|m| if !m.has_focus(id) { m.request_focus(id) });
+            ctx.memory_mut(|m| {
+                if !m.has_focus(id) {
+                    m.request_focus(id)
+                }
+            });
         }
     }
     match act {
@@ -211,7 +243,10 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
 /// its head and the keys at its foot. The field inside it.
 fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::list::Item>, new_repo: Option<&str>, area: Rect) -> Rect {
     let colors = ito_theme::colors();
-    let panel = Rect::from_min_max(pos2(area.left() + 20.0, area.bottom() - KEYBAR_H - 8.0 - PANEL_H), pos2(area.right() - 20.0, area.bottom() - KEYBAR_H - 8.0));
+    let panel = Rect::from_min_max(
+        pos2(area.left() + 20.0, area.bottom() - KEYBAR_H - 8.0 - PANEL_H),
+        pos2(area.right() - 20.0, area.bottom() - KEYBAR_H - 8.0),
+    );
     p.rect_filled(panel, CornerRadius::same(8), colors.panel);
     p.rect_stroke(panel, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
     let head = match (new_repo, item) {
@@ -219,9 +254,21 @@ fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::l
         (_, Some(i)) => format!("{}  {} #{}  {}", app.tr("compose.title"), i.repo, i.number, i.title),
         _ => String::new(),
     };
-    p.with_clip_rect(panel.shrink2(vec2(14.0, 0.0))).text(pos2(panel.left() + 14.0, panel.top() + 18.0), Align2::LEFT_CENTER, head, FontId::proportional(13.0), colors.fg);
+    p.with_clip_rect(panel.shrink2(vec2(14.0, 0.0))).text(
+        pos2(panel.left() + 14.0, panel.top() + 18.0),
+        Align2::LEFT_CENTER,
+        head,
+        FontId::proportional(13.0),
+        colors.fg,
+    );
     if c.preview {
-        p.text(pos2(panel.right() - 14.0, panel.top() + 18.0), Align2::RIGHT_CENTER, app.tr("compose.preview"), FontId::proportional(11.5), ACCENT);
+        p.text(
+            pos2(panel.right() - 14.0, panel.top() + 18.0),
+            Align2::RIGHT_CENTER,
+            app.tr("compose.preview"),
+            FontId::proportional(11.5),
+            ACCENT,
+        );
     }
     let hint = if c.picker.is_some() {
         app.tr("pick.hint").to_string()
@@ -229,7 +276,13 @@ fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::l
         // The keybar's keys, so the two never differ.
         app.compose_keys(c).iter().map(|(k, w)| format!("{k} {}", app.tr(w))).collect::<Vec<_>>().join("  ")
     };
-    p.with_clip_rect(panel).text(pos2(panel.left() + 14.0, panel.bottom() - 14.0), Align2::LEFT_CENTER, hint, FontId::proportional(11.0), colors.dim);
+    p.with_clip_rect(panel).text(
+        pos2(panel.left() + 14.0, panel.bottom() - 14.0),
+        Align2::LEFT_CENTER,
+        hint,
+        FontId::proportional(11.0),
+        colors.dim,
+    );
     Rect::from_min_max(pos2(panel.left() + 14.0, panel.top() + 36.0), pos2(panel.right() - 14.0, panel.bottom() - 30.0))
 }
 
@@ -258,7 +311,13 @@ fn picker(ui: &Ui, p: &egui::Painter, c: &mut Compose, at: [Rect; 2], act: &mut 
         }
     }
     let word = words[1];
-    p.text(pos2(field.left(), field.top() + 10.0), Align2::LEFT_CENTER, format!("{word}  /  {}", pk.query), FontId::proportional(13.0), ACCENT);
+    p.text(
+        pos2(field.left(), field.top() + 10.0),
+        Align2::LEFT_CENTER,
+        format!("{word}  /  {}", pk.query),
+        FontId::proportional(13.0),
+        ACCENT,
+    );
     let body = Rect::from_min_max(pos2(field.left(), field.top() + 26.0), field.max);
     if pk.options.is_empty() {
         p.text(pos2(body.left(), body.top() + ROW / 2.0), Align2::LEFT_CENTER, words[0], FontId::proportional(12.5), colors.dim);

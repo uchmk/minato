@@ -5,14 +5,14 @@
 //! and the box to write in, drawn as GitHub's: Write and Preview, the
 //! toolbar, about five lines, and Close and Comment.
 
-use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, CursorIcon, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
 use minato_core::composer::Tool;
 use minato_core::inbox::{Card, Group};
-use minato_core::list::{Ci, Item, Kind, age, epoch};
+use minato_core::list::{age, epoch, Ci, Item, Kind};
 
-use crate::app::{App, Click, View, now_epoch};
+use crate::app::{now_epoch, App, Click, View};
 use crate::list_ui::LINE;
-use crate::style::{self, ACCENT, Next};
+use crate::style::{self, Next, ACCENT};
 use crate::ui::{self, Out};
 
 /// The widest the detail's text runs.
@@ -58,7 +58,11 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     if !stub {
         y = sections(&p, app, item, x, y, w);
         let at = Rect::from_min_max(pos2(r.left(), body.bottom()), r.max);
-        if open || r.height() >= SHORT { strip(ui, app, item, at, out) } else { strip_line(ui, app, item, at, out) }
+        if open || r.height() >= SHORT {
+            strip(ui, app, item, at, out)
+        } else {
+            strip_line(ui, app, item, at, out)
+        }
     }
     // The wheel stops when the end is a little above the strip.
     out.detail_max = Some(((y - top + 36.0 - body.height()) / LINE).ceil().max(0.0));
@@ -66,19 +70,31 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
 
 /// How high the box's field is: five lines, or three in a short window.
 fn edit_h(h: f32) -> f32 {
-    if h >= 560.0 { 104.0 } else { 62.0 }
+    if h >= 560.0 {
+        104.0
+    } else {
+        62.0
+    }
 }
 
 /// How high the strip at the foot is in a detail `h` high: one line in a
 /// short one, unless the box is `open`; never above the detail.
 fn strip_h(h: f32, open: bool) -> f32 {
-    if !open && h < SHORT { LINE_H } else { (CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0).min(h) }
+    if !open && h < SHORT {
+        LINE_H
+    } else {
+        (CHIPS_H + BAR_H + edit_h(h) + FOOT_H + 12.0).min(h)
+    }
 }
 
 /// How high the chips are in a strip `h` high: left out (their fields keep
 /// their `Alt` keys) when the box's field would be shorter than `EDIT_MIN`.
 fn chips_h(h: f32) -> f32 {
-    if h - CHIPS_H - BAR_H - FOOT_H - 12.0 >= EDIT_MIN { CHIPS_H } else { 8.0 }
+    if h - CHIPS_H - BAR_H - FOOT_H - 12.0 >= EDIT_MIN {
+        CHIPS_H
+    } else {
+        8.0
+    }
 }
 
 /// The strip as one line: the draft's first line or the hint, and `r`. A
@@ -179,7 +195,13 @@ fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> 
     let n = match (card.group, card.rule) {
         (Group::Mine, Some(rule)) => {
             let (key, name) = rule.next();
-            Next { tone: style::tone(rule.tone()), lead: app.tr("detail.next"), label: app.tr(name), note: app.tr(rule.note()), key: Some(key) }
+            Next {
+                tone: style::tone(rule.tone()),
+                lead: app.tr("detail.next"),
+                label: app.tr(name),
+                note: app.tr(rule.note()),
+                key: Some(key),
+            }
         }
         (Group::Wait, _) => Next { tone: style::RUN, lead: app.tr("detail.wait"), label: why, note: app.tr("detail.back"), key: None },
         (Group::Done, _) => Next { tone: style::OK, lead: app.tr("detail.done"), label: why, note: "", key: None },
@@ -245,7 +267,13 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
     let tx = x + 22.0;
     for e in &d.timeline {
         let me = app.viewer.as_deref() == Some(e.author.as_str());
-        let dot = if me { ACCENT } else if e.author.ends_with("[bot]") { style::IDLE } else { c.border_strong() };
+        let dot = if me {
+            ACCENT
+        } else if e.author.ends_with("[bot]") {
+            style::IDLE
+        } else {
+            c.border_strong()
+        };
         style::dot(p, pos2(x + 6.0, y + 8.0), 5.0, dot);
         last = y + 8.0;
         let when = epoch(&e.created_at).map(|t| age(&e.created_at, now.max(t))).unwrap_or_default();
@@ -302,7 +330,14 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
         // Only whole chips: one that would run past the right is left out.
         let key = format!("Alt+{}", ALT[k]);
         let w = |s: &str, font: FontId| p.layout_no_wrap(s.to_owned(), font, c.fg).size().x;
-        let wide = 9.0 + w(app.tr(FIELDS[k]), FontId::proportional(11.5)) + 6.0 + w(&value, FontId::proportional(12.0)) + 6.0 + w(&key, FontId::monospace(11.0)) + 10.0 + 5.0;
+        let wide = 9.0
+            + w(app.tr(FIELDS[k]), FontId::proportional(11.5))
+            + 6.0
+            + w(&value, FontId::proportional(12.0))
+            + 6.0
+            + w(&key, FontId::monospace(11.0))
+            + 10.0
+            + 5.0;
         if x > x0 && x + wide > right {
             x = right + 1.0;
             break;
@@ -419,7 +454,19 @@ fn tools_shown(w: f32) -> usize {
     [all, 9, 6].into_iter().find(|&n| tools_width(n) <= w).unwrap_or_else(|| ((w / TOOL_W) as usize).min(6))
 }
 
-const TOOL_WORDS: [&str; 11] = ["tool.heading", "tool.bold", "tool.italic", "tool.quote", "tool.code", "tool.link", "tool.bullets", "tool.numbers", "tool.tasks", "tool.mention", "tool.reference"];
+const TOOL_WORDS: [&str; 11] = [
+    "tool.heading",
+    "tool.bold",
+    "tool.italic",
+    "tool.quote",
+    "tool.code",
+    "tool.link",
+    "tool.bullets",
+    "tool.numbers",
+    "tool.tasks",
+    "tool.mention",
+    "tool.reference",
+];
 
 /// A toolbar button's mark, drawn so no font is needed for it.
 fn tool_glyph(p: &Painter, at: egui::Pos2, t: Tool, ink: Color32) {
@@ -433,7 +480,10 @@ fn tool_glyph(p: &Painter, at: egui::Pos2, t: Tool, ink: Color32) {
             style::bold(p, at, Align2::CENTER_CENTER, "B", FontId::proportional(13.5), ink);
         }
         Tool::Italic => {
-            let g = p.layout_job(egui::text::LayoutJob::single_section("I".into(), egui::TextFormat { font_id: FontId::proportional(14.0), color: ink, italics: true, ..Default::default() }));
+            let g = p.layout_job(egui::text::LayoutJob::single_section(
+                "I".into(),
+                egui::TextFormat { font_id: FontId::proportional(14.0), color: ink, italics: true, ..Default::default() },
+            ));
             p.galley(at - g.size() / 2.0, g, ink);
         }
         Tool::Quote => {
@@ -476,14 +526,26 @@ fn tool_glyph(p: &Painter, at: egui::Pos2, t: Tool, ink: Color32) {
 fn footer(ui: &Ui, p: &Painter, app: &App, item: &Item, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let y = r.center().y;
-    let text = app.compose.as_ref().filter(|w| w.id == item.id).map(|w| w.text.as_str()).or_else(|| app.drafts.get(&item.id).map(String::as_str)).unwrap_or("");
+    let text = app
+        .compose
+        .as_ref()
+        .filter(|w| w.id == item.id)
+        .map(|w| w.text.as_str())
+        .or_else(|| app.drafts.get(&item.id).map(String::as_str))
+        .unwrap_or("");
     let written = !text.trim().is_empty();
     let mut x = r.right() - 10.0;
     // Comment, green; dimmed while nothing is written.
     let g = p.layout_no_wrap(app.tr("compose.title").to_owned(), FontId::proportional(13.0), Color32::WHITE);
     let b = Rect::from_min_max(pos2(x - g.size().x - 28.0, y - 15.0), pos2(x, y + 15.0));
     let resp = ui::hit(ui, b, "compose-send");
-    let fill = if !written { GREEN.gamma_multiply(0.45) } else if resp.hovered() { GREEN_HOT } else { GREEN };
+    let fill = if !written {
+        GREEN.gamma_multiply(0.45)
+    } else if resp.hovered() {
+        GREEN_HOT
+    } else {
+        GREEN
+    };
     p.rect_filled(b, CornerRadius::same(6), fill);
     style::bold(p, b.center(), Align2::CENTER_CENTER, app.tr("compose.title"), FontId::proportional(13.0), Color32::WHITE);
     if resp.clicked() && written {

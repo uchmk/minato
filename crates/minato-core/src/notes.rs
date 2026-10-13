@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::github::http::Method;
 use crate::github::worker::Call;
@@ -113,8 +113,7 @@ pub fn parse(body: &str) -> Result<Vec<Note>, String> {
         return Err(m.to_string());
     }
     let a = v.as_array().ok_or("notifications: not a list")?;
-    Ok(a
-        .iter()
+    Ok(a.iter()
         .filter(|n| n.get("unread").and_then(Value::as_bool).unwrap_or(true))
         .map(|n| {
             let repo = text(n, "/repository/full_name");

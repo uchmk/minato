@@ -30,7 +30,17 @@ pub enum Rule {
     MainRed,
 }
 
-pub const RULES: [Rule; 9] = [Rule::RedCi, Rule::Mergeable, Rule::Question, Rule::NeedsOwner, Rule::Finding, Rule::LaneStalled, Rule::Dependabot, Rule::Mention, Rule::MainRed];
+pub const RULES: [Rule; 9] = [
+    Rule::RedCi,
+    Rule::Mergeable,
+    Rule::Question,
+    Rule::NeedsOwner,
+    Rule::Finding,
+    Rule::LaneStalled,
+    Rule::Dependabot,
+    Rule::Mention,
+    Rule::MainRed,
+];
 
 impl Rule {
     pub fn index(self) -> usize {
@@ -155,7 +165,9 @@ fn has_label(item: &Item, name: &str) -> bool {
 /// session): nobody is waited on, so it is not in "waiting" (a rule still
 /// takes it in).
 pub fn automatic(item: &Item) -> bool {
-    item.labels.iter().any(|l| matches!(l.name.as_str(), "retest" | "lane-status" | "lane-review" | "needs-pc") || l.name.starts_with("lane:"))
+    item.labels
+        .iter()
+        .any(|l| matches!(l.name.as_str(), "retest" | "lane-status" | "lane-review" | "needs-pc") || l.name.starts_with("lane:"))
         || ["test/win-", "test/arm-", "rescue/"].iter().any(|b| item.head.starts_with(b))
 }
 
@@ -564,7 +576,14 @@ mod tests {
     fn what_the_lanes_make_does_not_wait() {
         let mut lane = item("lane", Kind::Pr, "me");
         lane.head = "test/win-17-32".into();
-        let items = vec![labelled(item("retest", Kind::Issue, "me"), "retest"), labelled(item("status", Kind::Issue, "me"), "lane-status"), labelled(item("found", Kind::Issue, "me"), "lane:win"), lane, item("mine", Kind::Pr, "me"), labelled(item("pc", Kind::Issue, "me"), "needs-pc")];
+        let items = vec![
+            labelled(item("retest", Kind::Issue, "me"), "retest"),
+            labelled(item("status", Kind::Issue, "me"), "lane-status"),
+            labelled(item("found", Kind::Issue, "me"), "lane:win"),
+            lane,
+            item("mine", Kind::Pr, "me"),
+            labelled(item("pc", Kind::Issue, "me"), "needs-pc"),
+        ];
         let c = cards(&items, "me", &Rules::default(), &HashMap::new(), 0);
         assert_eq!(c.iter().map(|c| items[c.at].id.as_str()).collect::<Vec<_>>(), ["mine"]);
         // A rule still takes one in.

@@ -2,7 +2,7 @@
 //! are on and which fields the writing box offers. Kept as a small JSON
 //! file beside common.toml.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::inbox::Rules;
 
@@ -25,7 +25,13 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { owner: String::new(), project: crate::board::TITLE.into(), rules: Rules::default(), fields: [true, true, true, false, false, false], order: [0, 1, 2, 3, 4, 5] }
+        Settings {
+            owner: String::new(),
+            project: crate::board::TITLE.into(),
+            rules: Rules::default(),
+            fields: [true, true, true, false, false, false],
+            order: [0, 1, 2, 3, 4, 5],
+        }
     }
 }
 

@@ -2,13 +2,13 @@
 //! with the painter on the rects it lays out itself, so nothing here scrolls
 //! (docs/design.md: no scrollbar anywhere).
 
-use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, ViewportCommand, pos2, vec2};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, ViewportCommand};
 use ito_common::Clock;
 
 use ito_layout::Node;
 use minato_core::inbox::RULES;
 
-use crate::app::{App, Click, GLOBAL_KEYS, Mode, NoteClick, Pane, View, Wheel};
+use crate::app::{App, Click, Mode, NoteClick, Pane, View, Wheel, GLOBAL_KEYS};
 
 /// The accent of the tabs, the palette and the best key.
 pub const ACCENT: Color32 = Color32::from_rgb(0x5B, 0x9F, 0xD1);
@@ -260,8 +260,12 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let mut hover = viewer.map_or_else(|| app.tr("account").into(), str::to_string);
     if !app.settings.owner.is_empty() {
         p.circle_stroke(acct.center(), 11.5, Stroke::new(1.5, ACCENT));
-        hover = format!("{hover}
-{}: {}", app.tr("account.showing"), app.settings.owner);
+        hover = format!(
+            "{hover}
+{}: {}",
+            app.tr("account.showing"),
+            app.settings.owner
+        );
     }
     resp.on_hover_text(hover);
     right = acct.left() - 10.0;
@@ -276,7 +280,9 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             (v, digit, text)
         })
         .collect();
-    let width = |digit: &std::sync::Arc<egui::Galley>, text: Option<&std::sync::Arc<egui::Galley>>| 10.0 + digit.size().x + text.map_or(0.0, |t| 6.0 + t.size().x) + 10.0;
+    let width = |digit: &std::sync::Arc<egui::Galley>, text: Option<&std::sync::Arc<egui::Galley>>| {
+        10.0 + digit.size().x + text.map_or(0.0, |t| 6.0 + t.size().x) + 10.0
+    };
     let full: f32 = tabs.iter().map(|(_, d, t)| width(d, Some(t)) + 2.0).sum();
     let short: f32 = tabs.iter().map(|(v, d, t)| width(d, app.is_on(*v).then_some(t)) + 2.0).sum();
     let mut x = r.left() + 12.0;
@@ -463,7 +469,9 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     // The keys stop short of it, kept as wide as two digits so they do not
     // come and go as the seconds tick: the last ones go first, then the word
     // of the way out (Esc, or F1), back when it is the only one; its key stays.
-    let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x);
+    let widest = ui.fonts_mut(|f| {
+        f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x
+    });
     let stop = right - t.width().max(widest) - 16.0;
     if app.find_on() {
         x = find_bar(ui, app, r, stop, out);
@@ -498,14 +506,20 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         let galley = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), kc));
         let chip = Rect::from_min_size(pos2(x, mid - 9.0), vec2(galley.size().x + 12.0, 18.0));
         p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
-        p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
+        p.rect_stroke(
+            chip,
+            CornerRadius::same(4),
+            Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }),
+            StrokeKind::Inside,
+        );
         p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, kc);
         if bare && Some(k) == out {
             x = chip.right() + 14.0;
             continue;
         }
         let label = word_for(app, word);
-        let t = p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
+        let t =
+            p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
         x = t.right() + 14.0;
     }
 }
@@ -538,14 +552,25 @@ fn find_bar(ui: &mut Ui, app: &App, r: Rect, stop: f32, out: &mut Out) -> f32 {
     let fw = if show_hint { most.min(room - 14.0 - hint) } else { most.min(room).max(80.0) };
     let field = Rect::from_min_size(pos2(chip.right() + 8.0, mid - 10.0), vec2(fw, 20.0));
     p.rect_filled(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), c.panel);
-    p.rect_stroke(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), Stroke::new(1.0, if app.find_open { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
+    p.rect_stroke(
+        field.expand2(vec2(5.0, 0.0)),
+        CornerRadius::same(4),
+        Stroke::new(1.0, if app.find_open { ACCENT.gamma_multiply(0.6) } else { c.border }),
+        StrokeKind::Inside,
+    );
     if app.find_open {
         out.find_at = Some(field);
     } else {
         let g = crate::style::truncated(&p, app.find_text.clone(), FontId::proportional(12.5), c.fg, field.width());
         p.galley(pos2(field.left(), mid - g.size().y / 2.0), g, c.fg);
     }
-    let t = p.text(pos2(field.right() + 14.0, mid), Align2::LEFT_CENTER, format!("{n} {}", app.tr("find.hits")), FontId::monospace(11.5), if n == 0 { crate::style::BAD } else { c.fg });
+    let t = p.text(
+        pos2(field.right() + 14.0, mid),
+        Align2::LEFT_CENTER,
+        format!("{n} {}", app.tr("find.hits")),
+        FontId::monospace(11.5),
+        if n == 0 { crate::style::BAD } else { c.fg },
+    );
     if !show_hint {
         return t.right() + 14.0;
     }
@@ -568,10 +593,21 @@ pub fn find_box(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
     let id = egui::Id::new("minato-find");
     let mut text = app.find_text.clone();
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(field));
-    let edit = egui::TextEdit::singleline(&mut text).id(id).frame(egui::Frame::NONE).desired_width(field.width()).lock_focus(true).font(FontId::proportional(12.5)).text_color(c.fg).hint_text(app.tr("find.hint"));
+    let edit = egui::TextEdit::singleline(&mut text)
+        .id(id)
+        .frame(egui::Frame::NONE)
+        .desired_width(field.width())
+        .lock_focus(true)
+        .font(FontId::proportional(12.5))
+        .text_color(c.fg)
+        .hint_text(app.tr("find.hint"));
     child.add(edit);
     // Only when it has lost it: asking again ends an IME composition.
-    ctx.memory_mut(|m| if !m.has_focus(id) { m.request_focus(id) });
+    ctx.memory_mut(|m| {
+        if !m.has_focus(id) {
+            m.request_focus(id)
+        }
+    });
     if text != app.find_text {
         app.set_find(&text);
     }
@@ -648,7 +684,13 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
                     continue;
                 }
                 p.text(pos2(x, y), Align2::LEFT_TOP, *key, FontId::monospace(12.0), c.fg);
-                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(pos2(x + 120.0, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(12.5), c.dim);
+                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(
+                    pos2(x + 120.0, y),
+                    Align2::LEFT_TOP,
+                    app.tr(word),
+                    FontId::proportional(12.5),
+                    c.dim,
+                );
                 y += pitch;
             }
             y += 8.0;
@@ -680,8 +722,20 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
                 break;
             }
             p.text(pos2(x, y), Align2::LEFT_TOP, key, FontId::monospace(12.0), c.fg);
-            p.with_clip_rect(Rect::from_min_max(pos2(why_x, y), pos2(do_x - 12.0, y + 20.0))).text(pos2(why_x, y), Align2::LEFT_TOP, app.tr(why), FontId::proportional(12.5), c.fg);
-            p.with_clip_rect(Rect::from_min_max(pos2(do_x, y), pos2(end, y + 20.0))).text(pos2(do_x, y), Align2::LEFT_TOP, app.tr(todo), FontId::proportional(12.5), c.dim);
+            p.with_clip_rect(Rect::from_min_max(pos2(why_x, y), pos2(do_x - 12.0, y + 20.0))).text(
+                pos2(why_x, y),
+                Align2::LEFT_TOP,
+                app.tr(why),
+                FontId::proportional(12.5),
+                c.fg,
+            );
+            p.with_clip_rect(Rect::from_min_max(pos2(do_x, y), pos2(end, y + 20.0))).text(
+                pos2(do_x, y),
+                Align2::LEFT_TOP,
+                app.tr(todo),
+                FontId::proportional(12.5),
+                c.dim,
+            );
             y += 20.0;
         }
     }
@@ -696,10 +750,19 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
 }
 
 /// The keys for any inbox card, after the rules in the help.
-const HELP_MARKS: [(&str, &str, &str); 3] = [("c", "help.any_card", "do.prompt"), ("d", "help.any_card", "do.done"), ("s", "help.any_card", "do.later")];
+const HELP_MARKS: [(&str, &str, &str); 3] =
+    [("c", "help.any_card", "do.prompt"), ("d", "help.any_card", "do.done"), ("s", "help.any_card", "do.later")];
 
 /// The keys over the notifications, for the help.
-const NOTES_KEYS: [(&str, &str); 7] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];
+const NOTES_KEYS: [(&str, &str); 7] = [
+    ("j k", "notes.pick"),
+    ("Enter", "key.open"),
+    ("o", "key.browser"),
+    ("O", "key.outside"),
+    ("d", "key.read"),
+    ("Shift+A", "notes.read_all"),
+    ("n Esc", "notes.close"),
+];
 
 /// The message, while its time lasts: at the top right under the title bar,
 /// over everything (the settings, the boxes, the palette), as in kura; a
