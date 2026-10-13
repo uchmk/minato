@@ -1916,8 +1916,9 @@ impl App {
 
     /// `a`: assign the selected item to the viewer.
     fn assign_self(&mut self) {
-        let (Some(item), Some(me)) = (self.selected().cloned(), self.viewer.clone()) else { return };
-        if item.kind == Kind::Discussion || minato_core::mainci::is_stub(&item) {
+        let Some(item) = self.writable() else { return };
+        let Some(me) = self.viewer.clone() else { return };
+        if item.kind == Kind::Discussion {
             return;
         }
         let n = self.outbox.len();

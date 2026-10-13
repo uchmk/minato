@@ -249,7 +249,9 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
     let x = r.left() + 13.0;
     let right = r.right() - 10.0;
     let y1 = r.top() + 7.0 + 10.0;
-    let kx = style::kind_chip(&p, x, y1, item.kind) + 7.0;
+    // A stub for a red main CI is no issue: no kind chip.
+    let stub = minato_core::mainci::is_stub(item);
+    let kx = if stub { x } else { style::kind_chip(&p, x, y1, item.kind) + 7.0 };
     let when = epoch(&item.updated_at).map(|t| age(&item.updated_at, now.max(t))).unwrap_or_default();
     // The age only where the title keeps some room beside it.
     let g = p.layout_no_wrap(when, FontId::monospace(11.5), c.dim);
@@ -269,7 +271,7 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
         p.galley(pos2(kx + 0.45, ty), title, c.fg);
     }
     let y2 = y1 + 20.0;
-    let place = if minato_core::mainci::is_stub(item) { item.repo.clone() } else { format!("{} #{} · {}", item.repo, item.number, item.author) };
+    let place = if stub { item.repo.clone() } else { format!("{} #{} · {}", item.repo, item.number, item.author) };
     let g = style::truncated(&p, place, FontId::monospace(12.0), c.dim, right - x);
     p.galley(pos2(x, y2 - g.size().y / 2.0), g, c.dim);
     let y3 = y2 + 19.0;

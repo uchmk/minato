@@ -291,7 +291,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 24.3 | In each view press `←` `↓` `↑` `→` instead of `h j k l` | They do the same as `h j k l`, also in the notifications list and the filters |
 | 24.4 | Open the palette and look at the commands tsumugi also has | They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き) |
 | 24.5 | Compare the inbox, list, Actions and notifications with `docs/mock/minato.html` | The same layout: the inbox's tag chips, "Your turn" / "Waiting" / "Done today" with their hints, the detail's "Next" box and keys, the list's filter column with counts, the Actions run rows and detail |
-| 24.6 | Select an item that is a stub for a red main CI (no thread) | The detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…" |
+| 24.6 | Select an item that is a stub for a red main CI (no thread) | The card has no `Issue` chip; the detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…" |
 
 ## 25. Comment box, Markdown, kept widths and the cache
 
