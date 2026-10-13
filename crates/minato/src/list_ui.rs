@@ -53,7 +53,8 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             Pane::Mid => Col::Items,
             Pane::Right => Col::Detail,
         };
-        if ui::hit(ui, rect, ("list-col", pane)).clicked() {
+        // A click focuses the column; no hand, as nothing is pressed.
+        if ui.interact(rect, ui.id().with(("list-col", pane)), egui::Sense::click()).clicked() {
             out.click = Some(Click::ListCol(col));
         }
         let at = if col == Col::Detail { Wheel::Detail } else { Wheel::List(col) };

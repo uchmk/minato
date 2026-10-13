@@ -48,7 +48,8 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             Pane::Mid => Col::Runs,
             Pane::Right => Col::Detail,
         };
-        if ui::hit(ui, rect, ("acts-col", pane)).clicked() {
+        // A click focuses the column; no hand, as nothing is pressed.
+        if ui.interact(rect, ui.id().with(("acts-col", pane)), egui::Sense::click()).clicked() {
             out.click = Some(Click::ActCol(col));
         }
         ui::wheel(ui.ctx(), ui.layer_id(), rect, Wheel::Acts(col), out);
