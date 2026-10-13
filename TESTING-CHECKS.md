@@ -68,6 +68,7 @@
 - [ ] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
 - [ ] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide with "⋯" lines; no card is folded to its title and no scrollbar
 - [ ] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
+- [ ] **7.8** Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) → The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room
 
 ## 8. Writing box and fields
 

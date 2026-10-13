@@ -21,7 +21,8 @@ const MORE_H: f32 = 22.0;
 const SEC_H: f32 = 30.0;
 const EMPTY_H: f32 = 24.0;
 /// The foot: two rows of chips.
-const FOOT_H: f32 = 68.0;
+/// The rows the foot's chips may take before the rest are left out.
+const FOOT_ROWS: usize = 4;
 const CHIP_H: f32 = 22.0;
 /// The border of a chip that is on.
 const CHIP_ON: Color32 = Color32::from_rgb(0x57, 0x55, 0x7A);
@@ -52,9 +53,8 @@ fn queue(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let sw = p.layout_no_wrap(sort.to_owned(), FontId::proportional(11.5), c.fg).size().x + 18.0;
     style::chip(&p, r.right() - 14.0 - sw, hy, sort, FontId::proportional(11.5), 9.0, 20.0, 6, c.border, Color32::TRANSPARENT, c.fg);
     let y = tags(ui, &p, app, &all, r, r.top() + 12.0 + 20.0, out);
-    let foot = Rect::from_min_max(pos2(r.left(), r.bottom() - FOOT_H), r.max);
-    chips(ui, &p, app, &all, foot, out);
-    let body = Rect::from_min_max(pos2(r.left() + 8.0, y), pos2(r.right() - 8.0, foot.top() - 4.0));
+    let foot = chips(ui, &p, app, &all, r, out);
+    let body = Rect::from_min_max(pos2(r.left() + 8.0, y), pos2(r.right() - 8.0, foot - 4.0));
     if all.is_empty() {
         let words = app.tr(if app.viewer.is_none() { "list.loading" } else { "inbox.empty" });
         p.text(pos2(body.left() + 6.0, body.top() + 20.0), Align2::LEFT_CENTER, words, FontId::proportional(13.0), c.dim);
@@ -220,36 +220,73 @@ fn more(p: &Painter, app: &App, x: f32, y: f32, n: usize, side: &'static str) {
     style::more(p, app.ja(), app.tr(side), x + 6.0, y + MORE_H / 2.0, n);
 }
 
-/// The foot: the status chips, then the repository chips, each with how
-/// many cards it would show.
-fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) {
+/// One chip of the foot before it is placed.
+struct FootChip<'a> {
+    dot: Option<Color32>,
+    word: &'a str,
+    n: usize,
+    on: bool,
+    click: Click,
+}
+
+/// The foot at the bottom of `r`: the status chips, then the repository
+/// chips, each with how many cards it would show; a group wraps to more
+/// rows when the column is narrow (up to `FOOT_ROWS`). Where the foot starts.
+fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, out: &mut Out) -> f32 {
     let c = ito_theme::colors();
-    p.line_segment([r.left_top(), r.right_top()], Stroke::new(1.0, c.border));
     let count = |s: InboxState| s.shown(all, &app.items).len();
     let base = || InboxState { undo: Vec::new(), ..app.inbox.clone() };
-    let y1 = r.top() + 4.0 + 4.0 + CHIP_H / 2.0;
-    let mut x = r.left() + 12.0;
     let sts = [(Status::All, "inbox.all", None), (Status::Mine, "inbox.mine", Some(ACCENT)), (Status::Wait, "inbox.wait", Some(style::RUN)), (Status::Done, "inbox.done_chip", Some(style::OK))];
-    for (st, word, dot) in sts {
-        let n = count(InboxState { status: st, ..base() });
-        let resp = chip(ui, p, x, y1, dot, app.tr(word), n, app.inbox.status == st, ("inbox-status", st.word()));
-        if resp.clicked() {
-            out.click = Some(Click::InboxStatus(st));
-        }
-        x = resp.rect.right() + 5.0;
-    }
+    let status: Vec<FootChip> = sts
+        .into_iter()
+        .map(|(st, word, dot)| FootChip { dot, word: app.tr(word), n: count(InboxState { status: st, ..base() }), on: app.inbox.status == st, click: Click::InboxStatus(st) })
+        .collect();
     let (repos, _) = InboxState::repos_and_tags(all, &app.items);
-    let y2 = y1 + CHIP_H + 8.0;
-    let mut x = r.left() + 12.0;
-    for repo in std::iter::once(None).chain(repos.into_iter().map(Some)) {
-        let n = count(InboxState { repo: repo.clone(), ..base() });
-        let word = repo.as_deref().map_or(app.tr("inbox.all_repos"), |r| r.rsplit('/').next().unwrap_or(r));
-        let resp = chip(ui, p, x, y2, None, word, n, app.inbox.repo == repo, ("inbox-repo", &repo));
-        if resp.clicked() {
-            out.click = Some(Click::InboxRepo(repo.clone()));
+    let repos: Vec<FootChip> = std::iter::once(None)
+        .chain(repos.iter().map(|r| Some(r.as_str())))
+        .map(|repo| FootChip {
+            dot: None,
+            word: repo.map_or(app.tr("inbox.all_repos"), |r| r.rsplit('/').next().unwrap_or(r)),
+            n: count(InboxState { repo: repo.map(str::to_owned), ..base() }),
+            on: app.inbox.repo.as_deref() == repo,
+            click: Click::InboxRepo(repo.map(str::to_owned)),
+        })
+        .collect();
+    // Place them first, so the foot is as tall as its rows.
+    let (left, right) = (r.left() + 12.0, r.right() - 12.0);
+    let mut at = Vec::new();
+    let mut row = 0;
+    for group in [&status, &repos] {
+        let mut x = left;
+        for f in group.iter() {
+            let w = chip_w(p, f.dot, f.word, f.n);
+            if x + w > right && x > left {
+                x = left;
+                row += 1;
+            }
+            at.push((x, row));
+            x += w + 5.0;
         }
-        x = resp.rect.right() + 5.0;
+        row += 1;
     }
+    let top = r.bottom() - 8.0 - row.min(FOOT_ROWS) as f32 * (CHIP_H + 8.0);
+    p.line_segment([pos2(r.left(), top), pos2(r.right(), top)], Stroke::new(1.0, c.border));
+    for (k, (f, (x, row))) in status.iter().chain(&repos).zip(at).enumerate() {
+        if row >= FOOT_ROWS {
+            break;
+        }
+        let y = top + 8.0 + CHIP_H / 2.0 + row as f32 * (CHIP_H + 8.0);
+        if chip(ui, p, x, y, f.dot, f.word, f.n, f.on, ("inbox-foot", k)).clicked() {
+            out.click = Some(f.click.clone());
+        }
+    }
+    top
+}
+
+/// How wide a chip of the foot is.
+fn chip_w(p: &Painter, dot: Option<Color32>, word: &str, n: usize) -> f32 {
+    let w = |s: String, font: FontId| p.layout_no_wrap(s, font, Color32::WHITE).size().x;
+    9.0 + dot.map_or(0.0, |_| w("●".into(), FontId::proportional(8.0)) + 5.0) + w(word.to_owned(), FontId::proportional(12.0)) + 5.0 + w(n.to_string(), FontId::monospace(11.0)) + 9.0
 }
 
 /// A chip of the foot: its dot, its words and its count; its response.
@@ -260,8 +297,7 @@ fn chip(ui: &Ui, p: &Painter, x: f32, y: f32, dot: Option<Color32>, word: &str, 
     let dot_g = dot.map(|d| p.layout_no_wrap("●".into(), FontId::proportional(8.0), d));
     let word_g = p.layout_no_wrap(word.to_owned(), FontId::proportional(12.0), color);
     let n_g = p.layout_no_wrap(n.to_string(), FontId::monospace(11.0), color);
-    let w = 9.0 + dot_g.as_ref().map_or(0.0, |g| g.size().x + 5.0) + word_g.size().x + 5.0 + n_g.size().x + 9.0;
-    let r = Rect::from_min_size(pos2(x, y - CHIP_H / 2.0), vec2(w, CHIP_H));
+    let r = Rect::from_min_size(pos2(x, y - CHIP_H / 2.0), vec2(chip_w(p, dot, word, n), CHIP_H));
     let resp = ui::hit(ui, r, id);
     if on {
         p.rect_filled(r, CornerRadius::same(6), style::head());
