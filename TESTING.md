@@ -62,7 +62,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.1 | Press `2` after the connection is up | Within a few seconds your open issues, PRs and discussions list in three lines each; on the title's line at the right stand, in this order, the CI mark, the comment count and the `受信箱` badge, inside the row even when it has no labels |
 | 6.2 | Press `j` / `k` | The selected row moves; the detail at the right follows within a second |
 | 6.3 | Shrink the window height until the rows do not fit | As many whole rows as fit show around the selected one; the rest hide with "⋯ 上に/下に N 件"; no row is folded to one line and no scrollbar appears |
-| 6.4 | Press `h`, then `j` and `Space` on a repository | The list narrows to it and the query line over the list changes; the chosen option is filled |
+| 6.4 | Press `h`, then `j` and `Space` on a repository | The list narrows to it and the query line over the list changes; the chosen option is filled; the count is that of the repository's open issues, PRs and discussions on GitHub, also for one with no item among the owner's 50 last updated |
 | 6.5 | Pick "CI is red" | Only PRs with a red mark remain |
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
 | 6.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
@@ -351,6 +351,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 28.15 | Start minato, stay in the inbox for about 30 seconds, then press `3` and `4` | Actions shows its runs and the board its cards at once, with no "loading" |
 | 28.16 | Stay in the inbox for a minute after a start, then in Actions select a finished run never selected before | Its jobs, artifacts and graph show at once; the runs next to it too |
 | 28.17 | Quit minato and start it again; note the API counter in the status bar, wait two minutes in the inbox | The counter goes down by only a few (the unchanged runs cost nothing; the notifications one each 90 seconds) |
+| 28.18 | Press `2`, then `C` (the owner has more than 100 closed items), and pick a repository in the filter column | The 100 last closed show within a few seconds (not the open ones under `is:closed`), then every closed item (up to 1000), not only the 50 last updated; `/` finds an old one by its title |
 
 ## 29. The built-in browser
 

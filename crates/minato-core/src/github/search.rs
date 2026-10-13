@@ -13,10 +13,12 @@ labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
 const REVIEWERS: &str =
     "reviewRequests(first: 5) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }";
 
-/// The search for issues and PRs. Variables: `q` (the query text), `n`.
+/// The search for issues and PRs. Variables: `q` (the query text), `n`,
+/// `after` (see [`search_vars`]).
 pub fn items_query() -> String {
     format!(
-        "query($q: String!, $n: Int!) {{ search(query: $q, type: ISSUE, first: $n) {{ nodes {{ __typename \
+        "query($q: String!, $n: Int!, $after: String) {{ search(query: $q, type: ISSUE, first: $n, after: $after) {{ \
+pageInfo {{ hasNextPage endCursor }} nodes {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
 ... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}"
@@ -40,12 +42,49 @@ pub fn item_vars(url: &str) -> String {
     serde_json::json!({ "url": url }).to_string()
 }
 
-/// The search for discussions. Variables: `q`, `n`.
+/// The search for discussions. Variables: `q`, `n`, `after`.
 pub fn discussions_query() -> String {
     format!(
-        "query($q: String!, $n: Int!) {{ search(query: $q, type: DISCUSSION, first: $n) {{ nodes {{ __typename \
+        "query($q: String!, $n: Int!, $after: String) {{ search(query: $q, type: DISCUSSION, first: $n, after: $after) {{ \
+pageInfo {{ hasNextPage endCursor }} nodes {{ __typename \
 ... on Discussion {{ {ITEM_COMMON} }} }} }} }}"
     )
+}
+
+/// The variables of a search's page of 100: the first (`after` none) or
+/// the one after a cursor.
+pub fn search_vars(q: &str, after: Option<&str>) -> String {
+    serde_json::json!({ "q": q, "n": 100, "after": after }).to_string()
+}
+
+/// The cursor of a search's next page, if its answer says there is one.
+pub fn next_page(body: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let info = v.pointer("/data/search/pageInfo")?;
+    if info.pointer("/hasNextPage").and_then(serde_json::Value::as_bool) != Some(true) {
+        return None;
+    }
+    info.pointer("/endCursor").and_then(serde_json::Value::as_str).map(str::to_string)
+}
+
+/// A search's answers page by page as one: the first with the items of
+/// all of them (what is kept and what [`parse_items`] reads).
+pub fn merge(pages: &[String]) -> Result<String, String> {
+    let mut all = Vec::new();
+    let mut first: Option<serde_json::Value> = None;
+    for body in pages {
+        let mut v: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+        if let Some(serde_json::Value::Array(nodes)) = v.pointer_mut("/data/search/nodes") {
+            all.append(nodes);
+        }
+        first.get_or_insert(v);
+    }
+    let mut v = first.ok_or("no pages")?;
+    if let Some(search) = v.pointer_mut("/data/search") {
+        search["nodes"] = serde_json::Value::Array(all);
+        search["pageInfo"] = serde_json::json!({ "hasNextPage": false, "endCursor": null });
+    }
+    Ok(v.to_string())
 }
 
 /// One item's body, comments and checks. Variables: `id`.
@@ -401,7 +440,8 @@ mod tests {
 
     #[test]
     fn the_queries_name_their_variables() {
-        assert!(items_query().contains("$q: String!"));
+        assert!(items_query().contains("$q: String!") && items_query().contains("after: $after"));
+        assert!(discussions_query().contains("pageInfo { hasNextPage endCursor }"));
         assert!(items_query().contains("milestone { title }") && item_query().contains("reviewRequests(first: 5)"));
         assert!(item_query().contains("resource(url: $url)"));
         // A discussion is no `UniformResourceLocatable`: GitHub refuses
@@ -409,5 +449,36 @@ mod tests {
         assert!(!item_query().contains("on Discussion"));
         assert!(discussions_query().contains("type: DISCUSSION"));
         assert!(detail_query().contains("$id: ID!"));
+    }
+
+    #[test]
+    fn a_search_is_read_page_by_page() {
+        assert_eq!(search_vars("user:u is:open", None), r#"{"after":null,"n":100,"q":"user:u is:open"}"#);
+        assert_eq!(search_vars("q", Some("Y3Vy")), r#"{"after":"Y3Vy","n":100,"q":"q"}"#);
+        let page = |ids: &[&str], more: bool| {
+            let nodes: Vec<String> = ids
+                .iter()
+                .map(|id| {
+                    format!(
+                        r#"{{"__typename":"Issue","id":"{id}","number":1,"title":"t","url":"u","repository":{{"nameWithOwner":"u/r"}}}}"#
+                    )
+                })
+                .collect();
+            format!(
+                r#"{{"data":{{"search":{{"pageInfo":{{"hasNextPage":{more},"endCursor":"c{}"}},"nodes":[{}]}}}}}}"#,
+                ids.len(),
+                nodes.join(",")
+            )
+        };
+        let (a, b) = (page(&["I1", "I2"], true), page(&["I3"], false));
+        assert_eq!(next_page(&a).as_deref(), Some("c2"));
+        assert_eq!(next_page(&b), None);
+        // An answer kept from before the pages (no pageInfo) has no next one.
+        assert_eq!(next_page(r#"{"data":{"search":{"nodes":[]}}}"#), None);
+        let all = merge(&[a, b]).unwrap();
+        let ids: Vec<String> = parse_items(&all).unwrap().into_iter().map(|i| i.id).collect();
+        assert_eq!(ids, ["I1", "I2", "I3"]);
+        assert_eq!(next_page(&all), None);
+        assert!(merge(&[]).is_err());
     }
 }

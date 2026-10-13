@@ -26,7 +26,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use minato_core::actions::{self, Run};
 use minato_core::board;
 use minato_core::cache;
-use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items};
+use minato_core::github::search::{self, detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items, search_vars};
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::worker::{self, Call, Job, Worker};
@@ -115,6 +115,14 @@ pub struct Net {
     run_refetch: bool,
     /// The board's pages come so far (the board changes once all have).
     board_pages: Vec<String>,
+    /// The query each search ("items", "discussions") was last sent with,
+    /// and the pages of its answer come so far (the items change once all
+    /// have). The next page's key names the round it is of.
+    searched_q: HashMap<&'static str, String>,
+    search_pages: HashMap<&'static str, (u64, Vec<String>)>,
+    /// The query whose answer, all its pages, the items are of.
+    shown_q: HashMap<&'static str, String>,
+    search_round: u64,
     /// The card whose body was last asked for.
     peek_asked: Option<String>,
     /// The kept answers, until the thread has read them; where to write.
@@ -155,6 +163,10 @@ const RETRY: Duration = Duration::from_secs(10);
 
 /// At most so many pages of 100 cards are read for the board.
 const PAGES: usize = 5;
+
+/// At most so many pages of 100 items are read for a search (GitHub gives
+/// no more than 1000).
+const SEARCH_PAGES: usize = 10;
 
 /// What GitHub said about one run, and the run's `updated_at` then.
 struct RunMemo {
@@ -250,6 +262,10 @@ impl Net {
             yaml_by: HashMap::new(),
             run_refetch: false,
             board_pages: Vec::new(),
+            searched_q: HashMap::new(),
+            search_pages: HashMap::new(),
+            shown_q: HashMap::new(),
+            search_round: 0,
             peek_asked: None,
             cache_rx,
             cache_tx,
@@ -325,6 +341,7 @@ impl Net {
         self.keep("scope", "", &scope_line(Some(&want)));
         if old.0 != want.0 {
             self.found = Default::default();
+            self.search_pages.clear();
             self.stash = None;
             self.mentioned.clear();
             self.stubs.clear();
@@ -557,6 +574,50 @@ impl Net {
         }
     }
 
+    /// One page of a search (`base`) from GitHub: the next is asked for,
+    /// and once the last has come the items change (and are kept). A page
+    /// of a round a newer first page has ended is dropped. The first page
+    /// of a search other than the one shown (closed items, a saved search)
+    /// shows at once, not the old search's items until all have come.
+    fn search_page(&mut self, app: &mut App, base: &'static str, key: &str, body: String) {
+        if key == base {
+            self.search_round += 1;
+            self.search_pages.insert(base, (self.search_round, Vec::new()));
+            if self.shown_q.get(base) != self.searched_q.get(base) && search::next_page(&body).is_some() {
+                self.take(app, base, &body, true);
+            }
+        } else if !self.search_pages.get(base).is_some_and(|(round, _)| key.ends_with(&format!("-more:{round}"))) {
+            return;
+        }
+        let Some((round, pages)) = self.search_pages.get_mut(base) else { return };
+        let next = search::next_page(&body).filter(|_| pages.len() + 1 < SEARCH_PAGES);
+        pages.push(body);
+        if let (Some(after), Some(q), Some(w)) = (next, self.searched_q.get(base), &self.worker) {
+            let query = if base == "items" { items_query() } else { discussions_query() };
+            let job = Job { key: format!("{base}-more:{round}"), call: Call::Graphql { query, variables: search_vars(q, Some(&after)) } };
+            if matches!(app.view, View::Inbox | View::List) {
+                w.send_first(job);
+            } else {
+                w.send(job);
+            }
+            return;
+        }
+        self.search_done(app, base);
+    }
+
+    /// The pages of a search come so far, as its answer.
+    fn search_done(&mut self, app: &mut App, base: &'static str) {
+        let Some((_, pages)) = self.search_pages.remove(base) else { return };
+        let Ok(all) = search::merge(&pages) else { return };
+        if cached(base, self.searched_custom.is_some() || self.searched_closed) && !all.contains("\"errors\"") {
+            self.keep(base, "", &all);
+        }
+        if let Some(q) = self.searched_q.get(base) {
+            self.shown_q.insert(base, q.clone());
+        }
+        self.take(app, base, &all, true);
+    }
+
     /// One page of the board from GitHub: the next is asked for, and once
     /// the last has come the board shows them all (and they are kept).
     fn board_page(&mut self, app: &mut App, key: &str, body: &str) {
@@ -764,6 +825,11 @@ impl Net {
                         self.keep_rate(r);
                     }
                     let key = reply.key.clone();
+                    if let Some(base) = search_of(&key) {
+                        self.live.insert(base.to_string());
+                        self.search_page(app, base, &key, f.body);
+                        continue;
+                    }
                     self.live.insert(key.clone());
                     // A 304's body is the one already kept.
                     if !f.cached && cached(&key, self.searched_custom.is_some() || self.searched_closed) && !f.body.contains("\"errors\"") {
@@ -788,6 +854,11 @@ impl Net {
                     }
                     if reply.key.starts_with("board:") {
                         self.board_asked = None;
+                    }
+                    if let Some(base) = search_of(&reply.key).filter(|_| reply.key.contains("-more:")) {
+                        if self.search_pages.get(base).is_some_and(|(round, _)| reply.key.ends_with(&format!(":{round}"))) {
+                            self.search_done(app, base);
+                        }
                     }
                     if let Some(url) = reply.key.strip_prefix("fetch:") {
                         app.open_url = Some(url.to_string());
@@ -903,6 +974,7 @@ impl Net {
                 }
                 self.searched_closed = closed;
                 self.searched_custom = custom.clone();
+                self.search_pages.clear();
                 self.next_search = now;
                 if plain(closed, &custom) {
                     self.rebuild(app);
@@ -910,12 +982,11 @@ impl Net {
             }
             if now >= self.next_search {
                 let state = if closed { "is:closed" } else { "is:open" };
-                let q = format!("user:{owner} {state} sort:updated-desc");
-                let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
-                worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
-                if let Some(q) = custom {
-                    let cvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
-                    worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: cvars } });
+                let plain = format!("user:{owner} {state} sort:updated-desc");
+                let q = custom.clone().unwrap_or_else(|| plain.clone());
+                worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) } });
+                self.searched_q.insert("items", q);
+                if custom.is_some() {
                     self.found[1].clear();
                     self.mentioned.clear();
                     self.stubs.clear();
@@ -923,13 +994,17 @@ impl Net {
                     self.found[1].clear();
                 } else {
                     let q = format!("user:{owner} is:open mentions:{me} -author:{me} sort:updated-desc");
-                    let mvars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
-                    worker.send(Job { key: "mentions".into(), call: Call::Graphql { query: items_query(), variables: mvars } });
+                    worker.send(Job {
+                        key: "mentions".into(),
+                        call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) },
+                    });
                     worker.send(Job {
                         key: "mainci".into(),
                         call: Call::Graphql { query: mainci::query(self.other()), variables: "{}".into() },
                     });
+                    let vars = search_vars(&plain, None);
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
+                    self.searched_q.insert("discussions", plain);
                 }
                 self.next_search = now + SEARCH;
             }
@@ -1048,6 +1123,11 @@ impl Net {
 /// parts are kept apart, with their stamp; the board once all its pages
 /// have come). `narrowed`: the items are of a saved search or the closed
 /// ones, which a start would not show.
+/// The search (`items`, `discussions`) a key's answer is a page of.
+fn search_of(key: &str) -> Option<&'static str> {
+    ["items", "discussions"].into_iter().find(|b| key == *b || key.strip_prefix(b).is_some_and(|r| r.starts_with("-more:")))
+}
+
 fn cached(key: &str, narrowed: bool) -> bool {
     match key {
         "items" => !narrowed,
@@ -1157,5 +1237,15 @@ mod tests {
         assert_eq!(list_repo("detail:x"), None);
         assert!(cached("labels:o/r", true) && cached("miles:o/r", false) && !scoped("people:o/r"));
         assert_eq!(rest_path("people:o/r", None).as_deref(), Some("/repos/o/r/assignees?per_page=100"));
+    }
+
+    #[test]
+    fn a_searchs_pages_are_known_by_their_key() {
+        assert_eq!(search_of("items"), Some("items"));
+        assert_eq!(search_of("items-more:3"), Some("items"));
+        assert_eq!(search_of("discussions-more:12"), Some("discussions"));
+        assert_eq!(search_of("mentions"), None);
+        assert_eq!(search_of("items-x"), None);
+        assert_eq!(search_of("detail:items"), None);
     }
 }
