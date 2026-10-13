@@ -11,7 +11,7 @@ use egui::text_edit::TextEditState;
 use egui::{Align2, CornerRadius, Event, FontId, Id, Key, Modifiers, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
 use minato_core::composer::{Tool, tool};
 
-use crate::app::{App, Compose, Pick};
+use crate::app::{App, Compose, Confirm, Pick};
 use crate::ui::ACCENT;
 
 const PANEL_H: f32 = 300.0;
@@ -44,10 +44,21 @@ fn confirm(ui: &mut Ui, app: &App) {
     let b = Rect::from_center_size(r.center(), vec2(440.0, 120.0));
     p.rect_filled(b, CornerRadius::same(8), c.panel);
     p.rect_stroke(b, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
-    let title = app.confirm.as_ref().and_then(|id| app.items.iter().find(|i| &i.id == id)).map(|i| format!("{} #{}  {}", i.repo, i.number, i.title)).unwrap_or_default();
-    p.with_clip_rect(b.shrink(14.0)).text(pos2(b.left() + 18.0, b.top() + 32.0), Align2::LEFT_CENTER, title, FontId::proportional(12.5), c.dim);
-    p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, app.tr(if app.confirm_act == crate::app::Confirm::Close { "confirm.close" } else { "confirm.merge" }), FontId::proportional(14.0), c.fg);
-    p.text(pos2(b.left() + 18.0, b.top() + 94.0), Align2::LEFT_CENTER, app.tr(if app.confirm_act == crate::app::Confirm::Close { "confirm.close_hint" } else { "confirm.hint" }), FontId::proportional(11.5), ACCENT);
+    let id = app.confirm.as_deref().unwrap_or_default();
+    let title = if app.confirm_act == Confirm::Dispatch {
+        app.runs.iter().find(|r| r.id.to_string() == id).map(|r| format!("{}  {}  ({})", r.repo, r.workflow, r.branch))
+    } else {
+        app.items.iter().find(|i| i.id == id).map(|i| format!("{} #{}  {}", i.repo, i.number, i.title))
+    };
+    let (ask, hint) = match app.confirm_act {
+        Confirm::Merge => ("confirm.merge", "confirm.hint"),
+        Confirm::Close => ("confirm.close", "confirm.close_hint"),
+        Confirm::Reopen => ("confirm.reopen", "confirm.reopen_hint"),
+        Confirm::Dispatch => ("confirm.dispatch", "confirm.dispatch_hint"),
+    };
+    p.with_clip_rect(b.shrink(14.0)).text(pos2(b.left() + 18.0, b.top() + 32.0), Align2::LEFT_CENTER, title.unwrap_or_default(), FontId::proportional(12.5), c.dim);
+    p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, app.tr(ask), FontId::proportional(14.0), c.fg);
+    p.text(pos2(b.left() + 18.0, b.top() + 94.0), Align2::LEFT_CENTER, app.tr(hint), FontId::proportional(11.5), ACCENT);
 }
 
 fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {

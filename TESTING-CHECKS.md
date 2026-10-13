@@ -106,7 +106,7 @@
 - [x] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [ ] **9.5** Select a running run and press `X` → A toast says it is stopping; the run turns to cancelled
-- [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` → A toast says the workflow started; a new run appears
+- [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
 - [ ] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
@@ -153,7 +153,7 @@
 - [ ] **12.4** `Up`/`Down` to move, type into a text input, `Enter`/`Space` on a boolean or choice → Text is typed; booleans and choices change; `Tab` moves down
 - [ ] **12.5** Press `Ctrl+Enter` with a required input empty → A toast says a value is needed; the form stays
 - [ ] **12.6** Fill the inputs and press `Ctrl+Enter` → The form closes, a toast says the workflow started, and a new run with those inputs appears on GitHub
-- [ ] **12.7** Press `D` on a workflow without inputs → The workflow starts at once, as before
+- [x] **12.7** Press `D` on a workflow without inputs, then `Esc` → Nothing starts until `Enter`; `Esc` closes the box and nothing is sent
 - [x] **12.8** Press `Esc` in the form → It closes and nothing starts
 - [x] **12.9** Press `L` on a failed run → A panel shows the failed job's log from a few lines before the first error, errors in red
 - [x] **12.10** `j`/`k`/`Space`/`PageUp`/`g`/`G` in the log, then `Esc` → The log scrolls with no scrollbar; `Esc` closes it
@@ -190,7 +190,7 @@
 ## 16. Closed items
 
 - [x] **16.1** In the list view press `C` → A toast says closed items are shown; within a few seconds the list holds closed issues and PRs, no discussions
-- [ ] **16.2** On a closed issue press `x` → No confirmation; the toast says it was reopened and GitHub shows it open
+- [ ] **16.2** On a closed issue press `x`, then `Enter` → A box asks whether to reopen it (`Esc` sends nothing); after `Enter` the toast says it was reopened and GitHub shows it open
 - [ ] **16.3** On a merged PR press `x` → Nothing is sent; a toast says it cannot be closed or reopened
 - [x] **16.4** Press `C` again → Open items return, discussions included
 
@@ -336,7 +336,7 @@
 - [ ] **31.8** Press `r` on an issue, then `Alt+R` → A toast says reviewers are for pull requests; no picker opens
 - [x] **31.9** Press `S` in the list → The repository settings' heading is the repository's name alone
 - [x] **31.10** Press `C` in the list, then `1` → The inbox has no card of a closed issue or a merged PR
-- [ ] **31.11** Select a run of a workflow with `workflow_dispatch` and press `D` at once → Until its file is read, a toast says it is reading the workflow file and to press `D` again; then `D` opens the form with its inputs (or asks to run it)
+- [ ] **31.11** Select a run of a workflow with `workflow_dispatch` and press `D` at once → Until its file is read, a toast says it is reading the workflow file and to press `D` again; then `D` opens the form with its inputs (or a box asking to run it)
 - [ ] **31.12** Press `r` and type more lines than the box holds → The text scrolls inside the box with the caret in view; nothing is drawn below the box
 - [x] **31.13** Narrow the window until the title bar's palette button is small → The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap
 - [ ] **31.14** Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` → The counter shows whichever of the REST (`core`) and GraphQL budgets has less left

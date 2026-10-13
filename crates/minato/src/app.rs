@@ -350,7 +350,8 @@ pub struct App {
     /// When each repository's lists were last asked for.
     lists_asked: HashMap<String, Instant>,
     state_tx: Option<std::sync::mpsc::Sender<String>>,
-    /// The item (node id) a merge waits to be confirmed for.
+    /// What waits to be confirmed: the item's node id, or the run's id to
+    /// start its workflow again.
     pub confirm: Option<String>,
     /// What the confirmation is for.
     pub confirm_act: Confirm,
@@ -405,6 +406,9 @@ pub struct App {
 pub enum Confirm {
     Merge,
     Close,
+    Reopen,
+    /// Start a run's workflow by hand (one without inputs).
+    Dispatch,
 }
 
 /// What GitHub said about one run.
@@ -768,8 +772,8 @@ impl App {
                 self.ask_merge();
                 return true;
             }
-            'x' if self.show_closed => {
-                self.reopen();
+            'x' if self.selected().is_some_and(|i| i.closed) => {
+                self.ask_reopen();
                 return true;
             }
             'x' => {
@@ -798,6 +802,12 @@ impl App {
             match self.confirm_act {
                 Confirm::Merge => self.merge(&id),
                 Confirm::Close => self.close(&id),
+                Confirm::Reopen => self.reopen(&id),
+                Confirm::Dispatch => {
+                    if let Some(run) = self.runs.iter().find(|r| r.id.to_string() == id).cloned() {
+                        self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
+                    }
+                }
             }
             return true;
         }
@@ -857,7 +867,9 @@ impl App {
                 }
                 let inputs = self.workflow_of(&run).map(|w| w.inputs.clone()).unwrap_or_default();
                 if inputs.is_empty() {
-                    self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
+                    // Nothing to fill in: ask before it starts, as closing does.
+                    self.confirm = Some(run.id.to_string());
+                    self.confirm_act = Confirm::Dispatch;
                 } else {
                     self.overlay = Some(Overlay::Form(Box::new(Form::new(run, inputs))));
                 }
@@ -1776,15 +1788,22 @@ impl App {
         }
     }
 
-    /// `x` over closed items: open the selected issue or PR again.
-    fn reopen(&mut self) {
+    /// `x` on a closed item: ask before opening it again.
+    fn ask_reopen(&mut self) {
         match self.selected() {
             Some(i) if i.kind != Kind::Discussion && !i.merged && !minato_core::mainci::is_stub(i) => {
-                let n = self.outbox.len();
-                self.queue(&format!("write:{n}:state"), write::set_state(i, true), Some("write.reopened"));
+                self.confirm = Some(i.id.clone());
+                self.confirm_act = Confirm::Reopen;
             }
             Some(_) => self.say_key("write.not_closable"),
             None => {}
+        }
+    }
+
+    fn reopen(&mut self, id: &str) {
+        if let Some(item) = self.item(id) {
+            let n = self.outbox.len();
+            self.queue(&format!("write:{n}:state"), write::set_state(&item, true), Some("write.reopened"));
         }
     }
 
@@ -1932,7 +1951,7 @@ mod tests {
         assert_eq!(a.outbox.len(), 2);
         assert_eq!(a.toast.as_ref().map(|t| t.0.clone()), Some(a.tr("run.reading").to_string()));
         a.run_detail = Some(RunDetail { id: 2, yaml_tried: true, ..Default::default() });
-        assert!(a.feed('D'));
+        assert!(a.feed('D') && a.enter());
         assert_eq!(a.outbox[2].key, "write:2:dispatch");
         assert!(a.feed('e'));
         assert!(a.open_url.take().unwrap().ends_with("/runs/2"));
@@ -2262,13 +2281,22 @@ mod tests {
     }
 
     #[test]
-    fn x_reopens_over_closed_items() {
+    fn x_reopens_a_closed_item_after_enter() {
         let mut a = with_pr();
         a.feed('2');
         assert!(a.feed('C') && a.show_closed);
+        for i in &mut a.items {
+            i.closed = true;
+        }
+        let before = a.outbox.len();
         assert!(a.feed('x'));
-        assert!(a.confirm.is_none(), "reopening asks nothing");
-        assert!(a.outbox.last().is_some_and(|o| o.key.ends_with(":state")));
+        assert_eq!(a.confirm_act, Confirm::Reopen);
+        assert_eq!(a.outbox.len(), before, "nothing is sent before Enter");
+        assert!(a.escape() && a.confirm.is_none());
+        assert_eq!(a.outbox.len(), before);
+        assert!(a.feed('x') && a.enter());
+        let Call::Send { body, .. } = &a.outbox.last().unwrap().call else { panic!() };
+        assert!(a.outbox.last().is_some_and(|o| o.key.ends_with(":state")) && body.contains(r#""state":"open""#), "{body}");
         assert!(a.feed('C') && !a.show_closed);
         // Only the list searches closed ones; the inbox keeps the open.
         a.show_closed = true;
@@ -2715,7 +2743,7 @@ jobs:
     }
 
     #[test]
-    fn d_starts_at_once_without_inputs_and_l_opens_the_failed_log() {
+    fn d_asks_before_starting_without_inputs_and_l_opens_the_failed_log() {
         let mut a = app();
         with_detail(&mut a, "jobs:
   lint:
@@ -2723,7 +2751,13 @@ jobs:
 ");
         a.feed('D');
         assert!(a.overlay.is_none());
+        assert_eq!((a.confirm.as_deref(), a.confirm_act), (Some("1"), Confirm::Dispatch));
+        assert!(a.outbox.is_empty(), "nothing starts before Enter");
+        assert!(a.escape() && a.confirm.is_none() && a.outbox.is_empty());
+        a.feed('D');
+        assert!(a.enter() && a.confirm.is_none());
         assert_eq!(a.outbox.len(), 1);
+        assert_eq!(a.outbox[0].key, "write:1:dispatch");
         a.feed('L');
         let Some(Overlay::Log(l)) = &a.overlay else { panic!() };
         assert_eq!(l.job_id, 11);
