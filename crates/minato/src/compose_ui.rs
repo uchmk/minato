@@ -2,13 +2,14 @@
 //! the detail's strip (`at`, the field the strip left for it: GitHub's box,
 //! drawn by `detail_ui`); a new issue, or a view without the detail, gets it
 //! as a panel over the view. It holds a multi-line field (or the preview)
-//! and, on Alt+L / Alt+A and the rest, the picker. No scrollbar: the field
-//! shows the end of what is typed, the picker a window around its cursor.
+//! and, on Alt+L / Alt+A and the rest (or a click on a field chip), the
+//! picker. No scrollbar: the field shows the end of what is typed, the
+//! picker a window around its cursor.
 
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
-use egui::{Align2, CornerRadius, Event, FontId, Id, Key, Modifiers, Rect, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
-use minato_core::composer::{Picker, Tool, tool};
+use egui::{Align2, CornerRadius, Event, FontId, Id, Key, Modifiers, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
+use minato_core::composer::{Tool, tool};
 
 use crate::app::{App, Compose, Pick};
 use crate::ui::ACCENT;
@@ -61,17 +62,18 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
         Some(field) => field,
         None => panel(&p, app, &c, item.as_ref(), new_repo.as_deref(), ui.max_rect()),
     };
-    // In the detail the picker opens as a panel over the box.
-    let pick_at = match inline {
+    // In the detail the picker opens as a panel over the box. `outer`: what
+    // takes the picker's clicks (a click outside it closes it).
+    let (pick_at, outer) = match inline {
         Some(f) => {
             let r = Rect::from_min_max(pos2(f.left() - 12.0, f.bottom() - PICK_H), pos2(f.right() + 12.0, f.bottom()));
             if c.picker.is_some() {
                 p.rect_filled(r, CornerRadius::same(8), colors.panel);
                 p.rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
             }
-            r.shrink2(vec2(14.0, 10.0))
+            (r.shrink2(vec2(14.0, 10.0)), r)
         }
-        None => field,
+        None => (field, Rect::from_min_max(field.min - vec2(14.0, 36.0), field.max + vec2(14.0, 30.0))),
     };
     let id = Id::new("minato-compose");
     let mut act = Act::Stay;
@@ -84,7 +86,7 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             Some(Pick::Reviewers) => app.tr("pick.reviewers"),
             _ => app.tr("pick.priority"),
         };
-        picker(&ctx, &p, &mut c, pick_at, &mut act, [app.tr("pick.loading"), title]);
+        picker(ui, &p, &mut c, [pick_at, outer], &mut act, [app.tr("pick.loading"), title]);
         if inline.is_some() {
             p.text(pos2(pick_at.right(), pick_at.top() + 10.0), Align2::RIGHT_CENTER, app.tr("pick.hint"), FontId::proportional(11.0), colors.dim);
         }
@@ -136,21 +138,10 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             }
         } else if preview {
             c.preview = !c.preview;
-        } else if status || priority {
+        } else if let Some(k) = [labels, people, status, mile, priority, review].iter().position(|&on| on) {
             app.compose = Some(c);
-            app.open_field_picker(priority);
+            app.open_pick(k);
             c = app.compose.take().expect("the box is still open");
-        } else if mile || review {
-            app.compose = Some(c);
-            app.open_extra_picker(review);
-            c = app.compose.take().expect("the box is still open");
-        } else if labels || people {
-            let (kind, options, chosen) = if labels {
-                (Pick::Labels, c.labels.clone(), item.as_ref().map(|i| i.labels.iter().map(|l| l.name.clone()).collect()).unwrap_or_default())
-            } else {
-                (Pick::Assignees, c.people.clone(), item.as_ref().map(|i| i.assignees.clone()).unwrap_or_default())
-            };
-            c.picker = Some((kind, Picker::new(options, chosen)));
         } else if let Some(t) = key_tool.or(c.tool.take()) {
             // A mark on the selection, from Ctrl+B/I/K or the toolbar.
             let mut st = TextEditState::load(&ctx, id).unwrap_or_default();
@@ -226,10 +217,18 @@ fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::l
     Rect::from_min_max(pos2(panel.left() + 14.0, panel.top() + 36.0), pos2(panel.right() - 14.0, panel.bottom() - 30.0))
 }
 
-/// The picker. `words` are loading and the title.
-fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, act: &mut Act, words: [&str; 2]) {
+/// The picker in `at[0]`, taking the clicks over `at[1]`. `words` are
+/// loading and the title. A click on a row ticks it (and closes a picker of
+/// one choice); a click outside closes it.
+fn picker(ui: &Ui, p: &egui::Painter, c: &mut Compose, at: [Rect; 2], act: &mut Act, words: [&str; 2]) {
     let colors = ito_theme::colors();
+    let ctx = ui.ctx();
+    let [field, outer] = at;
     let Some((_, pk)) = c.picker.as_mut() else { return };
+    ui.interact(outer, Id::new("minato-pick"), Sense::click());
+    if ctx.input(|i| i.pointer.primary_clicked() && i.pointer.interact_pos().is_some_and(|pos| !outer.contains(pos))) {
+        *act = Act::Apply;
+    }
     let events = ctx.input_mut(|i| std::mem::take(&mut i.events));
     for e in events {
         match e {
@@ -250,12 +249,19 @@ fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, 
         return;
     }
     let shown = pk.shown();
+    let mut clicked = None;
     let fit = ((body.height() / ROW) as usize).max(1);
     let first = pk.cursor.saturating_sub(fit - 1);
     for (k, name) in shown.iter().enumerate().skip(first).take(fit) {
         let row = Rect::from_min_size(pos2(body.left(), body.top() + (k - first) as f32 * ROW), vec2(body.width(), ROW));
+        let resp = crate::ui::hit(ui, row, ("pick-row", k));
         if k == pk.cursor {
             p.rect_filled(row, 0.0, ACCENT.gamma_multiply(0.16));
+        } else if resp.hovered() {
+            p.rect_filled(row, 0.0, colors.hover());
+        }
+        if resp.clicked() {
+            clicked = Some(k);
         }
         let mark = match (pk.single, pk.is_chosen(name)) {
             (true, true) => "(o)",
@@ -264,6 +270,13 @@ fn picker(ctx: &egui::Context, p: &egui::Painter, c: &mut Compose, field: Rect, 
             (false, false) => "[ ]",
         };
         p.text(pos2(row.left() + 6.0, row.center().y), Align2::LEFT_CENTER, format!("{mark}  {name}"), FontId::monospace(12.0), colors.fg);
+    }
+    if let Some(k) = clicked {
+        pk.cursor = k;
+        pk.toggle();
+        if pk.single {
+            *act = Act::Apply;
+        }
     }
 }
 

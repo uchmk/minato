@@ -228,8 +228,8 @@ pub struct Next<'a> {
     pub key: Option<&'a str>,
 }
 
-/// The box of the next step; the y under it.
-pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> f32 {
+/// The box of the next step; the y under it and its button, if it has one.
+pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<Rect>) {
     let c = ito_theme::colors();
     let y = y + 14.0;
     let pad = 14.0;
@@ -259,13 +259,22 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> f32 {
     if let Some(g) = note {
         p.galley(pos2(x + pad, ty), g, c.dim);
     }
-    if let Some((gw, k)) = go {
+    let button = go.map(|(gw, k)| {
         let b = Rect::from_min_size(pos2(r.right() - pad - gw, r.center().y - 14.0), vec2(gw, 28.0));
         p.rect_filled(b, CornerRadius::same(6), ACCENT);
         let kx = chip(p, b.left() + 12.0, b.center().y, k, FontId::monospace(11.0), 5.0, 18.0, 4, Color32::TRANSPARENT, Color32::from_white_alpha(128), ON_ACCENT);
         bold(p, pos2(kx + 8.0, b.center().y), Align2::LEFT_CENTER, n.label, FontId::proportional(12.5), ON_ACCENT);
-    }
-    r.bottom() + 6.0
+        b
+    });
+    (r.bottom() + 6.0, button)
+}
+
+/// The key a next box's button stands for, once clicked.
+pub fn next_click(ui: &egui::Ui, button: Option<Rect>, key: Option<&str>, clip: Rect) -> Option<char> {
+    let (b, k) = (button?.intersect(clip), key?);
+    let mut chars = k.chars();
+    let (Some(c), None) = (chars.next(), chars.next()) else { return None };
+    (b.is_positive() && crate::ui::hit(ui, b, ("next-box", c)).clicked()).then_some(c)
 }
 
 /// The other keys under the next box (`d 済み  s あとで`); the y under them.

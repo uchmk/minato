@@ -292,7 +292,11 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         Status::Ok | Status::Idle => None,
     };
     if let Some(n) = next {
-        y = style::next_box(&p, x, y, w, &n);
+        let (under, button) = style::next_box(&p, x, y, w, &n);
+        y = under;
+        if let Some(k) = style::next_click(ui, button, n.key, r) {
+            out.click = Some(Click::Key(k));
+        }
     } else {
         y += 12.0;
     }

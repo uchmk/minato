@@ -224,12 +224,16 @@ pub enum Click {
     Tab(bool),
     /// Comment (`false`), or Close (with the comment if there is one).
     Send(bool),
+    /// A field chip of the strip (0 Labels .. 5 Reviewers): its picker.
+    Field(usize),
+    /// A button that stands for a key (the next box's): that key.
+    Key(char),
 }
 
 impl Click {
     /// Whether it is the writing box's own, so the box stays open for it.
     pub fn is_compose(&self) -> bool {
-        matches!(self, Click::Write | Click::Tool(_) | Click::Tab(_) | Click::Send(_))
+        matches!(self, Click::Write | Click::Tool(_) | Click::Tab(_) | Click::Send(_) | Click::Field(_))
     }
 }
 
@@ -991,6 +995,10 @@ impl App {
     pub fn click(&mut self, c: Click) {
         use minato_core::list::Col;
         let me = self.viewer.clone().unwrap_or_default();
+        // A click on the box beside an open picker writes what it changed.
+        if c.is_compose() {
+            self.apply_pick();
+        }
         match c {
             Click::ListFilter(k) => {
                 self.list.col = Col::Filters;
@@ -1028,6 +1036,13 @@ impl App {
             }
             Click::ActCol(col) => self.acts.col = col,
             Click::Write => self.open_compose(),
+            Click::Field(k) => {
+                self.open_compose();
+                self.open_pick(k);
+            }
+            Click::Key(k) => {
+                self.feed(k);
+            }
             Click::Tool(t) => {
                 self.open_compose();
                 if let Some(c) = self.compose.as_mut() {
@@ -1423,6 +1438,26 @@ impl App {
                     self.queue(&key, call, Some("write.field"));
                 }
             }
+        }
+    }
+
+    /// The picker of field `k` (0 Labels .. 5 Reviewers), from Alt+L and the
+    /// rest or a click on its chip; one open before writes what changed.
+    pub fn open_pick(&mut self, k: usize) {
+        self.apply_pick();
+        match k {
+            0 | 1 => {
+                let Some(c) = self.compose.as_ref() else { return };
+                let item = self.item(&c.id);
+                let Some(c) = self.compose.as_mut() else { return };
+                c.picker = Some(if k == 0 {
+                    (Pick::Labels, Picker::new(c.labels.clone(), item.map(|i| i.labels.iter().map(|l| l.name.clone()).collect()).unwrap_or_default()))
+                } else {
+                    (Pick::Assignees, Picker::new(c.people.clone(), item.map(|i| i.assignees).unwrap_or_default()))
+                });
+            }
+            2 | 4 => self.open_field_picker(k == 4),
+            _ => self.open_extra_picker(k == 5),
         }
     }
 
@@ -2099,6 +2134,37 @@ mod tests {
         a.compose.as_mut().unwrap().text = "  ".into();
         a.close_compose();
         assert!(a.drafts.is_empty());
+    }
+
+    #[test]
+    fn a_field_chip_opens_its_picker_and_writes_the_one_before() {
+        let mut a = with_pr();
+        a.click(Click::Field(0));
+        assert!(matches!(a.compose.as_ref().unwrap().picker, Some((Pick::Labels, _))));
+        let c = a.compose.as_mut().unwrap();
+        c.people = vec!["uchmk".into()];
+        if let Some((_, pk)) = c.picker.as_mut() {
+            pk.options = vec!["bug".into()];
+            pk.toggle();
+        }
+        a.outbox.clear();
+        a.click(Click::Field(1));
+        assert!(matches!(a.compose.as_ref().unwrap().picker, Some((Pick::Assignees, _))));
+        let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["write:0:labels"]);
+        // Status needs the item in the Project: it only says so.
+        a.click(Click::Field(2));
+        assert!(a.compose.as_ref().unwrap().picker.is_none());
+    }
+
+    #[test]
+    fn the_next_box_button_is_its_key() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Bad, None)];
+        a.click(Click::Key('R'));
+        assert_eq!(a.outbox.len(), 1);
+        assert_eq!(a.outbox[0].key, "write:1:rerun");
     }
 
     #[test]

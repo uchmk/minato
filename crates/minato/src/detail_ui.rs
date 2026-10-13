@@ -43,7 +43,10 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let top = body.top() + 18.0 - scroll * LINE;
     let y = head(&p, app, item, x, top, w);
     let card = card_of(app, item);
-    let y = next(&p, app, card.as_ref(), x, y, w);
+    let (y, key) = next(&p, app, card.as_ref(), x, y, w);
+    if let Some(k) = key.and_then(|(b, k)| style::next_click(ui, b, Some(k), body)) {
+        out.click = Some(Click::Key(k));
+    }
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
         y = sections(&p, app, item, x, y, w);
@@ -119,10 +122,11 @@ fn head(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
 }
 
 /// The box of what to do next: the rule's step for a card of yours, the
-/// waiting for one that waits, done for one that is.
-fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> f32 {
+/// waiting for one that waits, done for one that is. The y under it, and
+/// its button and the button's key.
+fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> (f32, Option<(Option<Rect>, &'static str)>) {
     let Some(card) = card else {
-        return y;
+        return (y, None);
     };
     let why = crate::inbox_ui::card_why(app, card);
     let n = match (card.group, card.rule) {
@@ -134,7 +138,9 @@ fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> 
         (Group::Done, _) => Next { tone: style::OK, lead: app.tr("detail.done"), label: why, note: "", key: None },
         (Group::Mine, None) => Next { tone: style::IDLE, lead: app.tr("detail.next"), label: why, note: "", key: None },
     };
-    style::next_box(p, x, y, w, &n)
+    let key = card.rule.filter(|_| card.group == Group::Mine).map(|r| r.next().0);
+    let (y, button) = style::next_box(p, x, y, w, &n);
+    (y, key.map(|k| (button, k)))
 }
 
 /// The other keys under the box, less the box's own.
@@ -221,6 +227,11 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     let p = ui.painter().with_clip_rect(r);
     p.rect_filled(r, 0.0, style::head());
     p.line_segment([r.left_top(), r.right_top()], Stroke::new(1.0, c.border));
+    // The strip takes a click first; what is drawn on it takes it before.
+    let resp = ui::hit(ui, r, "detail-strip");
+    if resp.clicked() {
+        out.click = Some(Click::Write);
+    }
     let x0 = r.left() + 26.0;
     let right = r.right() - 26.0;
     let y = r.top() + 8.0 + 13.0;
@@ -238,7 +249,11 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
         let v = p.text(pos2(n.right() + 6.0, y), Align2::LEFT_CENTER, value, FontId::proportional(12.0), c.fg);
         let e = style::kbd(&p, v.right() + 6.0, y, &format!("Alt+{}", ALT[k]));
         let chip = Rect::from_min_max(pos2(x, y - 13.0), pos2(e + 5.0, y + 13.0));
-        p.rect_stroke(chip, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
+        let hot = ui::hit(ui, chip, ("field-chip", k));
+        p.rect_stroke(chip, CornerRadius::same(6), Stroke::new(1.0, if hot.hovered() { ACCENT } else { c.border }), StrokeKind::Inside);
+        if hot.clicked() {
+            out.click = Some(Click::Field(k));
+        }
         x = chip.right() + 6.0;
         if x > right {
             break;
@@ -248,11 +263,6 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     let open = app.compose.as_ref().filter(|w| w.id == item.id);
     let edit_h = r.height() - CHIPS_H - BAR_H - FOOT_H - 12.0;
     let bx = Rect::from_min_size(pos2(x0, r.top() + CHIPS_H), vec2(right - x0, BAR_H + edit_h + FOOT_H));
-    // The strip takes a click first; what is drawn on it takes it before.
-    let resp = ui::hit(ui, r, "detail-strip");
-    if resp.clicked() {
-        out.click = Some(Click::Write);
-    }
     p.rect_filled(bx, CornerRadius::same(8), c.bg);
     let bar = Rect::from_min_size(bx.min, vec2(bx.width(), BAR_H));
     p.rect_filled(bar, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, style::head().gamma_multiply(0.6));

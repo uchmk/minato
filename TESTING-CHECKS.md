@@ -89,6 +89,9 @@
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [ ] **8.11** Press `a` on an issue → You are assigned; a toast says so
 - [ ] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change
+- [ ] **8.13** Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel → The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated
+- [ ] **8.14** Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status → Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so
+- [ ] **8.15** With a picker open, click Comment or Close in the box's footer → The picker's change is written first, then the comment is sent (or the item closed)
 
 ## 9. Actions
 
@@ -102,6 +105,8 @@
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [ ] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
+- [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button; the click does what the key does (the toast and the run's change as in 9.4 and 9.5)
+- [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 
 ## 10. Board
 
