@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.9] - 2026-10-13
+
+### Fixed
+
+- マージ済みの PR や discussion で `x` を押したときのトーストが「閉じられるのは開いた issue / PR だけです。」で、閉じた issue を開き直せることと合わなかった。「閉じたり開き直したりできるのは issue とマージしていない PR だけです。」にする。
+
 ## [0.39.8] - 2026-10-13
 
 ### Fixed

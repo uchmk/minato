@@ -84,9 +84,9 @@
 - [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project
 - [x] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
 - [x] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
-- [ ] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
+- [x] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
 - [ ] **8.6c** Press `m` in the list on a ready PR, `Enter` → The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead
-- [ ] **8.6d** Press `x` on a merged item or a discussion → A toast says only an open issue or PR can be closed
+- [x] **8.6d** Press `x` on a merged item or a discussion → A toast says only an issue or an unmerged PR can be closed or reopened
 - [x] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
 - [x] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
 - [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
@@ -194,8 +194,8 @@
 ## 16. Closed items
 
 - [x] **16.1** In the list view press `C` → A toast says closed items are shown; within a few seconds the list holds closed issues and PRs, no discussions
-- [ ] **16.2** On a closed issue press `x`, then `Enter` → A box asks whether to reopen it (`Esc` sends nothing); after `Enter` the toast says it was reopened and GitHub shows it open
-- [ ] **16.3** On a merged PR press `x` → Nothing is sent; a toast says it cannot be closed or reopened
+- [x] **16.2** On a closed issue press `x`, then `Enter` → A box asks whether to reopen it (`Esc` sends nothing); after `Enter` the toast says it was reopened and GitHub shows it open
+- [x] **16.3** On a merged PR press `x` → Nothing is sent; a toast says it cannot be closed or reopened
 - [x] **16.4** Press `C` again → Open items return, discussions included
 
 ## 17. Field order and conflicts
