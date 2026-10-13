@@ -62,6 +62,8 @@ pub struct Item {
     pub ci: Option<Ci>,
     /// The start of its body as plain text, for the card's hover ([`peek_of`]).
     pub peek: String,
+    /// A PR's branch (empty for issues and discussions).
+    pub head: String,
 }
 
 /// The start of a body as GitHub's plain text gives it: no blank lines, at
@@ -412,6 +414,7 @@ mod tests {
             conflict: false,
             mentioned: false,
             peek: String::new(),
+            head: String::new(),
             ci: None,
         }
     }

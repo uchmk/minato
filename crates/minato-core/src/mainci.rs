@@ -54,6 +54,7 @@ pub fn parse(body: &str) -> Result<Vec<Item>, String> {
                 conflict: false,
                 mentioned: false,
                 peek: String::new(),
+                head: String::new(),
                 ci: Some(Ci::Bad),
                 repo,
             }

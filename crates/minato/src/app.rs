@@ -11,7 +11,7 @@ use minato_core::composer::{Picker, Tool};
 use minato_core::github::search;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
-use minato_core::inbox::{Card, Group, InboxState, Mark, Status};
+use minato_core::inbox::{Card, Group, InboxState, Mark, Rule, Status};
 use minato_core::prefs::Settings;
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::mainci;
@@ -97,6 +97,7 @@ impl View {
                 ("a", "key.assign"),
                 ("o", "key.browser"),
                 ("O", "key.outside"),
+                ("c", "key.prompt"),
                 ("f F t", "key.filter"),
                 ("/", "key.find"),
             ],
@@ -324,6 +325,8 @@ pub struct App {
     /// (`O`) and on Linux.
     pub open_url: Option<String>,
     pub open_outside: bool,
+    /// Words to put on the clipboard, taken by the window.
+    pub copy: Option<String>,
     /// The built-in browser's width while it is open, as asked (the frame
     /// keeps it between its bounds).
     pub browser_w: Option<f32>,
@@ -502,6 +505,7 @@ impl App {
             list: ListState::default(),
             detail: None,
             open_url: None,
+            copy: None,
             open_outside: false,
             browser_w: None,
             compose: None,
@@ -1307,7 +1311,8 @@ impl App {
     }
 
     /// A key in the inbox: `d` done, `s` later (tomorrow 9:00), `u` undo,
-    /// `o` the browser, and the filters and the cursor.
+    /// `o` the browser, `c` a prompt for Claude, and the filters and the
+    /// cursor.
     fn inbox_key(&mut self, c: char) -> bool {
         let all = self.inbox_all();
         let card = self.inbox.selected(&all, &self.items);
@@ -1316,6 +1321,12 @@ impl App {
             'm' => self.ask_merge(),
             'x' => self.ask_close(),
             'a' => self.assign_self(),
+            'c' => {
+                if let Some(card) = card {
+                    self.copy = Some(self.prompt(card));
+                    self.say_key("prompt.copied");
+                }
+            }
             'o' => {
                 if let Some(card) = card {
                     self.open_url = Some(self.items[card.at].url.clone());
@@ -1342,6 +1353,21 @@ impl App {
             _ => return self.inbox.key(c, &all, &self.items),
         }
         true
+    }
+
+    /// What to paste into a Claude Code session about `card`: the item, why
+    /// it is in the inbox and what to do (the rule's ask).
+    fn prompt(&self, card: Card) -> String {
+        let item = &self.items[card.at];
+        let head = match (item.number, item.kind) {
+            (0, _) => format!("{}: {}", item.repo, item.title),
+            (n, Kind::Pr) => format!("{} PR #{n}: {}", item.repo, item.title),
+            (n, Kind::Issue) => format!("{} issue #{n}: {}", item.repo, item.title),
+            (n, Kind::Discussion) => format!("{} discussion #{n}: {}", item.repo, item.title),
+        };
+        let why = self.tr(card.rule.map_or("prompt.why_wait", Rule::why));
+        let ask = self.tr(card.rule.map_or("prompt.ask_wait", Rule::ask));
+        format!("{head}\n{}\n\n{}: {why}\n{}\n{ask}\n", item.url, self.tr("prompt.why"), self.tr("prompt.read"))
     }
 
     /// Keep the marks in `path`: read them now (at start-up), and write
@@ -2199,6 +2225,22 @@ mod tests {
     }
 
     #[test]
+    fn c_copies_a_prompt_for_claude() {
+        let mut a = with_pr();
+        a.view = View::Inbox;
+        a.items[0].url = "https://github.com/uchmk/kura/pull/3".into();
+        assert!(a.feed('c'));
+        let text = a.copy.take().unwrap();
+        assert!(text.starts_with("uchmk/kura PR #3: t\nhttps://github.com/uchmk/kura/pull/3\n\n"), "{text}");
+        assert!(text.contains(a.tr("prompt.why_wait")) && text.contains(a.tr("prompt.ask_wait")), "{text}");
+        assert!(a.toast.is_some());
+        // A card a rule took in asks what the rule wants.
+        a.items[0].ci = Some(minato_core::list::Ci::Bad);
+        a.feed('c');
+        assert!(a.copy.take().unwrap().contains(a.tr("ask.red_ci")));
+    }
+
+    #[test]
     fn digits_open_the_views() {
         let mut a = app();
         assert_eq!(a.view, View::Inbox);
@@ -2298,6 +2340,7 @@ mod tests {
             conflict: false,
             mentioned: false,
             peek: String::new(),
+            head: String::new(),
             ci: None,
         }
     }

@@ -14,7 +14,7 @@ pub fn items_query() -> String {
     format!(
         "query($q: String!, $n: Int!) {{ search(query: $q, type: ISSUE, first: $n) {{ nodes {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable assignees(first: 5) {{ nodes {{ login }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName assignees(first: 5) {{ nodes {{ login }} }} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}"
     )
 }
@@ -25,7 +25,7 @@ pub fn item_query() -> String {
     format!(
         "query($url: URI!) {{ resource(url: $url) {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable assignees(first: 5) {{ nodes {{ login }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName assignees(first: 5) {{ nodes {{ login }} }} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} \
 ... on Discussion {{ {ITEM_COMMON} }} }} }}"
     )
@@ -138,6 +138,8 @@ struct RawItem {
     #[serde(rename = "isDraft", default)]
     is_draft: bool,
     mergeable: Option<String>,
+    #[serde(rename = "headRefName")]
+    head: Option<String>,
     assignees: Option<Nodes<Login>>,
     commits: Option<Nodes<CommitNode>>,
     #[serde(rename = "bodyText")]
@@ -209,6 +211,7 @@ fn item_of(n: RawItem) -> Option<Item> {
         mentioned: false,
         ci,
         peek: n.body_text.as_deref().map(peek_of).unwrap_or_default(),
+        head: n.head.unwrap_or_default(),
     })
 }
 

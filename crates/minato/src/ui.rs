@@ -534,7 +534,7 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     column(card.left() + 20.0 + col_w, &right);
     if rules {
         // One row per rule (its key, reason and what to do), then the keys
-        // that put any card away.
+        // for any card.
         let x = card.left() + 20.0;
         let (why_x, do_x, end) = (x + 70.0, x + 70.0 + (w - 110.0) * 0.4, card.right() - 20.0);
         let mut y = card.top() + 50.0 + cols;
@@ -558,8 +558,8 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
 }
 
-/// The keys that put any inbox card away, after the rules in the help.
-const HELP_MARKS: [(&str, &str, &str); 2] = [("d", "help.any_card", "do.done"), ("s", "help.any_card", "do.later")];
+/// The keys for any inbox card, after the rules in the help.
+const HELP_MARKS: [(&str, &str, &str); 3] = [("c", "help.any_card", "do.prompt"), ("d", "help.any_card", "do.done"), ("s", "help.any_card", "do.later")];
 
 /// The keys over the notifications, for the help.
 const NOTES_KEYS: [(&str, &str); 7] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];

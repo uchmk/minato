@@ -257,6 +257,9 @@ impl eframe::App for Minato {
         }
         self.browser_ui(ui, frame, page);
         ui::toast(&ctx, &self.app, page.filter(|_| self.browser.is_some()));
+        if let Some(text) = self.app.copy.take() {
+            ctx.copy_text(text);
+        }
         if let Some(url) = self.app.open_url.take() {
             if std::mem::take(&mut self.app.open_outside) || !ito_browser::EMBEDDED {
                 ctx.open_url(egui::OpenUrl::new_tab(url));

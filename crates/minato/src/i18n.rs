@@ -91,6 +91,22 @@ const EN: &[(&str, &str)] = &[
     ("do.main_red", "Open it and have Claude fix it"),
     ("do.done", "Done with it: it moves to \"Done today\" and goes after a day"),
     ("do.later", "Not now: hidden until 9:00 tomorrow"),
+    ("do.prompt", "Hand it to Claude: copies a prompt to paste into a session"),
+    ("key.prompt", "Prompt for Claude"),
+    ("prompt.copied", "Copied a prompt for Claude: paste it into a Claude Code session"),
+    ("prompt.why", "In minato's inbox because"),
+    ("prompt.why_wait", "It is mine and waits on someone else"),
+    ("prompt.read", "Read it and its comments with `gh`, and follow the repository's CLAUDE.md."),
+    ("prompt.ask_wait", "See where it stands and tell me what to do next."),
+    ("ask.red_ci", "Find why its CI failed, fix it and push."),
+    ("ask.mergeable", "Its CI is green. Check the changes and merge it if nothing is wrong."),
+    ("ask.question", "Sort out the choices and recommend one; I decide the answer."),
+    ("ask.needs_owner", "The votes are split. Compare their reasons and recommend one; I comment the answer."),
+    ("ask.finding", "Reproduce it, find the cause and fix it. When fixed, write the version on the issue and close it."),
+    ("ask.lane_stalled", "Find why the lane stopped, from its Lane status issue and the task's LastTaskResult."),
+    ("ask.dependabot", "Check what the update changes and what it touches; merge it if the CI is green."),
+    ("ask.mention", "Read the comment that mentions me and draft a reply; do not post it."),
+    ("ask.main_red", "Find why the CI on the default branch failed, fix it and push."),
     ("key.ends", "The first or the last (the top or the end of a detail)"),
     ("key.views", "Open a view"),
     ("key.cycle", "Next or previous view"),
@@ -384,6 +400,22 @@ const JA: &[(&str, &str)] = &[
     ("do.main_red", "開いて Claude に直させる"),
     ("do.done", "済んだら押す。「今日済んだ」に移り、1 日で消える"),
     ("do.later", "今はしない。明日 9:00 まで隠す"),
+    ("do.prompt", "Claude に任せる。セッションに貼るプロンプトをコピーする"),
+    ("key.prompt", "Claude へのプロンプト"),
+    ("prompt.copied", "Claude へのプロンプトをコピーしました。Claude Code のセッションに貼ってください"),
+    ("prompt.why", "minato の受信箱に出ている理由"),
+    ("prompt.why_wait", "私のもので、ほかの人を待っています"),
+    ("prompt.read", "`gh` で本文とコメントを読み、リポジトリの CLAUDE.md に従ってください。"),
+    ("prompt.ask_wait", "今どうなっているかを確かめ、次にすることを教えてください。"),
+    ("ask.red_ci", "CI が落ちた理由を調べて直し、push してください。"),
+    ("ask.mergeable", "CI は緑です。変更を確かめ、問題が無ければマージしてください。"),
+    ("ask.question", "選択肢を整理して推奨を 1 つ示してください。答えは私が決めます。"),
+    ("ask.needs_owner", "票が割れています。それぞれの理由を比べて推奨を 1 つ示してください。回答は私がコメントします。"),
+    ("ask.finding", "再現して原因を調べ、直してください。直したら版を書いて issue を閉じてください。"),
+    ("ask.lane_stalled", "Lane status の issue とタスクの LastTaskResult から、レーンが止まった理由を調べてください。"),
+    ("ask.dependabot", "更新の中身と影響を確かめ、CI が緑ならマージしてください。"),
+    ("ask.mention", "メンションされたコメントを読み、返事の案を書いてください（投稿はしない）。"),
+    ("ask.main_red", "既定のブランチの CI が落ちた理由を調べて直し、push してください。"),
     ("key.ends", "先頭・末尾へ（詳しくは上と終わりへ）"),
     ("key.views", "ビューを開く"),
     ("key.cycle", "次・前のビュー"),
@@ -621,7 +653,7 @@ mod tests {
     fn the_rules_and_the_notifications_have_words() {
         let has = |k: &str| EN.iter().any(|(key, _)| *key == k);
         for rule in minato_core::inbox::RULES {
-            for k in [rule.why(), rule.note(), rule.next().1, rule.todo()] {
+            for k in [rule.why(), rule.note(), rule.next().1, rule.todo(), rule.ask()] {
                 assert!(has(k), "{k}");
             }
         }

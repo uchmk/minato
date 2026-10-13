@@ -111,6 +111,7 @@ mod tests {
             mentioned: false,
             ci: None,
             peek: "Reads it from common.toml.".into(),
+            head: String::new(),
         }
     }
 

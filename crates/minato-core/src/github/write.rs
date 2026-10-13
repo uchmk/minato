@@ -143,6 +143,7 @@ mod tests {
             conflict: false,
             mentioned: false,
             peek: String::new(),
+            head: String::new(),
             ci: None,
         }
     }

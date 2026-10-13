@@ -67,6 +67,21 @@ impl Rule {
         }
     }
 
+    /// The i18n key of what a prompt for Claude asks it to do (`c`).
+    pub fn ask(self) -> &'static str {
+        match self {
+            Rule::RedCi => "ask.red_ci",
+            Rule::Mergeable => "ask.mergeable",
+            Rule::Question => "ask.question",
+            Rule::NeedsOwner => "ask.needs_owner",
+            Rule::Finding => "ask.finding",
+            Rule::LaneStalled => "ask.lane_stalled",
+            Rule::Dependabot => "ask.dependabot",
+            Rule::Mention => "ask.mention",
+            Rule::MainRed => "ask.main_red",
+        }
+    }
+
     /// The key to press next and the i18n key of its name.
     pub fn next(self) -> (&'static str, &'static str) {
         match self {
@@ -133,6 +148,14 @@ impl Rules {
 
 fn has_label(item: &Item, name: &str) -> bool {
     item.labels.iter().any(|l| l.name == name)
+}
+
+/// Made by the lanes and the workflows under the owner's account (a re-test
+/// list, a lane's status, its findings and PRs): nobody is waited on, so it is
+/// not in "waiting" (a rule still takes it in).
+pub fn automatic(item: &Item) -> bool {
+    item.labels.iter().any(|l| matches!(l.name.as_str(), "retest" | "lane-status" | "lane-review") || l.name.starts_with("lane:"))
+        || ["test/win-", "test/arm-", "rescue/"].iter().any(|b| item.head.starts_with(b))
 }
 
 /// The first rule that takes `item` in, if any.
@@ -229,7 +252,7 @@ pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Ma
             _ => {
                 if rule.is_some() {
                     Group::Mine
-                } else if item.author == me && item.kind != Kind::Discussion {
+                } else if item.author == me && item.kind != Kind::Discussion && !automatic(item) {
                     Group::Wait
                 } else {
                     continue;
@@ -429,6 +452,7 @@ mod tests {
             conflict: false,
             mentioned: false,
             peek: String::new(),
+            head: String::new(),
             ci: None,
         }
     }
@@ -515,6 +539,18 @@ mod tests {
         // A day later it is gone.
         let c = cards(&items, "me", &Rules::default(), &marks, 900 + DAY + 1);
         assert!(c.iter().all(|c| items[c.at].id != "red"));
+    }
+
+    #[test]
+    fn what_the_lanes_make_does_not_wait() {
+        let mut lane = item("lane", Kind::Pr, "me");
+        lane.head = "test/win-17-32".into();
+        let items = vec![labelled(item("retest", Kind::Issue, "me"), "retest"), labelled(item("status", Kind::Issue, "me"), "lane-status"), labelled(item("found", Kind::Issue, "me"), "lane:win"), lane, item("mine", Kind::Pr, "me")];
+        let c = cards(&items, "me", &Rules::default(), &HashMap::new(), 0);
+        assert_eq!(c.iter().map(|c| items[c.at].id.as_str()).collect::<Vec<_>>(), ["mine"]);
+        // A rule still takes one in.
+        let found = labelled(items[2].clone(), "finding");
+        assert_eq!(cards(&[found], "me", &Rules::default(), &HashMap::new(), 0)[0].group, Group::Mine);
     }
 
     #[test]
