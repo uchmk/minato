@@ -10,7 +10,7 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
 - **uchmk のアプリの共通仕様**（common.toml・設定の画面・テーマ・時計、`ito-common`・`ito-theme`・`ito-prefs`）は
   ito の [docs/common-spec.md](https://github.com/uchmk/ito/blob/main/docs/common-spec.md)。これに従う。
 - Cargo の workspace。クレートは `crates/` の下に置く。版はルートの `Cargo.toml` の `[workspace.package]` で 1 つ。
-- **push の前に `scripts/verify.sh` を 1 回回す。**最後の行が `ALL OK: …` なら push してよい（test、clippy を Linux と `x86_64-pc-windows-msvc` の両方で `-D warnings`）。
+- **push の前に `scripts/verify.sh` を 1 回回す。**最後の行が `ALL OK: …` なら push してよい（test、clippy を Linux と `x86_64-pc-windows-msvc` の両方で `-D warnings`。Windows 向けの clippy は Windows の上でだけ回る。ring が MSVC の道具を要るため。Linux では CI の `clippy-windows` に任せる）。
 
 ## 作業ルール
 

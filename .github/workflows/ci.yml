@@ -40,13 +40,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: rustup target add x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo clippy --workspace --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings
+
+  # On Windows itself, not checked from Linux with --target: ring (rustls,
+  # under ureq) builds its C for MSVC only with the MSVC tools.
+  clippy-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   # ARM64, Windows and Linux: the tests on GitHub's ARM64 runners.
   # On a push to main and by hand, not on a pull request -- the x64 jobs gate
