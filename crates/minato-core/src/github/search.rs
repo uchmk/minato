@@ -19,6 +19,23 @@ commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }}
     )
 }
 
+/// One issue, PR or discussion by its page, open or closed (for a
+/// notification of one the searches do not list). Variables: `url`.
+pub fn item_query() -> String {
+    format!(
+        "query($url: URI!) {{ resource(url: $url) {{ __typename \
+... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable assignees(first: 5) {{ nodes {{ login }} }} \
+commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} \
+... on Discussion {{ {ITEM_COMMON} }} }} }}"
+    )
+}
+
+/// The variables of `item_query`.
+pub fn item_vars(url: &str) -> String {
+    serde_json::json!({ "url": url }).to_string()
+}
+
 /// The search for discussions. Variables: `q`, `n`.
 pub fn discussions_query() -> String {
     format!(
@@ -132,6 +149,11 @@ struct Search {
     search: Nodes<RawItem>,
 }
 
+#[derive(Deserialize)]
+struct Resource {
+    resource: Option<RawItem>,
+}
+
 /// Rollup state to a CI mark.
 pub fn ci_of(state: &str) -> Ci {
     match state {
@@ -145,43 +167,49 @@ pub fn ci_of(state: &str) -> Ci {
 /// returns whatever matched) are skipped.
 pub fn parse_items(body: &str) -> Result<Vec<Item>, String> {
     let d: Data<Search> = serde_json::from_str(body).map_err(|e| format!("unexpected search answer: {e}"))?;
-    let s = unwrap(d)?;
-    let mut out = Vec::new();
-    for n in s.search.nodes {
-        let kind = match n.typename.as_str() {
-            "Issue" => Kind::Issue,
-            "PullRequest" => Kind::Pr,
-            "Discussion" => Kind::Discussion,
-            _ => continue,
-        };
-        let (Some(id), Some(number), Some(title), Some(repo)) = (n.id, n.number, n.title, n.repository) else { continue };
-        let ci = n
-            .commits
-            .and_then(|c| c.nodes.into_iter().next())
-            .and_then(|c| c.commit.rollup)
-            .map(|r| ci_of(&r.state));
-        out.push(Item {
-            id,
-            kind,
-            repo: repo.name_with_owner,
-            number,
-            title,
-            url: n.url.unwrap_or_default(),
-            author: n.author.map_or_else(|| "ghost".to_string(), |a| a.login),
-            labels: n.labels.map_or_else(Vec::new, |l| l.nodes.into_iter().map(|l| Label { name: l.name, color: l.color }).collect()),
-            assignees: n.assignees.map_or_else(Vec::new, |a| a.nodes.into_iter().map(|a| a.login).collect()),
-            comments: n.comments.map_or(0, |c| c.total_count),
-            created_at: n.created_at.unwrap_or_default(),
-            updated_at: n.updated_at.unwrap_or_default(),
-            draft: n.is_draft,
-            merged: n.state.as_deref() == Some("MERGED"),
-            conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
-            mentioned: false,
-            ci,
-            peek: n.body_text.as_deref().map(peek_of).unwrap_or_default(),
-        });
-    }
-    Ok(out)
+    Ok(unwrap(d)?.search.nodes.into_iter().filter_map(item_of).collect())
+}
+
+/// The item of an `item_query` answer; `None` when the page is not an
+/// issue, PR or discussion.
+pub fn parse_item(body: &str) -> Result<Option<Item>, String> {
+    let d: Data<Resource> = serde_json::from_str(body).map_err(|e| format!("unexpected item answer: {e}"))?;
+    Ok(unwrap(d)?.resource.and_then(item_of))
+}
+
+fn item_of(n: RawItem) -> Option<Item> {
+    let kind = match n.typename.as_str() {
+        "Issue" => Kind::Issue,
+        "PullRequest" => Kind::Pr,
+        "Discussion" => Kind::Discussion,
+        _ => return None,
+    };
+    let (Some(id), Some(number), Some(title), Some(repo)) = (n.id, n.number, n.title, n.repository) else { return None };
+    let ci = n
+        .commits
+        .and_then(|c| c.nodes.into_iter().next())
+        .and_then(|c| c.commit.rollup)
+        .map(|r| ci_of(&r.state));
+    Some(Item {
+        id,
+        kind,
+        repo: repo.name_with_owner,
+        number,
+        title,
+        url: n.url.unwrap_or_default(),
+        author: n.author.map_or_else(|| "ghost".to_string(), |a| a.login),
+        labels: n.labels.map_or_else(Vec::new, |l| l.nodes.into_iter().map(|l| Label { name: l.name, color: l.color }).collect()),
+        assignees: n.assignees.map_or_else(Vec::new, |a| a.nodes.into_iter().map(|a| a.login).collect()),
+        comments: n.comments.map_or(0, |c| c.total_count),
+        created_at: n.created_at.unwrap_or_default(),
+        updated_at: n.updated_at.unwrap_or_default(),
+        draft: n.is_draft,
+        merged: n.state.as_deref() == Some("MERGED"),
+        conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
+        mentioned: false,
+        ci,
+        peek: n.body_text.as_deref().map(peek_of).unwrap_or_default(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -323,8 +351,20 @@ mod tests {
     }
 
     #[test]
+    fn one_item_is_read_by_its_page() {
+        let body = r#"{"data":{"resource":{"__typename":"PullRequest","id":"PR_9","number":9,"title":"Fix","url":"https://github.com/u/r/pull/9","createdAt":"2026-10-01T00:00:00Z","updatedAt":"2026-10-02T00:00:00Z","author":{"login":"u"},"repository":{"nameWithOwner":"u/r"},"labels":{"nodes":[]},"comments":{"totalCount":1},"bodyText":"b","state":"MERGED","isDraft":false,"mergeable":"UNKNOWN","assignees":{"nodes":[]},"commits":{"nodes":[]}}}}"#;
+        let i = parse_item(body).unwrap().unwrap();
+        assert_eq!((i.id.as_str(), i.number, i.merged, i.kind), ("PR_9", 9, true, Kind::Pr));
+        assert_eq!(parse_item(r#"{"data":{"resource":{"__typename":"Commit"}}}"#), Ok(None));
+        assert_eq!(parse_item(r#"{"data":{"resource":null}}"#), Ok(None));
+        assert!(parse_item(r#"{"data":null,"errors":[{"message":"nope"}]}"#).is_err());
+        assert_eq!(item_vars("https://github.com/u/r/pull/9"), r#"{"url":"https://github.com/u/r/pull/9"}"#);
+    }
+
+    #[test]
     fn the_queries_name_their_variables() {
         assert!(items_query().contains("$q: String!"));
+        assert!(item_query().contains("resource(url: $url)"));
         assert!(discussions_query().contains("type: DISCUSSION"));
         assert!(detail_query().contains("$id: ID!"));
     }

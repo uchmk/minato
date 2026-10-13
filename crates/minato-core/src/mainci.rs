@@ -18,6 +18,14 @@ pub fn is_stub(item: &Item) -> bool {
     item.id.starts_with("main:")
 }
 
+/// The branch a stub says is red.
+pub fn branch(item: &Item) -> Option<&str> {
+    item.title.strip_prefix(RED).filter(|_| is_stub(item))
+}
+
+/// A stub's title, before the branch.
+const RED: &str = "CI is red on ";
+
 /// A stub for each repository whose default branch is red.
 pub fn parse(body: &str) -> Result<Vec<Item>, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
@@ -33,7 +41,7 @@ pub fn parse(body: &str) -> Result<Vec<Item>, String> {
                 id: format!("main:{repo}"),
                 kind: Kind::Issue,
                 number: 0,
-                title: format!("CI is red on {}", text(n, "/defaultBranchRef/name")),
+                title: format!("{RED}{}", text(n, "/defaultBranchRef/name")),
                 url: format!("{}/actions", text(n, "/url")),
                 author: String::new(),
                 labels: Vec::new(),
@@ -69,6 +77,7 @@ mod tests {
         assert_eq!(v[0].id, "main:u/a");
         assert_eq!(v[0].url, "https://github.com/u/a/actions");
         assert!(is_stub(&v[0]));
+        assert_eq!(branch(&v[0]), Some("main"));
         assert!(parse(r#"{"errors":[{"message":"nope"}]}"#).is_err());
     }
 }

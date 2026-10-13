@@ -8,11 +8,13 @@ use std::collections::HashMap;
 use minato_core::actions::{self, ActState, Artifact, Job, Run};
 use minato_core::board::{self, BoardState, Project};
 use minato_core::composer::{Picker, Tool};
+use minato_core::github::search;
 use minato_core::github::worker::Call;
 use minato_core::github::write;
 use minato_core::inbox::{Card, Group, InboxState, Mark, Status};
 use minato_core::prefs::Settings;
 use minato_core::list::{Detail, Item, Kind, ListState};
+use minato_core::mainci;
 use minato_core::notes::{self, Note, NotesState};
 
 use minato_core::workflow::{self, Workflow};
@@ -310,6 +312,9 @@ pub struct App {
     searches_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The list shows closed issues and PRs (`C`), so `x` opens them again.
     pub show_closed: bool,
+    /// Items fetched one by one for a notification the searches do not
+    /// list (a merged PR, a closed issue): shown in the list, not the inbox.
+    pub fetched: Vec<Item>,
     /// The list view's selection.
     pub list: ListState,
     /// The detail of one item (its node id), once fetched.
@@ -493,6 +498,7 @@ impl App {
             searches_text: String::new(),
             searches_tx: None,
             show_closed: false,
+            fetched: Vec::new(),
             list: ListState::default(),
             detail: None,
             open_url: None,
@@ -943,7 +949,15 @@ impl App {
             'o' => self.open_url = Some(page),
             '\n' => {
                 self.mode = Mode::Main;
-                if !self.open_item(&note.url) && !self.open_run(&note) {
+                if self.open_item(&note.url) || self.open_red_main(&note) || self.open_run(&note) {
+                    return;
+                }
+                if notes::number(&note.url).is_some() {
+                    // Not one the searches list (merged, closed): fetched
+                    // and shown in the list (see `show_fetched`).
+                    self.queue(&format!("fetch:{}", note.url), Call::Graphql { query: search::item_query(), variables: search::item_vars(&note.url) }, None);
+                    self.say_key("notes.fetching");
+                } else {
                     self.open_url = Some(page);
                 }
             }
@@ -959,6 +973,17 @@ impl App {
         let of = |r: &&Run| r.repo == note.repo && r.workflow == workflow && r.branch == branch;
         let newest = |done: bool| self.runs.iter().enumerate().filter(|(_, r)| of(r) && (!done || r.updated_at <= note.updated_at)).max_by(|a, b| a.1.started_at.cmp(&b.1.started_at)).map(|(k, _)| k);
         newest(true).or_else(|| newest(false))
+    }
+
+    /// The inbox card of the red CI of a notification's repository, when
+    /// the notification is of a run on the branch the card says is red.
+    fn open_red_main(&mut self, note: &Note) -> bool {
+        let Some((_, branch)) = notes::workflow_run(note) else { return false };
+        let id = format!("main:{}", note.repo);
+        let Some(at) = self.items.iter().position(|i| i.id == id && mainci::branch(i) == Some(branch)) else { return false };
+        let Some(card) = self.inbox_all().into_iter().find(|c| c.at == at) else { return false };
+        self.open_card(card);
+        true
     }
 
     /// Show the run a notification is about in Actions, the filters
@@ -979,8 +1004,14 @@ impl App {
     /// Where a notification's thread is in minato, by the page it opens:
     /// its row in the items, and its inbox card unless that is done.
     pub fn note_place(&self, url: &str) -> (Option<usize>, Option<Card>) {
+        let (at, card) = self.place(url);
+        (at, card.filter(|c| c.group != Group::Done))
+    }
+
+    /// The row of the item whose page is `url`, and its inbox card.
+    fn place(&self, url: &str) -> (Option<usize>, Option<Card>) {
         let at = self.items.iter().position(|i| i.url == url);
-        let card = at.and_then(|at| self.inbox_all().into_iter().find(|c| c.at == at && c.group != Group::Done));
+        let card = at.and_then(|at| self.inbox_all().into_iter().find(|c| c.at == at));
         (at, card)
     }
 
@@ -1037,20 +1068,33 @@ impl App {
     }
 
     /// Open the item whose page is `url`: in the inbox if it is a card
-    /// there, else in the list. False if minato does not have it.
+    /// there (done today too), else in the list. False if minato does not
+    /// have it.
     fn open_item(&mut self, url: &str) -> bool {
-        let (Some(at), card) = self.note_place(url) else { return false };
-        self.find_clear();
+        let (Some(at), card) = self.place(url) else { return false };
         if let Some(card) = card {
-            self.inbox = InboxState { undo: std::mem::take(&mut self.inbox.undo), ..InboxState::default() };
-            let all = self.inbox_all();
-            self.inbox.sel = self.inbox.shown(&all, &self.items).iter().position(|c| *c == card).unwrap_or(0);
-            self.view = View::Inbox;
+            self.open_card(card);
             return true;
         }
         let id = self.items[at].id.clone();
         self.show_in_list(&id);
         self.view == View::List
+    }
+
+    /// The inbox with `card` selected, its filters cleared.
+    fn open_card(&mut self, card: Card) {
+        self.find_clear();
+        self.inbox = InboxState { undo: std::mem::take(&mut self.inbox.undo), ..InboxState::default() };
+        let all = self.inbox_all();
+        self.inbox.sel = self.inbox.shown(&all, &self.items).iter().position(|c| *c == card).unwrap_or(0);
+        self.view = View::Inbox;
+    }
+
+    /// An item fetched for a notification has come (it is in the items
+    /// now): the list shows it.
+    pub fn show_fetched(&mut self, id: &str) {
+        self.mode = Mode::Main;
+        self.show_in_list(id);
     }
 
     /// A click in a view.
@@ -1251,10 +1295,15 @@ impl App {
         Some(self.settings.owner.as_str()).filter(|o| !o.is_empty()).or(self.viewer.as_deref())
     }
 
-    /// Every card of the inbox now, before its filters.
+    /// Every card of the inbox now, before its filters (none of an item
+    /// fetched for a notification).
     pub fn inbox_all(&self) -> Vec<Card> {
         let me = self.viewer.as_deref().unwrap_or("");
-        minato_core::inbox::cards(&self.items, me, &self.settings.rules, &self.marks, now_epoch())
+        let mut all = minato_core::inbox::cards(&self.items, me, &self.settings.rules, &self.marks, now_epoch());
+        if !self.fetched.is_empty() {
+            all.retain(|c| !self.fetched.iter().any(|f| f.id == self.items[c.at].id));
+        }
+        all
     }
 
     /// A key in the inbox: `d` done, `s` later (tomorrow 9:00), `u` undo,
@@ -1935,6 +1984,58 @@ mod tests {
         a.feed('n');
         a.note_click(NoteClick::Open(0));
         assert_eq!(a.open_url.as_deref(), Some("https://github.com/uchmk/kura/actions"));
+    }
+
+    #[test]
+    fn a_note_on_a_card_done_today_opens_it_in_the_inbox() {
+        let mut a = with_pr();
+        a.items[0].url = "https://github.com/uchmk/kura/pull/3".into();
+        a.marks.insert("P1".into(), Mark::Done(now_epoch()));
+        a.notes = vec![Note { url: a.items[0].url.clone(), ..note("1") }];
+        assert_eq!(a.note_place(&a.items[0].url).1, None, "no badge for a done card");
+        a.feed('n');
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.view, View::Inbox);
+        assert_eq!(a.selected().map(|i| i.id.as_str()), Some("P1"));
+        assert!(a.outbox.iter().all(|o| !o.key.starts_with("fetch:")));
+    }
+
+    #[test]
+    fn a_runs_note_opens_the_red_main_card_before_actions() {
+        let mut a = with_pr();
+        a.items.push(Item { id: "main:uchmk/kura".into(), title: "CI is red on main".into(), number: 0, author: String::new(), ..pr("main:uchmk/kura") });
+        a.runs = vec![run(1, actions::Status::Bad, None)];
+        let ci = Note { repo: "uchmk/kura".into(), kind: "CheckSuite".into(), title: "check workflow run failed for main branch".into(), url: "https://github.com/uchmk/kura/actions".into(), ..note("1") };
+        a.notes = vec![Note { title: "check workflow run failed for dev branch".into(), ..ci.clone() }, ci];
+        a.feed('n');
+        a.note_click(NoteClick::Open(1));
+        assert_eq!(a.view, View::Inbox);
+        assert_eq!(a.selected().map(|i| i.id.as_str()), Some("main:uchmk/kura"));
+        // Another branch's run is not the red main: Actions.
+        a.runs[0].branch = "dev".into();
+        a.feed('n');
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.view, View::Actions);
+    }
+
+    #[test]
+    fn a_note_on_a_closed_pr_fetches_it_into_the_list() {
+        let mut a = with_pr();
+        let url = "https://github.com/uchmk/kura/pull/7";
+        a.notes = vec![Note { url: url.into(), kind: "PullRequest".into(), ..note("1") }];
+        a.feed('n');
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.open_url, None, "not the browser");
+        assert!(a.outbox.iter().any(|o| o.key == format!("fetch:{url}")));
+        // What Net does when it comes.
+        let got = Item { id: "P7".into(), number: 7, url: url.into(), merged: true, ..pr("P7") };
+        a.fetched.push(got.clone());
+        a.items.push(got);
+        a.view = View::Board;
+        a.show_fetched("P7");
+        assert_eq!(a.view, View::List);
+        assert_eq!(a.selected().map(|i| i.id.as_str()), Some("P7"));
+        assert!(a.inbox_all().iter().all(|c| a.items[c.at].id != "P7"), "not in the inbox");
     }
 
     #[test]

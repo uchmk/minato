@@ -30,7 +30,7 @@ use minato_core::notes;
 use minato_core::workflow;
 use minato_core::github::token::Source;
 use minato_core::github::types::{parse_rate_limit, parse_viewer};
-use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_items};
+use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
 use minato_core::github::write::{self, parse_names};
 use minato_core::github::{client, Client, Etags, Rate, Token, UreqTransport};
@@ -154,10 +154,13 @@ struct RunMemo {
 }
 
 impl Net {
-    /// Merge what the searches found into `app.items`: mentions marked, stubs
-    /// for red main branches added (not over closed items).
+    /// Merge what the searches found into `app.items`: mentions marked, the
+    /// items fetched for notifications added (until a search lists them),
+    /// stubs for red main branches added (not over closed items).
     fn rebuild(&self, app: &mut App) {
         let mut all: Vec<Item> = self.found.concat();
+        app.fetched.retain(|f| !all.iter().any(|i| i.id == f.id));
+        all.extend(app.fetched.iter().cloned());
         for i in &mut all {
             i.mentioned = self.mentioned.contains(&i.id);
         }
@@ -358,6 +361,17 @@ impl Net {
             "notes" => match notes::parse(body) {
                 Ok(v) => app.take_notes(v),
                 Err(e) => app.say(e),
+            },
+            k if k.starts_with("fetch:") => match parse_item(body) {
+                Ok(Some(item)) => {
+                    let id = item.id.clone();
+                    app.fetched.retain(|f| f.id != id);
+                    app.fetched.push(item);
+                    self.rebuild(app);
+                    app.show_fetched(&id);
+                }
+                // Not something the list can show: its page.
+                _ => app.open_url = Some(k["fetch:".len()..].to_string()),
             },
             k if k.starts_with("note:") => {
                 if let Some(done) = self.pending.remove(k) {
@@ -678,6 +692,10 @@ impl Net {
                     }
                     if reply.key.starts_with("board:") {
                         self.board_asked = None;
+                    }
+                    if let Some(url) = reply.key.strip_prefix("fetch:") {
+                        app.open_url = Some(url.to_string());
+                        continue;
                     }
                     if reply.key.starts_with("note:") {
                         self.next_notes = Instant::now();
