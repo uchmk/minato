@@ -240,6 +240,10 @@ const DAY: i64 = 24 * 3600;
 pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Mark>, now: i64) -> Vec<Card> {
     let mut out = Vec::new();
     for (at, item) in items.iter().enumerate() {
+        // The list's `C` brings closed ones in; they are nobody's turn.
+        if item.closed || item.merged {
+            continue;
+        }
         let rule = why(item, me, rules);
         let group = match marks.get(&item.id) {
             Some(Mark::Later(until)) if *until > now => continue,
@@ -450,6 +454,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            closed: false,
             conflict: false,
             mentioned: false,
             peek: String::new(),
@@ -540,6 +545,17 @@ mod tests {
         // A day later it is gone.
         let c = cards(&items, "me", &Rules::default(), &marks, 900 + DAY + 1);
         assert!(c.iter().all(|c| items[c.at].id != "red"));
+    }
+
+    #[test]
+    fn closed_and_merged_ones_make_no_card() {
+        let mut closed = labelled(item("closed", Kind::Issue, "x"), "finding");
+        closed.closed = true;
+        let mut merged = item("merged", Kind::Pr, "me");
+        merged.merged = true;
+        let mut marks = HashMap::new();
+        marks.insert("closed".to_string(), Mark::Done(900));
+        assert!(cards(&[closed, merged], "me", &Rules::default(), &marks, 1000).is_empty());
     }
 
     #[test]

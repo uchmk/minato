@@ -2,6 +2,8 @@
 //! (the inputs of `workflow_dispatch`) and the log of a job. They take the
 //! keys themselves, as `K`, so they can be tested without a window.
 
+use std::cell::Cell;
+
 use minato_core::actions::Run;
 use minato_core::workflow::Input;
 
@@ -39,7 +41,10 @@ pub struct LogView {
     pub name: String,
     /// `None` while it is being fetched.
     pub lines: Option<Vec<String>>,
+    /// The first row shown, the long lines wrapped.
     pub scroll: usize,
+    /// How far it scrolls before its end shows, in rows; set as it is drawn.
+    pub last: Cell<usize>,
 }
 
 /// What a key did to the box.
@@ -105,12 +110,12 @@ impl Form {
 
 impl LogView {
     pub fn new(job_id: u64, name: String) -> LogView {
-        LogView { job_id, name, lines: None, scroll: 0 }
+        LogView { job_id, name, lines: None, scroll: 0, last: Cell::new(0) }
     }
 
     pub fn key(&mut self, k: K) -> Out {
-        let n = self.lines.as_ref().map_or(0, Vec::len);
-        let last = n.saturating_sub(1);
+        let last = self.last.get();
+        self.scroll = self.scroll.min(last);
         match k {
             K::Esc | K::Char('q') => return Out::Close,
             K::Down | K::Char('j') => self.scroll = (self.scroll + 1).min(last),
@@ -177,10 +182,16 @@ mod tests {
         l.key(K::Char('j'));
         assert_eq!(l.scroll, 0);
         l.lines = Some((0..50).map(|i| i.to_string()).collect());
+        l.last.set(30);
         l.key(K::Char('G'));
-        assert_eq!(l.scroll, 49);
+        assert_eq!(l.scroll, 30);
         l.key(K::PageUp);
-        assert_eq!(l.scroll, 29);
+        assert_eq!(l.scroll, 10);
+        // A taller window shows more, and the next key starts from its end.
+        l.key(K::Char('G'));
+        l.last.set(20);
+        l.key(K::Char('k'));
+        assert_eq!(l.scroll, 19);
         l.key(K::Char('g'));
         assert_eq!(l.scroll, 0);
         assert_eq!(l.key(K::Esc), Out::Close);

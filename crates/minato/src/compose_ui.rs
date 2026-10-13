@@ -163,7 +163,10 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             child.set_clip_rect(field);
             let rows = ((field.height() / 19.0) as usize).max(2);
             let edit = egui::TextEdit::multiline(&mut c.text).id(id).frame(egui::Frame::NONE).desired_width(field.width()).desired_rows(rows).lock_focus(true).font(FontId::proportional(13.5));
-            child.add(edit);
+            // A text longer than the field scrolls in it, after the caret
+            // (no bar: the field shows where the caret is).
+            let hidden = egui::scroll_area::ScrollBarVisibility::AlwaysHidden;
+            egui::ScrollArea::vertical().id_salt("minato-compose-scroll").max_height(field.height()).min_scrolled_height(field.height()).auto_shrink([false, false]).scroll_bar_visibility(hidden).show(&mut child, |ui| ui.add(edit));
             ctx.memory_mut(|m| m.request_focus(id));
         }
     }

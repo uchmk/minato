@@ -105,11 +105,14 @@ pub fn wheel(ctx: &egui::Context, layer: egui::LayerId, r: Rect, at: Wheel, out:
     }
 }
 
+/// Whether a box is over the view this frame (kept in the context's data).
+pub const BOXED: &str = "minato-boxed";
+
 /// An item's body while the pointer rests on its card or row, as tsumugi's
 /// peek draws a session's last lines: monospace on the ground, 520 wide, a
-/// dozen lines at most. Nothing for an item without a body.
+/// dozen lines at most. Nothing for an item without a body, nor under a box.
 pub fn peek(resp: &egui::Response, text: &str) {
-    if text.is_empty() || !resp.hovered() {
+    if text.is_empty() || !resp.hovered() || resp.ctx.data(|d| d.get_temp::<bool>(BOXED.into())).unwrap_or(false) {
         return;
     }
     resp.clone().on_hover_ui(|ui| {
@@ -318,8 +321,14 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         let resp = ui.interact(field, ui.id().with("palette"), Sense::click());
         p.rect_filled(field, CornerRadius::same(7), if resp.hovered() { c.panel } else { c.side });
         p.rect_stroke(field, CornerRadius::same(7), Stroke::new(1.0, c.border), StrokeKind::Inside);
-        p.text(field.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, app.tr("palette.hint"), FontId::proportional(12.5), c.dim);
-        p.text(field.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, "Ctrl+Shift+P", FontId::monospace(11.0), c.dim);
+        // The key goes first when both do not fit: the name says what it is.
+        let hint = p.layout_no_wrap(app.tr("palette.hint").to_string(), FontId::proportional(12.5), c.dim);
+        let key = p.layout_no_wrap("Ctrl+Shift+P".into(), FontId::monospace(11.0), c.dim);
+        let p = p.with_clip_rect(field.shrink(1.0));
+        p.galley(pos2(field.left() + 10.0, mid - hint.size().y / 2.0), hint.clone(), c.dim);
+        if hint.size().x + key.size().x + 36.0 <= field.width() {
+            p.galley(pos2(field.right() - 10.0 - key.size().x, mid - key.size().y / 2.0), key, c.dim);
+        }
         if resp.clicked() {
             out.palette = true;
         }
@@ -420,15 +429,13 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let p = ui.painter().clone();
     let mid = r.center().y;
     let mut x = r.left() + 12.0;
-    if app.find_on() {
-        x = find_bar(ui, app, r, out);
-    }
     let mut keys: Vec<(&str, &str)> = match app.mode {
         Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
-        Mode::Help => vec![("F1", "key.back"), ("Esc", "key.back")],
+        Mode::Help if app.help_last.get() > 0 => vec![("j k", "help.more"), ("F1 Esc", "key.back")],
+        Mode::Help => vec![("F1 Esc", "key.back")],
         Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
         Mode::Main if app.find_on() => Vec::new(),
-        Mode::Main => app.view.keys().iter().take(KEYBAR_KEYS).copied().chain([("F1", "key.help")]).collect(),
+        Mode::Main => app.keys_now().into_iter().take(KEYBAR_KEYS).chain([("F1", "key.help")]).collect(),
     };
     // The right side, from the right: the clock, the API budget, the sync.
     let mut right = r.right() - 12.0;
@@ -452,6 +459,9 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     // F1's word; its key stays.
     let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x);
     let stop = right - t.width().max(widest) - 16.0;
+    if app.find_on() {
+        x = find_bar(ui, app, r, stop, out);
+    }
     let mut widths: Vec<f32> = keys
         .iter()
         .map(|(key, word)| {
@@ -492,8 +502,9 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
 }
 
 /// The search in the keybar: `/`, its words (the field while it has the
-/// keys), how many are left and its keys; the x after it.
-fn find_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) -> f32 {
+/// keys), how many are left and its keys, short of `stop` (the keys go first,
+/// then the field narrows); the x after it.
+fn find_bar(ui: &mut Ui, app: &App, r: Rect, stop: f32, out: &mut Out) -> f32 {
     let c = ito_theme::colors();
     let p = ui.painter().clone();
     let mid = r.center().y;
@@ -503,7 +514,15 @@ fn find_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) -> f32 {
     p.rect_filled(chip, CornerRadius::same(4), ACCENT.gamma_multiply(0.18));
     p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, ACCENT.gamma_multiply(0.6)), StrokeKind::Inside);
     p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, ACCENT);
-    let field = Rect::from_min_size(pos2(chip.right() + 8.0, mid - 10.0), vec2(320.0f32.min(r.width() / 3.0), 20.0));
+    let n = app.find_count();
+    let hits = ui.fonts_mut(|f| f.layout_no_wrap(format!("{n} {}", app.tr("find.hits")), FontId::monospace(11.5), c.fg).size().x);
+    let hint = ui.fonts_mut(|f| f.layout_no_wrap(app.tr("find.keys").to_owned(), FontId::proportional(12.0), c.dim).size().x);
+    // The field narrows to keep the keys, then they go and it narrows on.
+    let most = 320.0f32.min(r.width() / 3.0);
+    let room = stop - chip.right() - 8.0 - 14.0 - hits;
+    let show_hint = most.min(room - 14.0 - hint) >= most.min(160.0);
+    let fw = if show_hint { most.min(room - 14.0 - hint) } else { most.min(room).max(80.0) };
+    let field = Rect::from_min_size(pos2(chip.right() + 8.0, mid - 10.0), vec2(fw, 20.0));
     p.rect_filled(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), c.panel);
     p.rect_stroke(field.expand2(vec2(5.0, 0.0)), CornerRadius::same(4), Stroke::new(1.0, if app.find_open { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
     if app.find_open {
@@ -512,8 +531,10 @@ fn find_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) -> f32 {
         let g = crate::style::truncated(&p, app.find_text.clone(), FontId::proportional(12.5), c.fg, field.width());
         p.galley(pos2(field.left(), mid - g.size().y / 2.0), g, c.fg);
     }
-    let n = app.find_count();
     let t = p.text(pos2(field.right() + 14.0, mid), Align2::LEFT_CENTER, format!("{n} {}", app.tr("find.hits")), FontId::monospace(11.5), if n == 0 { crate::style::BAD } else { c.fg });
+    if !show_hint {
+        return t.right() + 14.0;
+    }
     let t = p.text(pos2(t.right() + 14.0, mid), Align2::LEFT_CENTER, app.tr("find.keys"), FontId::proportional(12.0), c.dim);
     t.right() + 14.0
 }
@@ -578,27 +599,54 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     p.rect_stroke(card, CornerRadius::same(10), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
     p.text(pos2(card.left() + 20.0, card.top() + 18.0), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
     let x0 = card.left() + 20.0;
+    // On a short window the rows close up (down to 15) so none is lost.
+    let room = card.bottom() - 28.0 - (card.top() + 50.0);
+    let pitch = [&left[..], &right[..]]
+        .iter()
+        .map(|s| {
+            let rows = s.iter().map(|(_, rows)| rows.len()).sum::<usize>().max(1) as f32;
+            (room - s.len() as f32 * 28.0) / rows
+        })
+        .fold(20.0f32, f32::min)
+        .max(15.0);
     let (left_w, right_w) = if wide { (330.0, 280.0) } else { ((w - 40.0) / 2.0, (w - 40.0) / 2.0) };
-    let column = |x: f32, col_w: f32, sections: &[(&str, &[(&str, &'static str)])]| {
-        let mut y = card.top() + 50.0;
+    // A column from its `top`-th key row (`j` `k` move it when even the
+    // closest rows do not fit): the rows skipped and those left out.
+    let bottom = card.bottom() - 28.0;
+    let column = |x: f32, col_w: f32, sections: &[(&str, &[(&str, &'static str)])], top: usize| {
+        let (mut y, mut skip, mut out) = (card.top() + 50.0, top, 0);
         for (title, rows) in sections {
+            let from = skip.min(rows.len());
+            skip -= from;
+            if from == rows.len() {
+                continue;
+            }
+            if out > 0 || y + 20.0 + pitch.min(18.0) > bottom {
+                out += rows.len() - from;
+                continue;
+            }
             p.text(pos2(x, y), Align2::LEFT_TOP, *title, FontId::proportional(11.5), ACCENT);
             y += 20.0;
-            for (key, word) in rows.iter() {
-                if y + 18.0 > card.bottom() - 28.0 {
-                    return;
+            for (key, word) in &rows[from..] {
+                if out > 0 || y + pitch.min(18.0) > bottom {
+                    out += 1;
+                    continue;
                 }
                 p.text(pos2(x, y), Align2::LEFT_TOP, *key, FontId::monospace(12.0), c.fg);
                 p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(pos2(x + 120.0, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(12.5), c.dim);
-                y += 20.0;
+                y += pitch;
             }
             y += 8.0;
         }
+        (top - skip, out)
     };
+    let mut last = 0;
     if show_keys {
-        column(x0, left_w, &left);
-        column(x0 + left_w, right_w, &right);
+        for (skipped, out) in [column(x0, left_w, &left, app.help_top), column(x0 + left_w, right_w, &right, app.help_top)] {
+            last = last.max(skipped + out);
+        }
     }
+    app.help_last.set(last);
     let (x, mut y) = if wide { (x0 + left_w + right_w, card.top() + 50.0) } else { (x0, card.top() + 50.0 + cols) };
     if below && y + 58.0 <= card.bottom() - 28.0 {
         // One row per rule (its key, reason and what to do), then the keys
@@ -623,9 +671,13 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
         }
     }
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
-    if paged {
-        p.text(pos2(card.right() - 20.0, card.bottom() - 22.0), Align2::RIGHT_CENTER, app.tr("help.page"), FontId::proportional(11.5), c.dim);
-    }
+    let hint = match (paged, last > 0) {
+        (true, true) => format!("{}  ·  {}", app.tr("help.scroll"), app.tr("help.page")),
+        (true, false) => app.tr("help.page").to_string(),
+        (false, true) => app.tr("help.scroll").to_string(),
+        (false, false) => String::new(),
+    };
+    p.text(pos2(card.right() - 20.0, card.bottom() - 22.0), Align2::RIGHT_CENTER, hint, FontId::proportional(11.5), c.dim);
 }
 
 /// The keys for any inbox card, after the rules in the help.

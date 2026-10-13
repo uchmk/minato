@@ -1,6 +1,6 @@
 //! Painting of the dispatch form and the job log (see `overlay.rs`).
 
-use egui::{Align2, CornerRadius, FontId, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
 
 use crate::app::App;
 use crate::overlay::{Form, LogView, Overlay};
@@ -57,19 +57,46 @@ fn form(p: &egui::Painter, app: &App, f: &Form, r: Rect) {
 
 fn log(p: &egui::Painter, app: &App, l: &LogView, r: Rect) {
     let c = ito_theme::colors();
-    p.text(r.left_top() + vec2(0.0, 10.0), Align2::LEFT_CENTER, format!("{}  {}", app.tr("log.title"), l.name), FontId::proportional(14.0), c.fg);
+    // Job 0 is a repository's settings (`S`), not a log.
+    let head = app.tr(if l.job_id == 0 { "key.repo" } else { "log.title" });
+    p.text(r.left_top() + vec2(0.0, 10.0), Align2::LEFT_CENTER, format!("{head}  {}", l.name), FontId::proportional(14.0), c.fg);
     p.text(pos2(r.left(), r.bottom() - 8.0), Align2::LEFT_CENTER, app.tr("log.hint"), FontId::proportional(11.0), c.dim);
     let body = Rect::from_min_max(pos2(r.left(), r.top() + 28.0), pos2(r.right(), r.bottom() - 24.0));
     let Some(lines) = &l.lines else {
         p.text(body.left_top() + vec2(0.0, 10.0), Align2::LEFT_CENTER, app.tr("detail.fetching"), FontId::proportional(12.5), c.dim);
         return;
     };
-    let p = p.with_clip_rect(body);
+    let bp = p.with_clip_rect(body);
+    // Long lines wrap at the width, so nothing is cut at the right.
+    let font = FontId::monospace(11.5);
+    let cw = bp.layout_no_wrap("0".repeat(16), font.clone(), c.fg).size().x / 16.0;
+    let cols = ((body.width() / cw) as usize).max(20);
+    let rows: Vec<(&str, Color32)> = lines
+        .iter()
+        .flat_map(|line| {
+            let error = ["##[error]", "error:", "error["].iter().any(|e| line.starts_with(e));
+            let color = if error { crate::style::BAD } else if line.starts_with("##[") { c.dim } else { c.fg };
+            wrap(line, cols).into_iter().map(move |s| (s, color))
+        })
+        .collect();
     let fit = ((body.height() / ROW) as usize).max(1);
-    for (k, line) in lines.iter().enumerate().skip(l.scroll).take(fit) {
-        let color = if line.starts_with("##[error]") { crate::style::BAD } else if line.starts_with("##[") { c.dim } else { c.fg };
-        p.text(pos2(body.left(), body.top() + (k - l.scroll) as f32 * ROW + ROW / 2.0), Align2::LEFT_CENTER, line, FontId::monospace(11.5), color);
+    l.last.set(rows.len().saturating_sub(fit));
+    let top = l.scroll.min(l.last.get());
+    for (k, (s, color)) in rows.iter().enumerate().skip(top).take(fit) {
+        bp.text(pos2(body.left(), body.top() + (k - top) as f32 * ROW + ROW / 2.0), Align2::LEFT_CENTER, *s, font.clone(), *color);
     }
-    let pos = if app.ja() { format!("{} / {} 行", l.scroll + 1, lines.len()) } else { format!("{} / {}", l.scroll + 1, lines.len()) };
+    let pos = if app.ja() { format!("{} / {} 行", top + 1, rows.len()) } else { format!("{} / {}", top + 1, rows.len()) };
     p.text(pos2(r.right(), r.bottom() - 8.0), Align2::RIGHT_CENTER, pos, FontId::monospace(11.0), c.dim);
+}
+
+/// A line cut into rows of at most `cols` characters.
+fn wrap(s: &str, cols: usize) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = s;
+    while let Some((i, _)) = rest.char_indices().nth(cols) {
+        out.push(&rest[..i]);
+        rest = &rest[i..];
+    }
+    out.push(rest);
+    out
 }

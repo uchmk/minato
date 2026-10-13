@@ -33,7 +33,7 @@ use minato_core::github::types::{parse_rate_limit, parse_viewer};
 use minato_core::github::search::{detail_query, discussions_query, items_query, parse_detail, parse_item, parse_items};
 use minato_core::github::worker::{self, Call, Job, Worker};
 use minato_core::github::write::{self, parse_names};
-use minato_core::github::{client, Client, Etags, Rate, Token, UreqTransport};
+use minato_core::github::{Bucket, client, Client, Etags, Rate, Token, UreqTransport};
 
 use minato_core::list::Item;
 use minato_core::mainci;
@@ -49,6 +49,9 @@ const RUN_LANES: usize = 4;
 
 type Found = Option<(Token, Source)>;
 
+/// The open items' answers: the two searches', the mentioned ids and the stubs.
+type Answers = ([Vec<Item>; 2], HashSet<String>, Vec<Item>);
+
 pub struct Net {
     token_rx: Receiver<Found>,
     worker: Option<Worker>,
@@ -63,7 +66,9 @@ pub struct Net {
     /// The runs (id and `updated_at`) `back` has been asked about this start.
     back_tried: HashSet<(u64, String)>,
     next_poll: Instant,
-    rate: Option<Rate>,
+    /// The calls left in REST's limit and in GraphQL's: they are counted
+    /// apart, and the tighter one is shown and paces the polls.
+    rates: [Option<Rate>; 2],
     next_search: Instant,
     /// Whether the last search was for closed items.
     searched_closed: bool,
@@ -71,6 +76,9 @@ pub struct Net {
     found: [Vec<Item>; 2],
     /// The saved search the items were last searched with (the list view's).
     searched_custom: Option<String>,
+    /// The open items' answers (`found`, `mentioned`, `stubs`) while the
+    /// list shows closed items or a saved search's.
+    stash: Option<Answers>,
     /// Ids the `mentions:` search found, and the repositories whose main CI is red.
     mentioned: std::collections::HashSet<String>,
     stubs: Vec<Item>,
@@ -165,7 +173,7 @@ impl Net {
             i.mentioned = self.mentioned.contains(&i.id);
         }
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        if !app.show_closed {
+        if !self.searched_closed {
             all.extend(self.stubs.iter().cloned());
         }
         app.items = all;
@@ -194,7 +202,7 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
+        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rates: [None; 2], next_search: now, searched_closed: false, searched_custom: None, stash: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -259,6 +267,7 @@ impl Net {
         self.keep("scope", "", &scope_line(Some(&want)));
         if old.0 != want.0 {
             self.found = Default::default();
+            self.stash = None;
             self.mentioned.clear();
             self.stubs.clear();
             self.rebuild(app);
@@ -303,7 +312,7 @@ impl Net {
             },
             "rate" => {
                 if let Ok(r) = parse_rate_limit(body) {
-                    self.rate = Some(r);
+                    self.keep_rate(r);
                 }
             }
             k @ ("items" | "discussions") => {
@@ -556,6 +565,7 @@ impl Net {
                     m.detail.workflow = Some(w);
                 }
                 m.got[2] = true;
+                m.detail.yaml_tried = true;
             }
         }
         if app.run().is_some_and(|r| r.id == id) {
@@ -573,7 +583,17 @@ impl Net {
         let m = self.run_kept.entry(r.id).or_insert_with(|| RunMemo { stamp: r.updated_at.clone(), detail: RunDetail { id: r.id, ..Default::default() }, got: [false; 3] });
         m.detail.workflow = Some(w.clone());
         m.got[2] = true;
+        m.detail.yaml_tried = true;
         true
+    }
+
+    /// Keep a reply's count in its own limit's place; search's is not kept.
+    fn keep_rate(&mut self, r: Rate) {
+        match r.bucket {
+            Bucket::Core => self.rates[0] = Some(r),
+            Bucket::Graphql => self.rates[1] = Some(r),
+            Bucket::Other => {}
+        }
     }
 
     /// Read a finished run's jobs, artifacts and workflow ahead on `back`,
@@ -581,7 +601,7 @@ impl Net {
     /// rest. What is kept is not asked; a run tried is not tried again this
     /// start (unless it changes); nothing while the calls left are few.
     fn read_ahead(&mut self, app: &App) {
-        if self.back.is_none() || self.back_busy > 0 || self.rate.is_some_and(|r| r.remaining < BACK_FLOOR) {
+        if self.back.is_none() || self.back_busy > 0 || Rate::tighter(&self.rates).is_some_and(|r| r.remaining < BACK_FLOOR) {
             return;
         }
         let order: Vec<Run> = app.acts.near_first(&app.runs).into_iter().filter(|r| !r.status.active()).cloned().collect();
@@ -665,7 +685,7 @@ impl Net {
                 Ok(f) => {
                     app.synced = Some(Instant::now());
                     if let Some(r) = f.rate {
-                        self.rate = Some(r);
+                        self.keep_rate(r);
                     }
                     let key = reply.key.clone();
                     self.live.insert(key.clone());
@@ -705,6 +725,16 @@ impl Net {
                     if reply.key.starts_with("a-jobs:") {
                         self.asked_run = None;
                         self.run_retry = Instant::now() + RETRY;
+                    }
+                    // A workflow file that does not come is not waited for:
+                    // `D` then starts the run with no inputs.
+                    if let Some(id) = reply.key.strip_prefix("a-yaml:").and_then(|n| n.parse::<u64>().ok()) {
+                        let stamp = app.runs.iter().find(|r| r.id == id).map(|r| r.updated_at.clone()).unwrap_or_default();
+                        let m = self.run_kept.entry(id).or_insert_with(|| RunMemo { stamp, detail: RunDetail { id, ..Default::default() }, got: [false; 3] });
+                        m.detail.yaml_tried = true;
+                        if let Some(d) = app.run_detail.as_mut().filter(|d| d.id == id) {
+                            d.yaml_tried = true;
+                        }
                     }
                     app.say(e);
                 }
@@ -752,12 +782,12 @@ impl Net {
             self.asked = want;
             self.refetch = false;
         }
-        app.api = self.rate.map(|r| (r.remaining, r.limit));
+        app.api = Rate::tighter(&self.rates).map(|r| (r.remaining, r.limit));
         let now = Instant::now();
         if now >= self.next_poll {
             worker.send(get("rate", "/rate_limit"));
             let unix = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
-            let wait = self.rate.map_or(POLL, |r| r.interval(POLL, unix));
+            let wait = Rate::tighter(&self.rates).map_or(POLL, |r| r.interval(POLL, unix));
             self.next_poll = now + wait;
         }
         if let Some(me) = app.viewer.clone() {
@@ -765,13 +795,27 @@ impl Net {
             // and the authors stay the viewer's.
             let owner = app.owner().unwrap_or(&me).to_string();
             let custom = if app.view == crate::app::View::List { app.list.active_search().map(|t| minato_core::list::search_query(t, &owner)) } else { None };
-            if app.show_closed != self.searched_closed || custom != self.searched_custom {
-                self.searched_closed = app.show_closed;
+            let closed = app.closed_shown();
+            if closed != self.searched_closed || custom != self.searched_custom {
+                // The open items' answers are kept while the list shows
+                // others, and shown again at once on coming back.
+                let plain = |c: bool, q: &Option<String>| !c && q.is_none();
+                if plain(self.searched_closed, &self.searched_custom) {
+                    self.stash = Some((self.found.clone(), self.mentioned.clone(), self.stubs.clone()));
+                } else if plain(closed, &custom) {
+                    if let Some((found, mentioned, stubs)) = self.stash.take() {
+                        (self.found, self.mentioned, self.stubs) = (found, mentioned, stubs);
+                    }
+                }
+                self.searched_closed = closed;
                 self.searched_custom = custom.clone();
                 self.next_search = now;
+                if plain(closed, &custom) {
+                    self.rebuild(app);
+                }
             }
             if now >= self.next_search {
-                let state = if app.show_closed { "is:closed" } else { "is:open" };
+                let state = if closed { "is:closed" } else { "is:open" };
                 let q = format!("user:{owner} {state} sort:updated-desc");
                 let vars = format!("{{\"q\":{},\"n\":50}}", json_str(&q));
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: vars.clone() } });
@@ -781,7 +825,7 @@ impl Net {
                     self.found[1].clear();
                     self.mentioned.clear();
                     self.stubs.clear();
-                } else if app.show_closed {
+                } else if closed {
                     self.found[1].clear();
                 } else {
                     let q = format!("user:{owner} is:open mentions:{me} -author:{me} sort:updated-desc");

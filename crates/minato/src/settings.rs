@@ -73,7 +73,10 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 Some(b) => format!("{} {}", tr("settings.theme_note"), themes_dir(b).display()),
                 None => tr("settings.no_folder").into(),
             };
-            asked.extend(ito_prefs::theme_page(ui, l, w, themes, (&t, &d, &li), &note, |ui| preview(ui, tr("settings.sample"))));
+            asked.extend(ito_prefs::theme_page(ui, l, w, themes, (&t, &d, &li), &note, |ui| {
+                let tabs = ["view.inbox", "view.list", "view.actions", "view.board"].map(tr);
+                preview(ui, tr("settings.sample"), tabs, ["run.ok", "run.bad", "run.running"].map(tr))
+            }));
         }
         MINATO => {
             section(ui, l, tr("settings.scope"), |ui| {
@@ -170,8 +173,9 @@ pub fn show(ui: &mut Ui, app: &mut App) {
 }
 
 /// minato in the theme in force: the title bar's tabs and a row of the
-/// keybar, small.
-fn preview(ui: &mut Ui, sample: &str) {
+/// keybar, small, in the language in force. A name that does not fit is
+/// left out, not cut.
+fn preview(ui: &mut Ui, sample: &str, tabs: [&str; 4], runs: [&str; 3]) {
     let c = ito_theme::colors();
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width().min(420.0), 96.0), Sense::hover());
     let p = ui.painter_at(r);
@@ -180,11 +184,19 @@ fn preview(ui: &mut Ui, sample: &str) {
     let inner = r.shrink(12.0);
     let mono = FontId::monospace(12.0);
     p.text(inner.left_top(), Align2::LEFT_TOP, sample, FontId::proportional(12.0), c.dim);
-    let mut x = inner.left();
-    for (k, name) in ["1 Inbox", "2 List", "3 Actions", "4 Board"].into_iter().enumerate() {
-        let t = p.text(egui::pos2(x, inner.top() + 26.0), Align2::LEFT_TOP, name, mono.clone(), if k == 0 { crate::ui::ACCENT } else { c.fg });
-        x = t.right() + 14.0;
+    let tabs = tabs.into_iter().enumerate().map(|(k, name)| (format!("{} {name}", k + 1), if k == 0 { crate::ui::ACCENT } else { c.fg }));
+    let runs = ["●", "✗", "▶"].into_iter().zip(runs).map(|(m, name)| (format!("{m} {name}"), c.fg));
+    for (row, items) in [(26.0, tabs.collect::<Vec<_>>()), (52.0, runs.collect())] {
+        let mut x = inner.left();
+        for (text, color) in items {
+            let g = p.layout_no_wrap(text, mono.clone(), color);
+            if x + g.size().x > inner.right() {
+                break;
+            }
+            let w = g.size().x;
+            p.galley(egui::pos2(x, inner.top() + row), g, color);
+            x += w + 14.0;
+        }
     }
-    p.text(egui::pos2(inner.left(), inner.top() + 52.0), Align2::LEFT_TOP, "● OK   ✗ failed   ▶ running", mono, c.fg);
     p.circle_filled(egui::pos2(inner.right() - 8.0, inner.top() + 8.0), 4.0, c.done);
 }

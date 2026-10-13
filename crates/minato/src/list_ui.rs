@@ -192,7 +192,11 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     p.rect_filled(q, CornerRadius::same(6), c.bg);
     p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
     let owner = app.owner().unwrap_or("");
-    let query = app.list.active_search().map_or_else(|| app.list.filter.query(owner), |t| minato_core::list::search_query(t, owner));
+    let filter = || {
+        let q = app.list.filter.query(owner);
+        if app.show_closed { q.replacen("is:open", "is:closed", 1) } else { q }
+    };
+    let query = app.list.active_search().map_or_else(filter, |t| minato_core::list::search_query(t, owner));
     let g = style::truncated(&p, query, FontId::monospace(12.0), c.fg, q.width() - 18.0);
     p.galley(pos2(q.left() + 9.0, q.center().y - g.size().y / 2.0), g, c.fg);
     p.line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, c.border));
@@ -250,7 +254,12 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: boo
     p.line_segment([row.left_bottom(), row.right_bottom()], Stroke::new(1.0, c.border));
     let p = p.with_clip_rect(row);
     let y1 = row.top() + 8.0 + 9.0;
-    let (mark, color) = style::kind_mark(item.kind);
+    // A closed one as GitHub marks it: an issue's tick in purple, a PR's in red.
+    let (mark, color) = match (item.closed, item.kind) {
+        (true, Kind::Pr) => ("⇄", style::BAD),
+        (true, _) => ("✓", MERGED),
+        _ => style::kind_mark(item.kind),
+    };
     p.text(pos2(row.left() + 14.0 + 8.0, y1), Align2::CENTER_CENTER, mark, FontId::proportional(13.0), color);
     let x = row.left() + 14.0 + 16.0 + 10.0;
     let right = row.right() - 14.0;

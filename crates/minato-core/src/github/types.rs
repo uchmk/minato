@@ -34,7 +34,7 @@ pub fn parse_rate_limit(body: &str) -> Result<Rate, String> {
     }
     let a: Answer = serde_json::from_str(body).map_err(|e| format!("unexpected /rate_limit answer: {e}"))?;
     let b = a.resources.core;
-    Ok(Rate { remaining: b.remaining, limit: b.limit, reset: b.reset })
+    Ok(Rate { remaining: b.remaining, limit: b.limit, reset: b.reset, bucket: crate::github::Bucket::Core })
 }
 
 #[cfg(test)]
@@ -52,7 +52,7 @@ mod tests {
     #[test]
     fn the_core_bucket_is_the_rate() {
         let r = parse_rate_limit(include_str!("../../tests/fixtures/rate_limit.json")).unwrap();
-        assert_eq!(r, Rate { remaining: 4812, limit: 5000, reset: 1_760_000_000 });
+        assert_eq!(r, Rate { remaining: 4812, limit: 5000, reset: 1_760_000_000, bucket: crate::github::Bucket::Core });
         assert!(parse_rate_limit("{}").is_err());
     }
 }

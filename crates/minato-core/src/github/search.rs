@@ -207,6 +207,7 @@ fn item_of(n: RawItem) -> Option<Item> {
         updated_at: n.updated_at.unwrap_or_default(),
         draft: n.is_draft,
         merged: n.state.as_deref() == Some("MERGED"),
+        closed: n.state.as_deref() == Some("CLOSED"),
         conflict: n.mergeable.as_deref() == Some("CONFLICTING"),
         mentioned: false,
         ci,
@@ -357,7 +358,9 @@ mod tests {
     fn one_item_is_read_by_its_page() {
         let body = r#"{"data":{"resource":{"__typename":"PullRequest","id":"PR_9","number":9,"title":"Fix","url":"https://github.com/u/r/pull/9","createdAt":"2026-10-01T00:00:00Z","updatedAt":"2026-10-02T00:00:00Z","author":{"login":"u"},"repository":{"nameWithOwner":"u/r"},"labels":{"nodes":[]},"comments":{"totalCount":1},"bodyText":"b","state":"MERGED","isDraft":false,"mergeable":"UNKNOWN","assignees":{"nodes":[]},"commits":{"nodes":[]}}}}"#;
         let i = parse_item(body).unwrap().unwrap();
-        assert_eq!((i.id.as_str(), i.number, i.merged, i.kind), ("PR_9", 9, true, Kind::Pr));
+        assert_eq!((i.id.as_str(), i.number, i.merged, i.closed, i.kind), ("PR_9", 9, true, false, Kind::Pr));
+        let i = parse_item(&body.replace("MERGED", "CLOSED")).unwrap().unwrap();
+        assert!(i.closed && !i.merged);
         assert_eq!(parse_item(r#"{"data":{"resource":{"__typename":"Commit"}}}"#), Ok(None));
         assert_eq!(parse_item(r#"{"data":{"resource":null}}"#), Ok(None));
         assert!(parse_item(r#"{"data":null,"errors":[{"message":"nope"}]}"#).is_err());

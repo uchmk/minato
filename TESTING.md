@@ -25,8 +25,8 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 2.2 | Click each tab | Same as the digit |
 | 2.3 | Press `?`, then `F1` | A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open |
 | 2.3a | In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board | In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table |
-| 2.4 | Press `,` or click the comma button | The settings screen opens; `Esc` closes it |
-| 2.5 | Press `Ctrl+Shift+P` | A toast says it is not connected yet (the palette comes later) |
+| 2.4 | Press `Ctrl+,` | The settings screen opens; `Esc` closes it |
+| 2.5 | Press `Ctrl+Shift+P` | The command palette opens over the view (see 11.6) |
 | 2.6 | Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) | The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock |
 
 ## 3. Keybar status and clock
@@ -43,7 +43,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 4.1 | Open the settings | The common screen of the uchmk apps: General (language, size, clock) and Theme pages, a search, `Ctrl+Tab` moves between pages |
 | 4.2 | Change the scale to 150% | The whole window is drawn larger at once and stays so after a restart |
-| 4.3 | Pick another theme | The window's colours change at once; the sample card follows the theme |
+| 4.3 | Pick another theme | The window's colours change at once; the sample card follows the theme and is in the app's language (Japanese: 受信箱, 一覧, … and 成功, 失敗, 実行中) |
 | 4.4 | Edit `%APPDATA%\uchmk\common.toml` by hand while the app runs | The change shows within a few seconds |
 
 ## 5. GitHub connection
@@ -161,7 +161,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 11.5a | Click a row, then "Mark all read" at the top | The row opens as with `Enter`; the button marks every row read |
 | 11.6 | Press `Ctrl+Shift+P` | A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット) |
 | 11.7 | Type `#` and part of a title, press `Enter` | The list opens on that item |
-| 11.8 | Type `board`, press `Enter` | The Board view opens |
+| 11.8 | Type `board` | No line opens a view: the views are on `1`–`4` and the tabs (see 27.6) |
 | 11.9 | Press `Esc`, and `Ctrl+Shift+P` twice | The palette closes; the second press closes it again |
 
 ## 12. Dispatch form, job log and needs graph
@@ -205,7 +205,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 15.1 | `Ctrl+,`, open the "minato" page | Two cards: the seven inbox rules and the six writing-box fields, each with a switch; Milestone, Priority, Reviewers and the dependabot rule are off |
+| 15.1 | `Ctrl+,`, open the "minato" page | Cards for whose repositories (the owner and the board Project), the nine inbox rules and the six writing-box fields, each with a switch, and the saved searches; Milestone, Priority, Reviewers and the dependabot rule are off |
 | 15.2 | Switch the dependabot rule on and go to the inbox | A dependabot PR now appears with its reason |
 | 15.3 | Switch Milestone on, press `r` then `Alt+M` on an item | The milestone picker opens; with it off, a toast says the field is hidden |
 | 15.4 | Change a switch, quit and start again | The switches keep their state; `minato-settings.json` sits beside common.toml |
@@ -293,7 +293,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 25.1 | Select an issue and look under the detail | A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment" |
+| 25.1 | Select an issue and look under the detail | A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment"; in a narrower detail (zoom in, or the browser panel open) the toolbar drops its last groups whole (@ #, then the lists) instead of drawing over the tabs |
 | 25.2 | Click the text area, type two lines, then click another row | The box takes the cursor in place; after the click the box leaves and the text stays; back on the item, clicking the box shows the text again |
 | 25.3 | Select a word and click B, I, the link and the list buttons | The word becomes `**word**`, `_word_`, `[word](url)`, and the line a list item; hovering a button shows its name |
 | 25.4 | Click Preview, then Write | The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text |
@@ -364,6 +364,9 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 29.10 | Press `Esc` with nothing else open, then open the panel again and click ✕ | `Esc` closes the panel and the view takes the whole width; ✕ does the same |
 | 29.11 | Make a message show (e.g. `d` then `u`) with the panel open | The message is at the top right of the view, left of the panel, not under it |
 | 29.12 | On Linux press `o` | The system's browser opens the page; no panel |
+| 29.13 | Press `o` on a card, then `j` `k` without clicking the page | The panel opens without the keys: `j` `k` move the selection, not the page |
+| 29.14 | In the panel follow a link GitHub moves to without loading a page (an issue's link to another issue, a PR's tabs) | The address field shows the new page's address |
+| 29.15 | With the panel open press `N` | The new-issue box shows whole over the view, not cut by the panel's ground |
 
 ## 30. The smallest window
 
@@ -377,3 +380,25 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 30.6 | At that size watch the keybar of each view for 20 seconds | The view's first key stays (F1 keeps only its key when there is no room); no key comes and goes as the sync seconds tick |
 | 30.7 | Press `2` with a red CI on a repository's main | The main branch's CI is not a row of the list and adds nothing to the repository counts |
 | 30.8 | Open an item whose body has 🤖 (a PR written by Claude Code) | The robot shows in one colour, not as a box, in the detail and on hover |
+
+## 31. Narrow boxes, the job log and the keybar
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 31.1 | Zoom in (`Ctrl+=`) or open the browser panel, press `3` and select a failed run | The "Next" box's button goes under its words when both do not fit side by side, and the box grows; nothing covers the words |
+| 31.2 | Select a failed run of a workflow with fewer than ten runs loaded | The note and the squares' heading say how many runs they are about (Japanese: 直近 5 回, 最近 5 回で 1 回) |
+| 31.3 | Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` | No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows |
+| 31.4 | Narrow the window, press `1` and `/`, type a few letters | The search's hint goes first, then the field narrows; neither runs into the sync status |
+| 31.5 | On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` | Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out |
+| 31.6 | Press `3` and select a passed run, a failed run, a running run, a run of a pull request | The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's; `F1` still lists them all |
+| 31.7 | Open the palette and type part of a long title | The title is cut with `…` inside its row, clear of the key hint |
+| 31.8 | Press `r` on an issue, then `Alt+R` | A toast says reviewers are for pull requests; no picker opens |
+| 31.9 | Press `S` in the list | The repository settings' heading is the repository's name alone |
+| 31.10 | Press `C` in the list, then `1` | The inbox has no card of a closed issue or a merged PR |
+| 31.11 | Select a run of a workflow with `workflow_dispatch` and press `D` at once | Until its file is read, a toast says it is reading the workflow file and to press `D` again; then `D` opens the form with its inputs (or asks to run it) |
+| 31.12 | Press `r` and type more lines than the box holds | The text scrolls inside the box with the caret in view; nothing is drawn below the box |
+| 31.13 | Narrow the window until the title bar's palette button is small | The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap |
+| 31.14 | Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` | The counter shows whichever of the REST (`core`) and GraphQL budgets has less left |
+| 31.15 | Narrow the inbox column to its least, then zoom in | A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail |
+| 31.16 | Rest the pointer on a row of the list until its body shows, then press `S` | The repository settings show without the row's body over them |
+| 31.17 | Press `2`, `C`, wait for the closed items, then `1` | The inbox shows its cards at once, not "nothing is waiting" |

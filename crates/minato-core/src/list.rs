@@ -55,6 +55,8 @@ pub struct Item {
     pub updated_at: String,
     pub draft: bool,
     pub merged: bool,
+    /// Closed without a merge (only the list's `C` shows these).
+    pub closed: bool,
     /// The PR cannot merge as it is (GitHub says CONFLICTING).
     pub conflict: bool,
     /// Set by the app: a search for `mentions:` found it.
@@ -413,6 +415,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            closed: false,
             conflict: false,
             mentioned: false,
             peek: String::new(),

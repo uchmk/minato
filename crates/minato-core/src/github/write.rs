@@ -140,6 +140,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            closed: false,
             conflict: false,
             mentioned: false,
             peek: String::new(),

@@ -236,20 +236,40 @@ pub fn log_path(run: &Run, job: &Job) -> String {
 }
 
 /// The part of a log worth reading: from a few lines before the first
-/// `##[error]` to its end, else the last lines. Timestamps are dropped.
+/// `##[error]` to its end, else the last lines. Timestamps and terminal
+/// colour codes are dropped.
 pub fn log_tail(log: &str, max: usize) -> Vec<String> {
     let lines: Vec<String> = log
         .lines()
         .map(|l| {
             let l = l.trim_start_matches('\u{feff}');
             match l.split_once(' ') {
-                Some((t, rest)) if t.len() >= 20 && t.ends_with('Z') && t.as_bytes()[4] == b'-' => rest.to_string(),
-                _ => l.to_string(),
+                Some((t, rest)) if t.len() >= 20 && t.ends_with('Z') && t.as_bytes()[4] == b'-' => plain(rest),
+                _ => plain(l),
             }
         })
         .collect();
     let from = lines.iter().position(|l| l.starts_with("##[error]")).map_or(lines.len().saturating_sub(max), |e| e.saturating_sub(12));
     lines[from..].iter().take(max).cloned().collect()
+}
+
+/// A log line without its terminal codes (`ESC [ 1 m` and the like).
+fn plain(l: &str) -> String {
+    let mut out = String::with_capacity(l.len());
+    let mut it = l.chars();
+    while let Some(ch) = it.next() {
+        if ch != '\u{1b}' {
+            out.push(ch);
+        } else if it.next() == Some('[') {
+            // The parameters run to a final byte in `@`..`~`.
+            for c in it.by_ref() {
+                if ('@'..='~').contains(&c) {
+                    break;
+                }
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -340,5 +360,11 @@ jobs:
         assert_eq!(t.first().map(String::as_str), Some("line 28"));
         assert!(t.last().unwrap().starts_with("##[error]"));
         assert_eq!(log_tail("a\nb\nc\n", 2), ["b", "c"]);
+    }
+
+    #[test]
+    fn the_log_loses_its_colour_codes() {
+        let log = "2026-10-12T01:00:00.1234567Z \u{1b}[1m\u{1b}[91merror\u{1b}[0m: test failed\n";
+        assert_eq!(log_tail(log, 10), ["error: test failed"]);
     }
 }

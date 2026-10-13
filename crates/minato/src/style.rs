@@ -228,6 +228,9 @@ pub struct Next<'a> {
     pub key: Option<&'a str>,
 }
 
+/// The narrowest the words of a next box get beside its button.
+const NEXT_WORDS: f32 = 200.0;
+
 /// The box of the next step; the y under it and its button, if it has one.
 pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<Rect>) {
     let c = ito_theme::colors();
@@ -239,11 +242,14 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
         let lg = p.layout_no_wrap(n.label.to_owned(), FontId::proportional(12.5), ON_ACCENT);
         (kg.size().x + 10.0 + 8.0 + lg.size().x + 24.0, k)
     });
-    let words_w = (w - pad * 2.0 - go.map_or(0.0, |(gw, _)| gw + 14.0)).max(80.0);
+    // Too narrow for both side by side, the button goes under the words.
+    let under = go.is_some_and(|(gw, _)| w - pad * 2.0 - gw - 14.0 < NEXT_WORDS);
+    let words_w = (w - pad * 2.0 - go.filter(|_| !under).map_or(0.0, |(gw, _)| gw + 14.0)).max(80.0);
     let lead = p.layout_no_wrap(n.lead.to_owned(), FontId::proportional(13.5), c.fg);
     let label = p.layout(n.label.to_owned(), FontId::proportional(15.0), c.fg, words_w);
     let note = (!n.note.is_empty()).then(|| p.layout(n.note.to_owned(), FontId::proportional(13.5), c.dim, words_w));
-    let h = 9.0 + lead.size().y + label.size().y + note.as_ref().map_or(0.0, |g| g.size().y) + 9.0;
+    let words_h = lead.size().y + label.size().y + note.as_ref().map_or(0.0, |g| g.size().y);
+    let h = 9.0 + words_h + if under { 8.0 + 28.0 } else { 0.0 } + 9.0;
     let r = Rect::from_min_size(pos2(x, y), vec2(w, h));
     p.rect_filled(r, CornerRadius::same(8), card());
     p.rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0, c.border), StrokeKind::Inside);
@@ -260,7 +266,8 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
         p.galley(pos2(x + pad, ty), g, c.dim);
     }
     let button = go.map(|(gw, k)| {
-        let b = Rect::from_min_size(pos2(r.right() - pad - gw, r.center().y - 14.0), vec2(gw, 28.0));
+        let at = if under { pos2(x + pad, r.top() + 9.0 + words_h + 8.0) } else { pos2(r.right() - pad - gw, r.center().y - 14.0) };
+        let b = Rect::from_min_size(at, vec2(gw, 28.0));
         p.rect_filled(b, CornerRadius::same(6), ACCENT);
         let kx = chip(p, b.left() + 12.0, b.center().y, k, FontId::monospace(11.0), 5.0, 18.0, 4, Color32::TRANSPARENT, Color32::from_white_alpha(128), ON_ACCENT);
         bold(p, pos2(kx + 8.0, b.center().y), Align2::LEFT_CENTER, n.label, FontId::proportional(12.5), ON_ACCENT);

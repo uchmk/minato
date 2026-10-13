@@ -51,6 +51,7 @@ pub fn parse(body: &str) -> Result<Vec<Item>, String> {
                 updated_at: String::new(),
                 draft: false,
                 merged: false,
+                closed: false,
                 conflict: false,
                 mentioned: false,
                 peek: String::new(),

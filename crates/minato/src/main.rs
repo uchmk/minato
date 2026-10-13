@@ -202,9 +202,13 @@ impl eframe::App for Minato {
         let mut page = None;
         if self.app.mode == Mode::Settings {
             settings::show(ui, &mut self.app);
+            self.browser_ui(ui, frame, None);
         } else {
             let was = self.app.mode;
             self.app.find_check();
+            // A box over the view keeps the cards' peeks from showing over it.
+            let boxed = self.app.palette.is_some() || self.app.overlay.is_some() || self.app.confirm.is_some() || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
+            ui.ctx().data_mut(|d| d.insert_temp(ui::BOXED.into(), boxed));
             let out = ui::frame(ui, &self.app);
             self.app.detail_max = out.detail_max;
             self.app.clamp_scroll();
@@ -240,7 +244,6 @@ impl eframe::App for Minato {
             }
             self.app.peek_wanted = out.peek;
             // Not under a box that is over the view.
-            let boxed = self.app.palette.is_some() || self.app.overlay.is_some() || self.app.confirm.is_some() || self.app.compose.as_ref().is_some_and(|c| c.id.starts_with("new:"));
             if let Some((at, n)) = out.wheel.filter(|_| !boxed) {
                 self.app.wheel(at, n, out.detail_max);
             }
@@ -250,12 +253,13 @@ impl eframe::App for Minato {
             if out.palette && self.app.palette.is_none() {
                 self.app.palette = Some(ito_palette::View::new());
             }
+            // Before the boxes over the view: its ground would cover them.
+            self.browser_ui(ui, frame, page);
             compose_ui::show(ui, &mut self.app, out.compose_at);
             ui::find_box(ui, &mut self.app, out.find_at);
             overlay_ui::show(ui, &self.app);
             palette_show(&ctx, &mut self.app);
         }
-        self.browser_ui(ui, frame, page);
         ui::toast(&ctx, &self.app, page.filter(|_| self.browser.is_some()));
         if let Some(text) = self.app.copy.take() {
             ctx.copy_text(text);

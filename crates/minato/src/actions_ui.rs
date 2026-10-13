@@ -308,7 +308,11 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     // What to do next: re-run a failure, stop a run that goes.
     let hist = actions::history(&app.runs, run, 10);
     let bad = hist.iter().filter(|h| h.status == Status::Bad).count();
-    let note = if app.ja() { format!("このワークフローは最近 10 回で {bad} 回落ちている") } else { format!("{bad} of the last 10 runs of this workflow failed") };
+    let note = match (app.ja(), hist.len()) {
+        (true, n) => format!("このワークフローは最近 {n} 回で {bad} 回落ちている"),
+        (false, 1) => "The last run of this workflow failed".to_owned(),
+        (false, n) => format!("{bad} of the last {n} runs of this workflow failed"),
+    };
     let next = match run.status {
         Status::Bad => Some(Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some("R") }),
         Status::Running | Status::Queued => Some(Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some("X") }),
@@ -346,8 +350,13 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             }
         },
     }
-    // The last ten results, newest at the left.
-    y = style::heading(&p, x, y, app.tr("run.history"));
+    // The last results (up to ten, as many as are loaded), newest at the left.
+    let head = match (app.ja(), hist.len()) {
+        (true, n) => format!("直近 {n} 回"),
+        (false, 1) => "Last run".to_owned(),
+        (false, n) => format!("Last {n} runs"),
+    };
+    y = style::heading(&p, x, y, &head);
     for (k, h) in hist.iter().enumerate() {
         let sq = Rect::from_min_size(pos2(x + 10.0 + k as f32 * 18.0, y), vec2(14.0, 14.0));
         p.rect_filled(sq, CornerRadius::same(3), tone(h.status));

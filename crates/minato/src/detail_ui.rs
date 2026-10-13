@@ -107,7 +107,8 @@ fn card_of(app: &App, item: &Item) -> Option<Card> {
     if app.view == View::Inbox {
         return app.inbox.selected(&all, &app.items);
     }
-    all.into_iter().find(|c| app.items[c.at].id == item.id)
+    // A closed one has nothing left to do.
+    all.into_iter().find(|c| app.items[c.at].id == item.id).filter(|_| !item.closed)
 }
 
 /// The repository, the number and the labels; the title; who opened it
@@ -148,6 +149,9 @@ fn head(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 {
     }
     if item.merged {
         meta.push("merged".into());
+    }
+    if item.closed {
+        meta.push("closed".into());
     }
     let mut mx = x;
     for m in meta {
@@ -364,19 +368,13 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
 /// mark to the selection (and opens the box first if it is not open).
 fn toolbar(ui: &Ui, p: &Painter, app: &App, r: Rect, on: bool, out: &mut Out) {
     let c = ito_theme::colors();
-    let bw = 26.0;
-    // After Link and after Tasks, a wider gap, as GitHub groups them.
-    let gaps = |k: usize| if k > 8 { 20.0 } else if k > 5 { 10.0 } else { 0.0 };
-    let width = bw * Tool::ALL.len() as f32 + gaps(Tool::ALL.len());
-    if width > r.width() {
-        return;
-    }
-    let mut x = r.right() - width;
-    for (k, t) in Tool::ALL.into_iter().enumerate() {
+    let n = tools_shown(r.width());
+    let mut x = r.right() - tools_width(n);
+    for (k, t) in Tool::ALL.into_iter().take(n).enumerate() {
         if k == 6 || k == 9 {
             x += 10.0;
         }
-        let b = Rect::from_center_size(pos2(x + bw / 2.0, r.center().y), vec2(bw - 2.0, 24.0));
+        let b = Rect::from_center_size(pos2(x + TOOL_W / 2.0, r.center().y), vec2(TOOL_W - 2.0, 24.0));
         let resp = ui::hit(ui, b, ("compose-tool", k));
         if resp.hovered() && on {
             p.rect_filled(b, CornerRadius::same(5), c.panel);
@@ -386,8 +384,24 @@ fn toolbar(ui: &Ui, p: &Painter, app: &App, r: Rect, on: bool, out: &mut Out) {
             out.click = Some(Click::Tool(t));
         }
         resp.on_hover_text(app.tr(TOOL_WORDS[k]));
-        x += bw;
+        x += TOOL_W;
     }
+}
+
+/// A toolbar button's width.
+const TOOL_W: f32 = 26.0;
+
+/// The first `n` buttons' width: after Link and after Tasks a wider gap, as
+/// GitHub groups them.
+fn tools_width(n: usize) -> f32 {
+    TOOL_W * n as f32 + [6, 9].iter().filter(|&&k| k < n).count() as f32 * 10.0
+}
+
+/// How many buttons fit in `w`: a narrow box drops the last groups whole
+/// (mention and reference, then the lists), and then the last buttons.
+fn tools_shown(w: f32) -> usize {
+    let all = Tool::ALL.len();
+    [all, 9, 6].into_iter().find(|&n| tools_width(n) <= w).unwrap_or_else(|| ((w / TOOL_W) as usize).min(6))
 }
 
 const TOOL_WORDS: [&str; 11] = ["tool.heading", "tool.bold", "tool.italic", "tool.quote", "tool.code", "tool.link", "tool.bullets", "tool.numbers", "tool.tasks", "tool.mention", "tool.reference"];
@@ -462,13 +476,15 @@ fn footer(ui: &Ui, p: &Painter, app: &App, item: &Item, r: Rect, out: &mut Out) 
     }
     resp.on_hover_text("Ctrl+Enter");
     x = b.left() - 8.0;
-    if item.kind != Kind::Discussion && !item.merged {
-        let word = match (item.kind, written) {
-            (_, true) => app.tr("compose.close_with"),
-            (Kind::Pr, false) => app.tr("compose.close_pr"),
-            _ => app.tr("compose.close_issue"),
-        };
-        let g = p.layout_no_wrap(word.to_owned(), FontId::proportional(13.0), c.fg);
+    let word = match (item.kind, written) {
+        (_, true) => app.tr("compose.close_with"),
+        (Kind::Pr, false) => app.tr("compose.close_pr"),
+        _ => app.tr("compose.close_issue"),
+    };
+    let g = p.layout_no_wrap(word.to_owned(), FontId::proportional(13.0), c.fg);
+    // Close only where it fits in the box (Ctrl+Shift+Enter is still there).
+    let fits = x - g.size().x - 40.0 >= r.left() + 10.0;
+    if item.kind != Kind::Discussion && !item.merged && !item.closed && fits {
         let b = Rect::from_min_max(pos2(x - g.size().x - 40.0, y - 15.0), pos2(x, y + 15.0));
         let resp = ui::hit(ui, b, "compose-close");
         p.rect_filled(b, CornerRadius::same(6), if resp.hovered() { c.panel } else { style::head() });
@@ -496,4 +512,19 @@ fn footer(ui: &Ui, p: &Painter, app: &App, item: &Item, r: Rect, out: &mut Out) 
         hint = next;
     }
     p.text(pos2(r.left() + 12.0, y), Align2::LEFT_CENTER, hint, FontId::proportional(11.5), c.dim);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_narrow_box_keeps_the_first_tools() {
+        assert_eq!(tools_shown(400.0), Tool::ALL.len());
+        // The list's narrower detail: mention and reference go, the rest stay.
+        assert_eq!(tools_shown(tools_width(Tool::ALL.len()) - 1.0), 9);
+        assert_eq!(tools_shown(tools_width(9) - 1.0), 6);
+        assert_eq!(tools_shown(100.0), 3);
+        assert_eq!(tools_shown(10.0), 0);
+    }
 }

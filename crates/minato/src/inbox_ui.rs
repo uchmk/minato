@@ -251,13 +251,23 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
     let y1 = r.top() + 7.0 + 10.0;
     let kx = style::kind_chip(&p, x, y1, item.kind) + 7.0;
     let when = epoch(&item.updated_at).map(|t| age(&item.updated_at, now.max(t))).unwrap_or_default();
-    let t = p.text(pos2(right, y1), Align2::RIGHT_CENTER, when, FontId::monospace(11.5), c.dim);
+    // The age only where the title keeps some room beside it.
+    let g = p.layout_no_wrap(when, FontId::monospace(11.5), c.dim);
+    let end = if right - g.size().x - 7.0 - kx >= 48.0 {
+        let left = right - g.size().x;
+        p.galley(pos2(left, y1 - g.size().y / 2.0), g, c.dim);
+        left - 7.0
+    } else {
+        right
+    };
     // The marked one first, so its ground is under both.
-    let title = style::truncated_lit(&p, item.title.clone(), FontId::proportional(13.0), c.fg, t.left() - 7.0 - kx, app.lit());
-    let ty = y1 - title.size().y / 2.0;
-    p.galley(pos2(kx, ty), title, c.fg);
-    let title = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), c.fg, t.left() - 7.0 - kx);
-    p.galley(pos2(kx + 0.45, ty), title, c.fg);
+    if end - kx >= 24.0 {
+        let title = style::truncated_lit(&p, item.title.clone(), FontId::proportional(13.0), c.fg, end - kx, app.lit());
+        let ty = y1 - title.size().y / 2.0;
+        p.galley(pos2(kx, ty), title, c.fg);
+        let title = style::truncated(&p, item.title.clone(), FontId::proportional(13.0), c.fg, end - kx);
+        p.galley(pos2(kx + 0.45, ty), title, c.fg);
+    }
     let y2 = y1 + 20.0;
     let place = if minato_core::mainci::is_stub(item) { item.repo.clone() } else { format!("{} #{} · {}", item.repo, item.number, item.author) };
     let g = style::truncated(&p, place, FontId::monospace(12.0), c.dim, right - x);

@@ -285,6 +285,10 @@ pub struct App {
     /// The help's second page (the inbox's table), when it does not fit
     /// beside the keys; Tab turns it.
     pub help_rules: bool,
+    /// The key rows the help's columns are moved up by (`j` `k`) when they
+    /// do not fit, and the most that is of use (set as the help is drawn).
+    pub help_top: usize,
+    pub help_last: std::cell::Cell<usize>,
     pub prefs: Prefs,
     /// The language in force (`en`, `ja`), from common.toml or the OS.
     pub lang: String,
@@ -409,6 +413,9 @@ pub struct RunDetail {
     pub id: u64,
     /// The workflow file at the run's commit (the `needs:` graph, the inputs).
     pub workflow: Option<Workflow>,
+    /// Whether the workflow file has been asked for and answered (read, or
+    /// not to be read): till then `D` cannot know the inputs.
+    pub yaml_tried: bool,
     pub jobs: Option<Vec<Job>>,
     pub artifacts: Option<Vec<Artifact>>,
 }
@@ -480,6 +487,8 @@ impl App {
             view: View::Inbox,
             mode: Mode::Main,
             help_rules: false,
+            help_top: 0,
+            help_last: Default::default(),
             prefs,
             lang: "en".into(),
             unread: 0,
@@ -644,6 +653,7 @@ impl App {
             return;
         }
         self.palette = None;
+        self.help_top = 0;
         self.mode = if self.mode == Mode::Help { Mode::Main } else { Mode::Help };
     }
 
@@ -720,8 +730,10 @@ impl App {
         match (self.mode, c) {
             (Mode::Notes, c) => return self.notes_key(c),
             (Mode::Help, '?') => self.mode = Mode::Main,
+            (Mode::Help, 'j') => self.help_top = (self.help_top + 1).min(self.help_last.get()),
+            (Mode::Help, 'k') => self.help_top = self.help_top.saturating_sub(1),
             (Mode::Settings, _) | (Mode::Help, _) => return false,
-            (Mode::Main, '?') => self.mode = Mode::Help,
+            (Mode::Main, '?') => (self.mode, self.help_top) = (Mode::Help, 0),
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
             (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
@@ -805,6 +817,24 @@ impl App {
         self.acts.selected(&self.runs)
     }
 
+    /// The view's keys that do something now, for the keybar: in Actions,
+    /// `R` only on a failed run, `X` on one still going, `p` on one from a
+    /// pull request.
+    pub fn keys_now(&self) -> Vec<(&'static str, &'static str)> {
+        let run = self.run();
+        self.view
+            .keys()
+            .iter()
+            .copied()
+            .filter(|(_, w)| match *w {
+                "key.rerun" => run.is_some_and(|r| r.status == actions::Status::Bad),
+                "key.cancel" => run.is_some_and(|r| r.status.active()),
+                "run.open_pr" => run.is_some_and(|r| r.pr.is_some()),
+                _ => true,
+            })
+            .collect()
+    }
+
     /// A key in the Actions view: `R` runs the failed jobs again, `X` stops,
     /// `D` starts the workflow by hand, `e` opens the failed job's log, `p`
     /// the pull request, `o` the run; the rest moves the cursor.
@@ -819,6 +849,12 @@ impl App {
             'X' if run.status.active() => self.queue(&format!("write:{}:cancel", run.id), actions::cancel(&run), Some("run.cancelled")),
             'X' => self.say_key("run.not_active"),
             'D' => {
+                // Its inputs come with the workflow file: not before it.
+                let tried = self.run_detail.as_ref().is_some_and(|d| d.id == run.id && d.yaml_tried);
+                if !tried && workflow::contents_path(&run).is_some() {
+                    self.say_key("run.reading");
+                    return true;
+                }
                 let inputs = self.workflow_of(&run).map(|w| w.inputs.clone()).unwrap_or_default();
                 if inputs.is_empty() {
                     self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
@@ -1249,7 +1285,7 @@ impl App {
     pub fn run_cmd(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Settings => self.mode = Mode::Settings,
-            Cmd::Help => self.mode = Mode::Help,
+            Cmd::Help => (self.mode, self.help_top) = (Mode::Help, 0),
             Cmd::Notes => self.mode = Mode::Notes,
             Cmd::MarkAll => self.mark_all_read(),
             Cmd::Scale(to) => self.scale(to),
@@ -1301,6 +1337,12 @@ impl App {
     fn say_key(&mut self, key: &'static str) {
         let words = self.tr(key);
         self.say(words);
+    }
+
+    /// Whether the searches are of closed items: `C` while the list is
+    /// open. The inbox and the rest keep the open ones.
+    pub fn closed_shown(&self) -> bool {
+        self.show_closed && self.view == View::List
     }
 
     /// Whose repositories are shown: the owner the settings name, else the
@@ -1442,8 +1484,14 @@ impl App {
     }
 
     /// Whether the writing box offers field `f` (0 Labels .. 5 Reviewers);
-    /// says so in a toast when the settings hide it.
+    /// says so in a toast when the settings hide it. Reviewers on anything
+    /// but a PR say that first, hidden or not.
     pub fn field_shown(&mut self, f: usize) -> bool {
+        let pr = self.compose.as_ref().is_some_and(|c| self.item(&c.id).is_some_and(|i| i.kind == Kind::Pr));
+        if f == 5 && !pr {
+            self.say_key("write.not_pr");
+            return false;
+        }
         let on = self.settings.fields[f];
         if !on {
             self.say_key("pick.hidden");
@@ -1576,7 +1624,7 @@ impl App {
     fn repo_settings(&mut self) {
         let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
         self.queue(&format!("a-repo:{repo}"), Call::Get(minato_core::reposettings::path(&repo)), None);
-        self.overlay = Some(Overlay::Log(LogView::new(0, format!("{repo}  settings"))));
+        self.overlay = Some(Overlay::Log(LogView::new(0, repo)));
     }
 
     /// `N`: open the writing box for a new issue in the selected item's
@@ -1846,6 +1894,22 @@ mod tests {
     }
 
     #[test]
+    fn the_keybar_shows_the_run_keys_that_apply() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Bad, Some(9)), run(2, actions::Status::Running, None), run(3, actions::Status::Ok, None)];
+        let words = |a: &App| a.keys_now().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
+        let w = words(&a);
+        assert!(w.contains(&"key.rerun") && !w.contains(&"key.cancel") && w.contains(&"run.open_pr"));
+        a.feed('j');
+        let w = words(&a);
+        assert!(!w.contains(&"key.rerun") && w.contains(&"key.cancel") && !w.contains(&"run.open_pr"));
+        a.feed('j');
+        let w = words(&a);
+        assert!(!w.contains(&"key.rerun") && !w.contains(&"key.cancel") && w.contains(&"key.dispatch"));
+    }
+
+    #[test]
     fn actions_keys_rerun_cancel_and_open() {
         let mut a = app();
         a.feed('3');
@@ -1863,6 +1927,11 @@ mod tests {
         assert_eq!(a.outbox[1].key, "write:2:cancel");
         assert!(a.feed('R'));
         assert_eq!(a.outbox.len(), 2, "a running run is not re-run");
+        // Not before its workflow file is read: the inputs may want the form.
+        assert!(a.feed('D'));
+        assert_eq!(a.outbox.len(), 2);
+        assert_eq!(a.toast.as_ref().map(|t| t.0.clone()), Some(a.tr("run.reading").to_string()));
+        a.run_detail = Some(RunDetail { id: 2, yaml_tried: true, ..Default::default() });
         assert!(a.feed('D'));
         assert_eq!(a.outbox[2].key, "write:2:dispatch");
         assert!(a.feed('e'));
@@ -2201,6 +2270,11 @@ mod tests {
         assert!(a.confirm.is_none(), "reopening asks nothing");
         assert!(a.outbox.last().is_some_and(|o| o.key.ends_with(":state")));
         assert!(a.feed('C') && !a.show_closed);
+        // Only the list searches closed ones; the inbox keeps the open.
+        a.show_closed = true;
+        assert!(a.closed_shown());
+        a.view = View::Inbox;
+        assert!(!a.closed_shown());
     }
 
     #[test]
@@ -2210,6 +2284,11 @@ mod tests {
         a.feed('r');
         a.open_extra_picker(true);
         assert!(a.compose.as_ref().unwrap().picker.is_none() && a.toast.is_some());
+        // Hidden in the settings, it still says it is for PRs.
+        a.settings.fields[5] = false;
+        a.toast = None;
+        assert!(!a.field_shown(5));
+        assert_eq!(a.toast.as_ref().map(|t| t.0.clone()), Some(a.tr("write.not_pr").to_string()));
     }
 
     #[test]
@@ -2347,6 +2426,7 @@ mod tests {
             updated_at: String::new(),
             draft: false,
             merged: false,
+            closed: false,
             conflict: false,
             mentioned: false,
             peek: String::new(),
@@ -2607,7 +2687,7 @@ mod tests {
         a.runs = vec![run(1, actions::Status::Bad, None)];
         a.acts.col = actions::Col::Runs;
         let job = |id, name: &str, status| actions::Job { id, name: name.into(), status, started_at: String::new(), completed_at: String::new(), url: String::new() };
-        a.run_detail = Some(RunDetail { id: 1, jobs: Some(vec![job(10, "lint", actions::Status::Ok), job(11, "Test (linux)", actions::Status::Bad)]), workflow: Some(workflow::parse(yaml)), ..Default::default() });
+        a.run_detail = Some(RunDetail { id: 1, jobs: Some(vec![job(10, "lint", actions::Status::Ok), job(11, "Test (linux)", actions::Status::Bad)]), workflow: Some(workflow::parse(yaml)), yaml_tried: true, ..Default::default() });
     }
 
     #[test]
