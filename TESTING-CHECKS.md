@@ -347,10 +347,10 @@
 
 ## 32. The writing box's fields, the preview and the filter cursor
 
-- [ ] **32.1** Press `r` on an issue and `Alt+R`; switch Milestone off, then `Alt+M` → Each says so in a toast; no `r` or `m` is typed into the box
-- [ ] **32.2** Press `r`, write more Markdown than the box holds, `Ctrl+P`; turn the wheel over the preview; `Ctrl+P` twice → The preview starts at the top; the wheel scrolls it 3 lines a notch and stops at its end, and the detail behind does not move; shown again it starts at the top
+- [x] **32.1** Press `r` on an issue and `Alt+R`; switch Milestone off, then `Alt+M` → Each says so in a toast; no `r` or `m` is typed into the box
+- [x] **32.2** Press `r`, write more Markdown than the box holds, `Ctrl+P`; turn the wheel over the preview; `Ctrl+P` twice → The preview starts at the top; the wheel scrolls it 3 lines a notch and stops at its end, and the detail behind does not move; shown again it starts at the top
 - [ ] **32.3** Select an item in the Project with a Status and a Priority, then a PR with a milestone and a review asked → The chips above the box show the Status, the Priority, the milestone and the reviewers (a team by its name); a field with nothing set shows "—"
-- [ ] **32.4** Press `3` and select a `pull_request` run whose PR is merged; press `p` → The facts show "branch → main" and the keys `p`; `p` opens GitHub's PR search for the run's branch
-- [ ] **32.5** In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` → The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there
+- [x] **32.4** Press `3` and select a `pull_request` run whose PR is merged; press `p` → The facts show "branch → main" and the keys `p`; `p` opens GitHub's PR search for the run's branch
+- [x] **32.5** In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` → The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there
 - [ ] **32.6** Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set → The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)`
 - [ ] **32.7** On a PR with a review asked press `r`, `Alt+R`, untick the person, `Esc` → The person is ticked at first; after `Esc` a toast says the request was taken off and GitHub no longer lists them
