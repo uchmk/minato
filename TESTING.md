@@ -124,6 +124,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 9.10 | Fill the list with many runs | No scrollbar; the rows that do not fit hide and "more" shows; none is folded |
 | 9.11 | Select a failed run and click the `R` button in its "Next" box; on a running run click `X` | The pointer turns to a hand over the button; the click does what the key does (the toast and the run's change as in 9.4 and 9.5) |
 | 9.12 | In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) | The click does what the key does |
+| 9.13 | In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions | The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds) |
 
 ## 10. Board
 

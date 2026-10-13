@@ -8,8 +8,10 @@
 //! searches, the board, the runs; those of the open view go first, the
 //! others' less often), `quick` for what a key asks for (a detail, a run's
 //! jobs, a log, a write), so it never waits behind a poll, and `back` for
-//! reading the finished runs' jobs ahead. They share one ETag cache, filled
-//! from disk at a start, so an answer that has not changed costs a 304.
+//! reading the finished runs' jobs ahead. The runs of each repository are
+//! asked on `runs`, a few at once, so Actions does not wait for them one by
+//! one. They share one ETag cache, filled from disk at a start, so an
+//! answer that has not changed costs a 304.
 //!
 //! A run's jobs, artifacts and workflow are kept by run with its
 //! `updated_at`: a finished run's are shown from there (and from disk after
@@ -42,6 +44,9 @@ use crate::overlay::Overlay;
 /// How often the rate limit is asked while plenty is left.
 const POLL: Duration = Duration::from_secs(60);
 
+/// How many repositories' runs are asked at once.
+const RUN_LANES: usize = 4;
+
 type Found = Option<(Token, Source)>;
 
 pub struct Net {
@@ -49,6 +54,8 @@ pub struct Net {
     worker: Option<Worker>,
     quick: Option<Worker>,
     back: Option<Worker>,
+    /// The workers the runs of the repositories are spread over.
+    runs: Vec<Worker>,
     /// The ETags and bodies the workers' GETs were last answered with.
     etags: Etags,
     /// Jobs sent to `back` and not answered yet.
@@ -184,7 +191,7 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, back: None, etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
+        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rate: None, next_search: now, searched_closed: false, searched_custom: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -608,6 +615,12 @@ impl Net {
                     let client = |token: Token| Client::sharing(UreqTransport::new(), token, self.etags.clone());
                     self.quick = Some(Worker::spawn(client(token.clone()), move || wake2.request_repaint()));
                     self.back = Some(Worker::spawn(client(token.clone()), move || wake3.request_repaint()));
+                    self.runs = (0..RUN_LANES)
+                        .map(|_| {
+                            let wake = ctx.clone();
+                            Worker::spawn(client(token.clone()), move || wake.request_repaint())
+                        })
+                        .collect();
                     let worker = Worker::spawn(client(token), move || wake.request_repaint());
                     worker.send(get("me", "/user"));
                     worker.send(get("rate", "/rate_limit"));
@@ -628,6 +641,9 @@ impl Net {
         self.load_cache(app);
         let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
         let mut replies: Vec<_> = std::iter::from_fn(|| worker.try_recv().or_else(|| quick.try_recv())).map(|r| (r, false)).collect();
+        for w in &self.runs {
+            replies.extend(std::iter::from_fn(|| w.try_recv()).map(|r| (r, false)));
+        }
         if let Some(back) = &self.back {
             replies.extend(std::iter::from_fn(|| back.try_recv()).map(|r| (r, true)));
         }
@@ -784,8 +800,13 @@ impl Net {
             if self.repos.is_empty() {
                 send(get("a-repos", &actions::repos_path(self.other())), open);
             } else {
-                for r in &self.repos {
-                    send(Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) }, open);
+                for (k, r) in self.repos.iter().enumerate() {
+                    let job = Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) };
+                    match self.runs.get(k % RUN_LANES) {
+                        Some(w) if open => w.send_first(job),
+                        Some(w) => w.send(job),
+                        None => send(job, open),
+                    }
                 }
                 // A running or queued run's jobs are asked again with the runs.
                 if open && app.run().is_some_and(|r| r.status.active()) {
