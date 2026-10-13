@@ -109,7 +109,7 @@
 - [x] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [x] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [x] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
-- [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
+- [x] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
 - [x] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [x] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [x] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
@@ -139,7 +139,7 @@
 - [x] **11.2** Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) → The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one
 - [ ] **11.2a** Press `d` on a card in the inbox, then `Enter` on a notification of the same thread → The inbox opens on that card under "Done today" (the notification has no `Inbox` badge)
 - [x] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
-- [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
+- [x] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
 - [x] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
 - [x] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens the inbox on that repository's "CI is red on main" card when there is one, else Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato has neither, the repository's Actions page is shown, not its top
 - [x] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
