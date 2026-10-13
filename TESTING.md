@@ -24,6 +24,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 2.1 | Press `1`, `2`, `3`, `4` | The matching tab lights with an underline and the empty view's name and text change |
 | 2.2 | Click each tab | Same as the digit |
 | 2.3 | Press `?`, then `F1` | A card lists in two columns the global keys and the notifications' at the left and the current view's at the right; `F1`, `?` or `Esc` closes it; digits do nothing while it is open |
+| 2.3a | In the inbox, press `F1`; then in the board | In the inbox, below the keys, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `d` and `s`; nothing is cut off at the right. In the board there is no such table |
 | 2.4 | Press `,` or click the comma button | The settings screen opens; `Esc` closes it |
 | 2.5 | Press `Ctrl+Shift+P` | A toast says it is not connected yet (the palette comes later) |
 | 2.6 | Look at the keybar in each view | The keys of the view at the left, the first one lit, ending with `F1`; no overflow at 720 px |

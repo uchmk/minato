@@ -52,6 +52,21 @@ impl Rule {
         }
     }
 
+    /// The i18n key of what the owner does about it, for the help.
+    pub fn todo(self) -> &'static str {
+        match self {
+            Rule::RedCi => "do.red_ci",
+            Rule::Mergeable => "do.mergeable",
+            Rule::Question => "do.question",
+            Rule::NeedsOwner => "do.needs_owner",
+            Rule::Finding => "do.finding",
+            Rule::LaneStalled => "do.lane_stalled",
+            Rule::Dependabot => "do.dependabot",
+            Rule::Mention => "do.mention",
+            Rule::MainRed => "do.main_red",
+        }
+    }
+
     /// The key to press next and the i18n key of its name.
     pub fn next(self) -> (&'static str, &'static str) {
         match self {

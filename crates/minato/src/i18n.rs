@@ -75,6 +75,22 @@ const EN: &[(&str, &str)] = &[
     ("help.global", "Everywhere"),
     ("help.close", "Press F1, ? or Esc to close"),
     ("help.notes", "Notifications"),
+    ("help.rules", "Inbox cards: why they are there and what to do"),
+    ("help.key", "Key"),
+    ("help.why", "Why"),
+    ("help.do", "What to do"),
+    ("help.any_card", "Any card"),
+    ("do.red_ci", "Open it, see why it failed and have Claude fix it"),
+    ("do.mergeable", "Merge it"),
+    ("do.question", "Write an answer"),
+    ("do.needs_owner", "Decide: comment \"回答: …\""),
+    ("do.finding", "Take it (assign yourself)"),
+    ("do.lane_stalled", "Check the Task Scheduler on the PC"),
+    ("do.dependabot", "Look inside, then merge or close it"),
+    ("do.mention", "Reply"),
+    ("do.main_red", "Open it and have Claude fix it"),
+    ("do.done", "Done with it: it moves to \"Done today\" and goes after a day"),
+    ("do.later", "Not now: hidden until 9:00 tomorrow"),
     ("key.ends", "The first or the last (the top or the end of a detail)"),
     ("key.views", "Open a view"),
     ("key.cycle", "Next or previous view"),
@@ -352,6 +368,22 @@ const JA: &[(&str, &str)] = &[
     ("help.global", "どこでも"),
     ("help.close", "F1・? か Esc で閉じる"),
     ("help.notes", "通知"),
+    ("help.rules", "受信箱のカード：理由とすること"),
+    ("help.key", "キー"),
+    ("help.why", "理由"),
+    ("help.do", "すること"),
+    ("help.any_card", "どのカードでも"),
+    ("do.red_ci", "開いて原因を見て、Claude に直させる"),
+    ("do.mergeable", "マージする"),
+    ("do.question", "返事を書く"),
+    ("do.needs_owner", "「回答: …」とコメントして決める"),
+    ("do.finding", "引き受ける（自分を担当にする）"),
+    ("do.lane_stalled", "PC のタスク スケジューラを確かめる"),
+    ("do.dependabot", "中を見て、マージか閉じる"),
+    ("do.mention", "返事を書く"),
+    ("do.main_red", "開いて Claude に直させる"),
+    ("do.done", "済んだら押す。「今日済んだ」に移り、1 日で消える"),
+    ("do.later", "今はしない。明日 9:00 まで隠す"),
     ("key.ends", "先頭・末尾へ（詳しくは上と終わりへ）"),
     ("key.views", "ビューを開く"),
     ("key.cycle", "次・前のビュー"),
@@ -589,7 +621,7 @@ mod tests {
     fn the_rules_and_the_notifications_have_words() {
         let has = |k: &str| EN.iter().any(|(key, _)| *key == k);
         for rule in minato_core::inbox::RULES {
-            for k in [rule.why(), rule.note(), rule.next().1] {
+            for k in [rule.why(), rule.note(), rule.next().1, rule.todo()] {
                 assert!(has(k), "{k}");
             }
         }

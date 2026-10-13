@@ -6,6 +6,7 @@ use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense,
 use ito_common::Clock;
 
 use ito_layout::Node;
+use minato_core::inbox::RULES;
 
 use crate::app::{App, Click, GLOBAL_KEYS, Mode, NoteClick, Pane, View, Wheel};
 
@@ -493,7 +494,8 @@ fn word_for(app: &App, key: &'static str) -> &'static str {
     app.tr(key)
 }
 
-/// The list of every key: the global ones, then the view's.
+/// The list of every key: the global ones, then the view's; over the inbox,
+/// a table of its cards' reasons below them.
 fn help(ui: &mut Ui, app: &App, r: Rect) {
     let c = ito_theme::colors();
     let p = ui.painter().clone();
@@ -502,7 +504,10 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     let left: [(&str, &[(&str, &'static str)]); 2] = [(app.tr("help.global"), &GLOBAL_KEYS), (app.tr("help.notes"), &NOTES_KEYS)];
     let right: [(&str, &[(&str, &'static str)]); 1] = [(app.tr(app.view.label()), app.view.keys())];
     let tall = |s: &[(&str, &[(&str, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
-    let h = 50.0 + tall(&left).max(tall(&right)) + 30.0;
+    let cols = tall(&left).max(tall(&right));
+    let rules = app.view == View::Inbox;
+    let rules_h = if rules { 48.0 + (RULES.len() + HELP_MARKS.len()) as f32 * 20.0 } else { 0.0 };
+    let h = 50.0 + cols + rules_h + 30.0;
     let w = (r.width() - 24.0).min(860.0);
     let card = Rect::from_center_size(r.center(), vec2(w, h.min(r.height() - 24.0).max(80.0)));
     p.rect_filled(card, CornerRadius::same(10), c.raised());
@@ -527,8 +532,34 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     };
     column(card.left() + 20.0, &left);
     column(card.left() + 20.0 + col_w, &right);
+    if rules {
+        // One row per rule (its key, reason and what to do), then the keys
+        // that put any card away.
+        let x = card.left() + 20.0;
+        let (why_x, do_x, end) = (x + 70.0, x + 70.0 + (w - 110.0) * 0.4, card.right() - 20.0);
+        let mut y = card.top() + 50.0 + cols;
+        p.text(pos2(x, y), Align2::LEFT_TOP, app.tr("help.rules"), FontId::proportional(11.5), ACCENT);
+        y += 20.0;
+        for (at, word) in [(x, "help.key"), (why_x, "help.why"), (do_x, "help.do")] {
+            p.text(pos2(at, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(11.0), c.dim);
+        }
+        y += 20.0;
+        let rows = RULES.iter().map(|rule| (rule.next().0, rule.why(), rule.todo())).chain(HELP_MARKS);
+        for (key, why, todo) in rows {
+            if y + 18.0 > card.bottom() - 28.0 {
+                break;
+            }
+            p.text(pos2(x, y), Align2::LEFT_TOP, key, FontId::monospace(12.0), c.fg);
+            p.with_clip_rect(Rect::from_min_max(pos2(why_x, y), pos2(do_x - 12.0, y + 20.0))).text(pos2(why_x, y), Align2::LEFT_TOP, app.tr(why), FontId::proportional(12.5), c.fg);
+            p.with_clip_rect(Rect::from_min_max(pos2(do_x, y), pos2(end, y + 20.0))).text(pos2(do_x, y), Align2::LEFT_TOP, app.tr(todo), FontId::proportional(12.5), c.dim);
+            y += 20.0;
+        }
+    }
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
 }
+
+/// The keys that put any inbox card away, after the rules in the help.
+const HELP_MARKS: [(&str, &str, &str); 2] = [("d", "help.any_card", "do.done"), ("s", "help.any_card", "do.later")];
 
 /// The keys over the notifications, for the help.
 const NOTES_KEYS: [(&str, &str); 7] = [("j k", "notes.pick"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("d", "key.read"), ("Shift+A", "notes.read_all"), ("n Esc", "notes.close")];
