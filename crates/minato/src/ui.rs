@@ -79,13 +79,30 @@ pub fn dividers(ui: &Ui, split: &Node<Pane>, r: Rect, out: &mut Out) {
     }
 }
 
-/// The wheel over `r` on `layer`, into `out.wheel` as notches (a touchpad's
-/// points are 40 a notch). Not with Ctrl: that is the zoom's.
+/// The wheel over `r` on `layer`, into `out.wheel` as notches. Not over a
+/// part that scrolls by itself ([`OWN_WHEEL`]).
 pub fn wheel(ctx: &egui::Context, layer: egui::LayerId, r: Rect, at: Wheel, out: &mut Out) {
     if !ctx.rect_contains_pointer(layer, r) {
         return;
     }
-    let notches: f32 = ctx.input(|i| {
+    let own: Option<(Rect, u64)> = ctx.data(|d| d.get_temp(egui::Id::new(OWN_WHEEL)));
+    if own.is_some_and(|(o, pass)| pass + 1 >= ctx.cumulative_pass_nr() && ctx.rect_contains_pointer(layer, o)) {
+        return;
+    }
+    let notches = notches(ctx);
+    if notches != 0.0 {
+        out.wheel = Some((at, notches));
+    }
+}
+
+/// Where a part that takes the wheel itself was drawn, and in which pass
+/// (kept in the context's data): the view behind does not scroll under it.
+pub const OWN_WHEEL: &str = "minato-own-wheel";
+
+/// This frame's wheel as notches (a touchpad's points are 40 a notch). Not
+/// with Ctrl: that is the zoom's.
+pub fn notches(ctx: &egui::Context) -> f32 {
+    ctx.input(|i| {
         i.events
             .iter()
             .map(|e| match e {
@@ -97,10 +114,7 @@ pub fn wheel(ctx: &egui::Context, layer: egui::LayerId, r: Rect, at: Wheel, out:
                 _ => 0.0,
             })
             .sum()
-    });
-    if notches != 0.0 {
-        out.wheel = Some((at, notches));
-    }
+    })
 }
 
 /// Whether a box is over the view this frame (kept in the context's data).

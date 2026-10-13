@@ -73,15 +73,15 @@
 
 ## 8. Writing box and fields
 
-- [ ] **8.1** Select an item and press `r` → The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window
+- [x] **8.1** Select an item and press `r` → The box under the detail (GitHub's "Add a comment") takes the cursor in place, about five lines high; no box covers the window
 - [ ] **8.2** Type text, press `Ctrl+P`, then `Esc` → The preview shows headings, bullets, quotes and code as blocks; `Esc` returns to the field
-- [ ] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
+- [x] **8.3** Select a word and press `Ctrl+B`, `Ctrl+I`, `Ctrl+K` → `**word**`, `_word_` and `[word](url)` (with `url` selected)
 - [ ] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
 - [ ] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
 - [ ] **8.5a** In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` → A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project
 - [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project
 - [ ] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
-- [ ] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
+- [x] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
 - [ ] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
 - [ ] **8.6c** Press `m` in the list on a ready PR, `Enter` → The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead
 - [ ] **8.6d** Press `x` on a merged item or a discussion → A toast says only an open issue or PR can be closed
@@ -109,7 +109,7 @@
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
 - [ ] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
-- [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
+- [x] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [x] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
 - [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button; the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
 - [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
@@ -181,11 +181,11 @@
 - [x] **15.1** `Ctrl+,`, open the "minato" page → Cards for whose repositories (the owner and the board Project), the nine inbox rules and the six writing-box fields, each with a switch, and the saved searches; Milestone, Priority, Reviewers and the dependabot rule are off
 - [ ] **15.2** Switch the dependabot rule on and go to the inbox → A dependabot PR now appears with its reason
 - [ ] **15.3** Switch Milestone on, press `r` then `Alt+M` on an item → The milestone picker opens; with it off, a toast says the field is hidden
-- [ ] **15.4** Change a switch, quit and start again → The switches keep their state; `minato-settings.json` sits beside common.toml
-- [ ] **15.5** Open the minato page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
-- [ ] **15.6** Type `https://github.com/@rust-lang` in the owner box and press Enter → The box shows `rust-lang`
-- [ ] **15.7** Type `Triage Queue` in "Board Project" and press Enter, then open the board → The board shows that Project; a title no Project has shows the owner's first Project
-- [ ] **15.8** Clear the owner box and press Enter; quit and start again → Your own repositories come back with no old rust-lang cards or runs left; the ring goes; the owner and the Project are kept across the restart
+- [x] **15.4** Change a switch, quit and start again → The switches keep their state; `minato-settings.json` sits beside common.toml
+- [x] **15.5** Open the minato page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
+- [x] **15.6** Type `https://github.com/@rust-lang` in the owner box and press Enter → The box shows `rust-lang`
+- [x] **15.7** Type `Triage Queue` in "Board Project" and press Enter, then open the board → The board shows that Project; a title no Project has shows the owner's first Project
+- [x] **15.8** Clear the owner box and press Enter; quit and start again → Your own repositories come back with no old rust-lang cards or runs left; the ring goes; the owner and the Project are kept across the restart
 
 ## 16. Closed items
 
@@ -210,9 +210,9 @@
 
 ## 19. New issue
 
-- [ ] **19.1** In the inbox or the list press `N` → The writing box opens titled "New issue" with the repository of the selected item
+- [x] **19.1** In the inbox or the list press `N` → The writing box opens titled "New issue" with the repository of the selected item
 - [ ] **19.2** Type a title, a new line and a body, then `Ctrl+Enter` → A toast says the issue was created; it is on GitHub with that title and body and appears in the list soon
-- [ ] **19.3** Press `N`, leave it empty, `Ctrl+Enter` → A toast says the title is empty and the box stays open
+- [x] **19.3** Press `N`, leave it empty, `Ctrl+Enter` → A toast says the title is empty and the box stays open
 
 ## 20. Repository settings
 
@@ -231,9 +231,9 @@
 
 ## 23. Saved searches
 
-- [ ] **23.1** In the settings (`,`), minato page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
-- [ ] **23.2** In the list move to the filter column and choose that search under saved → The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds
-- [ ] **23.3** Choose "All" under saved, or switch to the inbox → The ordinary list comes back
+- [x] **23.1** In the settings (`,`), minato page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
+- [x] **23.2** In the list move to the filter column and choose that search under saved → The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds
+- [x] **23.3** Choose "All" under saved, or switch to the inbox → The ordinary list comes back
 
 ## 24. Columns, mouse and arrows
 
@@ -246,10 +246,10 @@
 
 ## 25. Comment box, Markdown, kept widths and the cache
 
-- [ ] **25.1** Select an issue and look under the detail → A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment"; in a narrower detail (zoom in, or the browser panel open) the toolbar drops its last groups whole (@ #, then the lists) instead of drawing over the tabs
+- [x] **25.1** Select an issue and look under the detail → A box like GitHub's "Add a comment": Write / Preview tabs, a toolbar (H B I quote code link, lists, @ #), about five lines for the text, the hint at the left of the foot, "Close issue" and a green "Comment"; in a narrower detail (zoom in, or the browser panel open) the toolbar drops its last groups whole (@ #, then the lists) instead of drawing over the tabs
 - [x] **25.2** Click the text area, type two lines, then click another row → The box takes the cursor in place; after the click the box leaves and the text stays; back on the item, clicking the box shows the text again
 - [x] **25.3** Select a word and click B, I, the link and the list buttons → The word becomes `**word**`, `_word_`, `[word](url)`, and the line a list item; hovering a button shows its name
-- [x] **25.4** Click Preview, then Write → The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text
+- [ ] **25.4** Click Preview, then Write → The text shows as Markdown (headings, bold, lists, quotes, code), then the field comes back with the text
 - [x] **25.5** With nothing written click "Comment", then "Close issue" → "Comment" is dim and does nothing; "Close issue" asks first, as `x` does
 - [ ] **25.6** Type a comment and click "Close with comment" (the close button's name once there is text) → The comment is sent and the issue is closed
 - [x] **25.7** Look at an item whose body and comments use Markdown → Headings, bold, italic, code, lists, quotes and links show as such in the detail, not as raw marks
@@ -260,7 +260,7 @@
 ## 26. HTML in Markdown, the wheel, the scale, the hover and the messages
 
 - [ ] **26.1** Look at an item whose body has `<details><summary>…</summary>` and `<b>`, `<code>`, `<br>`, `<a href>` → The summary is a bar with a triangle pointing down and what the details hold under it; bold, code, the line break and the link show as Markdown does; no raw tags are left
-- [ ] **26.2** Turn the wheel over the inbox cards, the list's filters and rows, the Actions runs, a board column and the notifications → The selection (or the filter cursor) moves one a notch, down for down; the column under the pointer takes the focus
+- [x] **26.2** Turn the wheel over the inbox cards, the list's filters and rows, the Actions runs, a board column and the notifications → The selection (or the filter cursor) moves one a notch, down for down; the column under the pointer takes the focus
 - [x] **26.3** Turn the wheel over a long detail in the inbox, the list and Actions → It scrolls about three lines a notch; in the inbox and the list it stops once its end shows, and at the top
 - [x] **26.4** Press Ctrl+=, Ctrl++ (with Shift), Ctrl+- and Ctrl+0, also on the settings screen, and pick "Zoom in" in the palette → The window grows or shrinks a step, a message says the size (as kura's), Ctrl+0 brings it back to 100%; kura and tsumugi take the same size from common.toml
 - [x] **26.5** Rest the pointer on an inbox card, a list row and a board card → A box with the first lines of the item's body in monospace shows, as tsumugi's peek of a session; none for an item without a body or while a card is dragged
@@ -271,7 +271,7 @@
 - [x] **27.1** Look at the detail of an item in the inbox and the list, and of a run in Actions → The title, the meta line, the next box, the checks, the body and the comments read a step larger than in 0.23.0; nothing overlaps
 - [x] **27.2** In an inbox with 30 cards and a short window, select one in the middle → The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines in their own sections, each saying how many of that section are hidden
 - [x] **27.3** Focus a long detail (`l` in the list, Actions' detail) and hold `j`, then press `k` once; turn the wheel down over it too → The scroll stops once the end shows; one `k` moves it up at once
-- [ ] **27.4** Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications → `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd
+- [x] **27.4** Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications → `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd
 - [x] **27.5** Press `F1` in each view, with the palette open and in the notifications → The key list opens (the palette closes); `F1` again closes it; the keybar ends with `F1`; the list has "gg G"
 - [x] **27.6** Open the palette → There are no lines to go to Inbox, List, Actions or Board
 
@@ -331,16 +331,26 @@
 - [x] **31.3** Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` → No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows
 - [x] **31.4** Narrow the window, press `1` and `/`, type a few letters → The search's hint goes first, then the field narrows; neither runs into the sync status
 - [x] **31.5** On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` → Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out; the keybar keeps `F1 Esc` to the last (only its key when there is no room)
-- [ ] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's; `F1` still lists them all
-- [ ] **31.7** Open the palette and type part of a long title → The title is cut with `…` inside its row, clear of the key hint
-- [ ] **31.8** Press `r` on an issue, then `Alt+R` → A toast says reviewers are for pull requests; no picker opens
+- [ ] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's (also when that PR is merged); `F1` still lists them all
+- [~] **31.7** Open the palette and type part of a long title → The title is cut with `…` inside its row, clear of the key hint
+- [x] **31.8** Press `r` on an issue, then `Alt+R` → A toast says reviewers are for pull requests; no picker opens
 - [x] **31.9** Press `S` in the list → The repository settings' heading is the repository's name alone
 - [x] **31.10** Press `C` in the list, then `1` → The inbox has no card of a closed issue or a merged PR
 - [ ] **31.11** Select a run of a workflow with `workflow_dispatch` and press `D` at once → Until its file is read, a toast says it is reading the workflow file and to press `D` again; then `D` opens the form with its inputs (or a box asking to run it)
-- [ ] **31.12** Press `r` and type more lines than the box holds → The text scrolls inside the box with the caret in view; nothing is drawn below the box
+- [x] **31.12** Press `r` and type more lines than the box holds → The text scrolls inside the box with the caret in view; nothing is drawn below the box
 - [x] **31.13** Narrow the window until the title bar's palette button is small → The key name (`Ctrl+Shift+P`) goes first and the label stays; they never overlap
-- [ ] **31.14** Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` → The counter shows whichever of the REST (`core`) and GraphQL budgets has less left
+- [x] **31.14** Use the list and the board for a while, then compare the keybar's `API n/m` with `gh api rate_limit` → The counter shows whichever of the REST (`core`) and GraphQL budgets has less left
 - [x] **31.15** Narrow the inbox column to its least, then zoom in; press `r` on the least window → A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail; the open box stays inside the detail, its field chips going first
 - [x] **31.16** Rest the pointer on a row of the list until its body shows, then press `S` → The repository settings show without the row's body over them
 - [x] **31.17** Press `2`, `C`, wait for the closed items, then `1` → The inbox shows its cards at once, not "nothing is waiting"
 - [x] **31.18** Press `r` on an item, `Ctrl+P`, `Alt+L`, then `Esc` until the box closes; press `N`, also with the browser panel open; press `x`; open the palette; press `L` on a failed job; then narrow the window in each → The keybar shows the keys of what is open, not the view's: the box's `Ctrl+Enter` (comment, or create for a new issue), `Ctrl+P`, `Ctrl+Shift+Enter` and the fields' `Alt` keys (none for a new issue) and `Esc` (back to writing in the preview); the picker's `Enter` `↑ ↓` `Esc`; the confirmation's `Enter` and `Esc`; the palette's and the log's keys; the foot of the box over the view (`N`) lists the same keys as the keybar; narrowed, the other keys go first and `Esc` stays, with its words when it is alone and they fit
+
+## 32. The writing box's fields, the preview and the filter cursor
+
+- [ ] **32.1** Press `r` on an issue and `Alt+R`; switch Milestone off, then `Alt+M` → Each says so in a toast; no `r` or `m` is typed into the box
+- [ ] **32.2** Press `r`, write more Markdown than the box holds, `Ctrl+P`; turn the wheel over the preview; `Ctrl+P` twice → The preview starts at the top; the wheel scrolls it 3 lines a notch and stops at its end, and the detail behind does not move; shown again it starts at the top
+- [ ] **32.3** Select an item in the Project with a Status and a Priority, then a PR with a milestone and a review asked → The chips above the box show the Status, the Priority, the milestone and the reviewers (a team by its name); a field with nothing set shows "—"
+- [ ] **32.4** Press `3` and select a `pull_request` run whose PR is merged; press `p` → The facts show "branch → main" and the keys `p`; `p` opens GitHub's PR search for the run's branch
+- [ ] **32.5** In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` → The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there
+- [ ] **32.6** Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set → The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)`
+- [ ] **32.7** On a PR with a review asked press `r`, `Alt+R`, untick the person, `Esc` → The person is ticked at first; after `Esc` a toast says the request was taken off and GitHub no longer lists them

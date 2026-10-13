@@ -176,7 +176,8 @@ impl Net {
         if !self.searched_closed {
             all.extend(self.stubs.iter().cloned());
         }
-        app.items = all;
+        let before = std::mem::replace(&mut app.items, all);
+        app.list.follow(&before, &app.items);
         app.list.clamp(&app.items, app.viewer.as_deref().unwrap_or(""));
     }
 
@@ -355,15 +356,15 @@ impl Net {
                 let labels = k.starts_with("labels:");
                 let repo = &k[7..];
                 match parse_names(body, if labels { "name" } else { "login" }) {
-                    Ok(v) if labels => app.got_lists(repo, |l| l.labels = v),
-                    Ok(v) => app.got_lists(repo, |l| l.people = v),
+                    Ok(v) if labels => app.got_lists(repo, |l| (l.labels, l.came[0]) = (v, true)),
+                    Ok(v) => app.got_lists(repo, |l| (l.people, l.came[1]) = (v, true)),
                     Err(e) => self.list_failed(app, repo, e),
                 }
             }
             k if k.starts_with("miles:") => {
                 let repo = &k[6..];
                 match minato_core::github::write::parse_milestones(body) {
-                    Ok(v) => app.got_lists(repo, |l| l.milestones = v),
+                    Ok(v) => app.got_lists(repo, |l| (l.milestones, l.came[2]) = (v, true)),
                     Err(e) => self.list_failed(app, repo, e),
                 }
             }

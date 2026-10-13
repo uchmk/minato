@@ -252,9 +252,20 @@ pub fn dispatch_with(run: &Run, inputs: &[(String, String)]) -> Call {
     post(format!("/repos/{}/actions/workflows/{}/dispatches", run.repo, run.workflow_id), json!({ "ref": run.branch, "inputs": map }))
 }
 
-/// The page of the pull request a run belongs to.
+/// The page of the pull request a run belongs to. GitHub leaves the number out
+/// once the PR is merged or when it comes from a fork, so a `pull_request` run
+/// without one opens the search for its branch.
 pub fn pr_url(run: &Run) -> Option<String> {
-    run.pr.map(|n| format!("https://github.com/{}/pull/{n}", run.repo))
+    match run.pr {
+        Some(n) => Some(format!("https://github.com/{}/pull/{n}", run.repo)),
+        None if has_pr(run) => Some(format!("https://github.com/{}/pulls?q=is%3Apr+head%3A{}", run.repo, run.branch)),
+        None => None,
+    }
+}
+
+/// Whether the run belongs to a pull request, known or not.
+pub fn has_pr(run: &Run) -> bool {
+    run.pr.is_some() || run.event.starts_with("pull_request")
 }
 
 /// What the filter column chooses from.
@@ -545,5 +556,8 @@ mod tests {
         assert_eq!(body, r#"{"ref":"feat/x"}"#);
         assert_eq!(pr_url(r).as_deref(), Some("https://github.com/uchmk/kura/pull/361"));
         assert_eq!(pr_url(&runs()[1]), None);
+        let merged = Run { pr: None, event: "pull_request".into(), ..r.clone() };
+        assert!(has_pr(&merged));
+        assert_eq!(pr_url(&merged).as_deref(), Some("https://github.com/uchmk/kura/pulls?q=is%3Apr+head%3Afeat/x"));
     }
 }

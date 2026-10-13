@@ -472,6 +472,9 @@ pub struct Lists {
     pub labels: Vec<String>,
     pub people: Vec<String>,
     pub milestones: Vec<(u64, String)>,
+    /// Which of the three have come (an empty list that came is not one
+    /// on its way).
+    pub came: [bool; 3],
 }
 
 /// The writing box: a comment on one item, with the labels and the
@@ -486,8 +489,23 @@ pub struct Compose {
     pub people: Vec<String>,
     /// The repository's open milestones, `(number, title)`.
     pub milestones: Vec<(u64, String)>,
+    /// Which of the labels, people and milestones have come.
+    pub came: [bool; 3],
     /// A toolbar button clicked, for the box to apply to its selection.
     pub tool: Option<Tool>,
+}
+
+impl Compose {
+    /// Whether the open picker's list has come (Status and Priority come
+    /// with the Project).
+    pub fn picker_ready(&self) -> bool {
+        match self.picker.as_ref().map(|(k, _)| *k) {
+            Some(Pick::Labels) => self.came[0],
+            Some(Pick::Assignees | Pick::Reviewers) => self.came[1],
+            Some(Pick::Milestone) => self.came[2],
+            _ => true,
+        }
+    }
 }
 
 impl App {
@@ -848,7 +866,7 @@ impl App {
             .filter(|(_, w)| match *w {
                 "key.rerun" => run.is_some_and(|r| r.status == actions::Status::Bad),
                 "key.cancel" => run.is_some_and(|r| r.status.active()),
-                "run.open_pr" => run.is_some_and(|r| r.pr.is_some()),
+                "run.open_pr" => run.is_some_and(actions::has_pr),
                 _ => true,
             })
             .collect()
@@ -1614,8 +1632,8 @@ impl App {
             self.queue(&key, call, None);
         }
         let text = self.drafts.remove(&item.id).unwrap_or_default();
-        let Lists { labels, people, milestones } = self.lists.get(&item.repo).cloned().unwrap_or_default();
-        self.compose = Some(Compose { id: item.id, text, preview: false, picker: None, labels, people, milestones, tool: None });
+        let Lists { labels, people, milestones, came } = self.lists.get(&item.repo).cloned().unwrap_or_default();
+        self.compose = Some(Compose { id: item.id, text, preview: false, picker: None, labels, people, milestones, came, tool: None });
     }
 
     /// The jobs that ask for `repo`'s labels, people and milestones, unless
@@ -1649,12 +1667,12 @@ impl App {
     pub fn got_lists(&mut self, repo: &str, set: impl FnOnce(&mut Lists)) {
         let lists = self.lists.entry(repo.to_string()).or_default();
         set(lists);
-        let Lists { labels, people, milestones } = lists.clone();
+        let Lists { labels, people, milestones, came } = lists.clone();
         if !self.composing_in(repo) {
             return;
         }
         let Some(c) = self.compose.as_mut() else { return };
-        (c.labels, c.people, c.milestones) = (labels, people, milestones);
+        (c.labels, c.people, c.milestones, c.came) = (labels, people, milestones, came);
         if let Some((kind, pk)) = c.picker.as_mut() {
             pk.options = match kind {
                 Pick::Labels => c.labels.clone(),
@@ -1710,7 +1728,7 @@ impl App {
     fn new_issue(&mut self) {
         let Some(repo) = self.selected().or(self.items.first()).map(|i| i.repo.clone()) else { return };
         self.close_compose();
-        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), tool: None });
+        self.compose = Some(Compose { id: format!("new:{repo}"), text: String::new(), preview: false, picker: None, labels: Vec::new(), people: Vec::new(), milestones: Vec::new(), came: [false; 3], tool: None });
     }
 
     /// Send the comment; `close` also closes the item.
@@ -1759,7 +1777,16 @@ impl App {
                 let number = picker.chosen.first().and_then(|t| self.compose.as_ref()?.milestones.iter().find(|(_, m)| m == t).map(|(n, _)| *n));
                 self.queue(&format!("write:{n}:milestone"), write::set_milestone(&item, number), Some("write.milestone"));
             }
-            Pick::Reviewers => self.queue(&format!("write:{n}:reviewers"), write::request_reviewers(&item, &picker.chosen), Some("write.reviewers")),
+            Pick::Reviewers => {
+                // The ones ticked are asked; the ones unticked, taken off.
+                let (added, removed) = (picker.added(), picker.removed());
+                if !added.is_empty() {
+                    self.queue(&format!("write:{n}:reviewers"), write::request_reviewers(&item, &added), Some("write.reviewers"));
+                }
+                if !removed.is_empty() {
+                    self.queue(&format!("write:{n}:unreview"), write::remove_reviewers(&item, &removed), Some("write.unreviewed"));
+                }
+            }
             Pick::Status | Pick::Priority => {
                 let priority = kind == Pick::Priority;
                 let (Some(name), Some(p)) = (picker.chosen.first(), self.board.as_mut()) else { return };
@@ -1794,17 +1821,17 @@ impl App {
 
     /// Alt+M (milestone, one choice) or Alt+R (reviewers, PRs only).
     pub fn open_extra_picker(&mut self, reviewers: bool) {
-        let Some(c) = self.compose.as_ref() else { return };
-        let is_pr = self.item(&c.id).is_some_and(|i| i.kind == Kind::Pr);
-        if reviewers && !is_pr {
+        let Some(item) = self.compose.as_ref().and_then(|c| self.item(&c.id)) else { return };
+        if reviewers && item.kind != Kind::Pr {
             self.say_key("write.not_pr");
             return;
         }
         let Some(c) = self.compose.as_mut() else { return };
         c.picker = Some(if reviewers {
-            (Pick::Reviewers, Picker::new(c.people.clone(), Vec::new()))
+            (Pick::Reviewers, Picker::new(c.people.clone(), item.reviewers))
         } else {
-            (Pick::Milestone, Picker::single(c.milestones.iter().map(|(_, t)| t.clone()).collect(), Vec::new()))
+            let now = [item.milestone].into_iter().filter(|m| !m.is_empty()).collect();
+            (Pick::Milestone, Picker::single(c.milestones.iter().map(|(_, t)| t.clone()).collect(), now))
         });
     }
 
@@ -2546,6 +2573,8 @@ mod tests {
             author: "uchmk".into(),
             labels: Vec::new(),
             assignees: Vec::new(),
+            milestone: String::new(),
+            reviewers: Vec::new(),
             comments: 0,
             created_at: String::new(),
             updated_at: String::new(),
@@ -2695,6 +2724,33 @@ mod tests {
         assert!(a.compose.as_ref().unwrap().labels.is_empty() && a.lists["o/other"].labels == ["x"]);
         a.lists_failed(&repo);
         assert_eq!(a.ask_lists(&repo).len(), 3);
+    }
+
+    #[test]
+    fn an_empty_list_that_came_is_not_loading_and_pickers_start_from_the_item() {
+        let mut a = with_pr();
+        let repo = a.selected().unwrap().repo.clone();
+        let id = a.selected().unwrap().id.clone();
+        let it = a.items.iter_mut().find(|i| i.id == id).unwrap();
+        (it.milestone, it.reviewers) = ("v1".into(), vec!["amy".into()]);
+        a.feed('r');
+        a.open_pick(3);
+        assert!(!a.compose.as_ref().unwrap().picker_ready());
+        a.got_lists(&repo, |l| (l.milestones, l.came[2]) = (Vec::new(), true));
+        assert!(a.compose.as_ref().unwrap().picker_ready());
+        assert_eq!(a.compose.as_ref().unwrap().picker.as_ref().unwrap().1.chosen, ["v1"]);
+        a.got_lists(&repo, |l| (l.people, l.came[1]) = (vec!["amy".into(), "bob".into()], true));
+        // Reviewers: bob ticked is asked, amy unticked is taken off.
+        a.outbox.clear();
+        a.open_pick(5);
+        let pk = &mut a.compose.as_mut().unwrap().picker.as_mut().unwrap().1;
+        assert!(pk.is_chosen("amy"));
+        pk.toggle();
+        pk.step(true);
+        pk.toggle();
+        a.apply_pick();
+        let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["write:0:reviewers", "write:0:unreview"]);
     }
 
     #[test]

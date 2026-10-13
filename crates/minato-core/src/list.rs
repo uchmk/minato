@@ -49,6 +49,10 @@ pub struct Item {
     pub author: String,
     pub labels: Vec<Label>,
     pub assignees: Vec<String>,
+    /// The milestone's title (empty when none).
+    pub milestone: String,
+    /// Who a PR asks for a review (logins, or team names).
+    pub reviewers: Vec<String>,
     pub comments: u32,
     /// ISO 8601 UTC, as GitHub sends it.
     pub created_at: String,
@@ -356,6 +360,18 @@ impl ListState {
         }
     }
 
+    /// Keep the filter cursor on the same option after the items changed:
+    /// the repositories and authors come from them, so the options before the
+    /// cursor may have grown or shrunk. On the last when its option is gone.
+    pub fn follow(&mut self, before: &[Item], after: &[Item]) {
+        let flat = |items: &[Item]| -> Vec<Pick> { options(items, &self.searches).into_iter().flat_map(|(_, v)| v).collect() };
+        let (old, new) = (flat(before), flat(after));
+        self.cursor = match old.get(self.cursor).and_then(|p| new.iter().position(|q| q == p)) {
+            Some(k) => k,
+            None => self.cursor.min(new.len().saturating_sub(1)),
+        };
+    }
+
     /// Keep the selection inside the list after the items changed.
     pub fn clamp(&mut self, items: &[Item], me: &str) {
         let n = self.shown(items, me).len();
@@ -410,6 +426,8 @@ mod tests {
             author: author.into(),
             labels: vec![],
             assignees: vec![],
+            milestone: String::new(),
+            reviewers: Vec::new(),
             comments: 0,
             created_at: String::new(),
             updated_at: String::new(),
@@ -501,6 +519,29 @@ mod tests {
         s.sel = 5;
         s.clamp(&it, "me");
         assert_eq!(s.sel, 0);
+    }
+
+    #[test]
+    fn the_filter_cursor_stays_on_its_option_when_the_items_change() {
+        let it = items();
+        let mut s = ListState { col: Col::Filters, searches: vec!["is:open label:bug".into()], ..Default::default() };
+        s.jump(true, &it, "me");
+        let last = Pick::Search(0);
+        // Fewer repositories and authors: the same option, further up.
+        let fewer = vec![item("uchmk/kura", Kind::Pr, "uchmk")];
+        s.follow(&it, &fewer);
+        let flat: Vec<Pick> = options(&fewer, &s.searches).into_iter().flat_map(|(_, v)| v).collect();
+        assert_eq!(flat[s.cursor], last);
+        // Its option gone: on the last one.
+        s.cursor = 1;
+        s.follow(&fewer, &it);
+        assert_eq!(s.cursor, 1, "Repo(kura) is still the second");
+        s.cursor = 2;
+        s.follow(&it, &fewer);
+        assert_eq!(s.cursor, 2, "Repo(tsumugi) is gone: its place now holds Kind(None)");
+        s.cursor = 99;
+        s.follow(&it, &fewer);
+        assert_eq!(s.cursor, flat.len() - 1);
     }
 
     #[test]

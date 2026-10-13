@@ -9,12 +9,15 @@ use crate::list::{Check, Ci, Detail, Entry, Item, Kind, Label, peek_of};
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
 labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
 
+/// Who a PR asks for a review: people by login, teams by name.
+const REVIEWERS: &str = "reviewRequests(first: 5) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }";
+
 /// The search for issues and PRs. Variables: `q` (the query text), `n`.
 pub fn items_query() -> String {
     format!(
         "query($q: String!, $n: Int!) {{ search(query: $q, type: ISSUE, first: $n) {{ nodes {{ __typename \
-... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName assignees(first: 5) {{ nodes {{ login }} }} \
+... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}"
     )
 }
@@ -24,8 +27,8 @@ commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }}
 pub fn item_query() -> String {
     format!(
         "query($url: URI!) {{ resource(url: $url) {{ __typename \
-... on Issue {{ {ITEM_COMMON} state assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName assignees(first: 5) {{ nodes {{ login }} }} \
+... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} \
 ... on Discussion {{ {ITEM_COMMON} }} }} }}"
     )
@@ -119,6 +122,23 @@ struct CommitInner {
 }
 
 #[derive(Deserialize)]
+struct Title {
+    title: String,
+}
+
+#[derive(Deserialize)]
+struct ReviewRequest {
+    #[serde(rename = "requestedReviewer")]
+    reviewer: Option<Reviewer>,
+}
+
+#[derive(Deserialize)]
+struct Reviewer {
+    login: Option<String>,
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct RawItem {
     #[serde(rename = "__typename")]
     typename: String,
@@ -141,6 +161,9 @@ struct RawItem {
     #[serde(rename = "headRefName")]
     head: Option<String>,
     assignees: Option<Nodes<Login>>,
+    milestone: Option<Title>,
+    #[serde(rename = "reviewRequests")]
+    review_requests: Option<Nodes<ReviewRequest>>,
     commits: Option<Nodes<CommitNode>>,
     #[serde(rename = "bodyText")]
     body_text: Option<String>,
@@ -202,6 +225,8 @@ fn item_of(n: RawItem) -> Option<Item> {
         author: n.author.map_or_else(|| "ghost".to_string(), |a| a.login),
         labels: n.labels.map_or_else(Vec::new, |l| l.nodes.into_iter().map(|l| Label { name: l.name, color: l.color }).collect()),
         assignees: n.assignees.map_or_else(Vec::new, |a| a.nodes.into_iter().map(|a| a.login).collect()),
+        milestone: n.milestone.map(|m| m.title).unwrap_or_default(),
+        reviewers: n.review_requests.map_or_else(Vec::new, |r| r.nodes.into_iter().filter_map(|r| r.reviewer.and_then(|v| v.login.or(v.name))).collect()),
         comments: n.comments.map_or(0, |c| c.total_count),
         created_at: n.created_at.unwrap_or_default(),
         updated_at: n.updated_at.unwrap_or_default(),
@@ -319,9 +344,11 @@ mod tests {
         assert_eq!(pr.labels[0].name, "lane:win");
         assert_eq!(pr.assignees, vec!["uchmk".to_string()]);
         assert_eq!(pr.comments, 2);
+        assert_eq!((pr.milestone.as_str(), pr.reviewers.clone()), ("v1", vec!["kura-bot".to_string(), "core".to_string()]));
         assert_eq!(pr.peek, "Fixes the font.\nThe UI now reads it from common.toml.");
         let issue = &items[1];
         assert_eq!((issue.kind, issue.ci, issue.author.as_str()), (Kind::Issue, None, "ghost"));
+        assert!(issue.milestone.is_empty() && issue.reviewers.is_empty());
         assert_eq!(items[2].kind, Kind::Discussion);
         assert_eq!(items[2].peek, "");
     }
@@ -370,6 +397,7 @@ mod tests {
     #[test]
     fn the_queries_name_their_variables() {
         assert!(items_query().contains("$q: String!"));
+        assert!(items_query().contains("milestone { title }") && item_query().contains("reviewRequests(first: 5)"));
         assert!(item_query().contains("resource(url: $url)"));
         assert!(discussions_query().contains("type: DISCUSSION"));
         assert!(detail_query().contains("$id: ID!"));

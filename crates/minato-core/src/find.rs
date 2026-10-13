@@ -102,6 +102,8 @@ mod tests {
             author: "octocat".into(),
             labels: vec![Label { name: "finding".into(), color: "fff".into() }],
             assignees: Vec::new(),
+            milestone: String::new(),
+            reviewers: Vec::new(),
             comments: 0,
             created_at: String::new(),
             updated_at: String::new(),

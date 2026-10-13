@@ -292,10 +292,13 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
             continue;
         }
         let value = match k {
-            0 if !item.labels.is_empty() => item.labels.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", "),
-            1 if !item.assignees.is_empty() => item.assignees.join(", "),
-            _ => "—".into(),
+            0 => item.labels.iter().map(|l| l.name.clone()).collect::<Vec<_>>(),
+            1 => item.assignees.clone(),
+            2 | 4 => app.board.as_ref().and_then(|b| b.card_of(&item.id).map(|c| b.choices(c, k == 4).1)).unwrap_or_default(),
+            3 => [item.milestone.clone()].into_iter().filter(|m| !m.is_empty()).collect(),
+            _ => item.reviewers.clone(),
         };
+        let value = if value.is_empty() { "—".to_string() } else { value.join(", ") };
         // Only whole chips: one that would run past the right is left out.
         let key = format!("Alt+{}", ALT[k]);
         let w = |s: &str, font: FontId| p.layout_no_wrap(s.to_owned(), font, c.fg).size().x;

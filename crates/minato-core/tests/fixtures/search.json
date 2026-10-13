@@ -18,6 +18,8 @@
           "state": "OPEN",
           "isDraft": false,
           "assignees": { "nodes": [ { "login": "uchmk" } ] },
+          "milestone": { "title": "v1" },
+          "reviewRequests": { "nodes": [ { "requestedReviewer": { "__typename": "User", "login": "kura-bot" } }, { "requestedReviewer": { "__typename": "Team", "name": "core" } }, { "requestedReviewer": null } ] },
           "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "FAILURE" } } } ] }
         },
         {
@@ -33,6 +35,7 @@
           "labels": { "nodes": [] },
           "comments": { "totalCount": 0 },
           "state": "OPEN",
+          "milestone": null,
           "assignees": { "nodes": [] }
         },
         {

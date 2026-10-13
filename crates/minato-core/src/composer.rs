@@ -530,6 +530,16 @@ impl Picker {
         self.chosen.iter().any(|c| c == name)
     }
 
+    /// The names ticked that were not at first.
+    pub fn added(&self) -> Vec<String> {
+        self.chosen.iter().filter(|c| !self.original.contains(c)).cloned().collect()
+    }
+
+    /// The names that were ticked at first and are not now.
+    pub fn removed(&self) -> Vec<String> {
+        self.original.iter().filter(|c| !self.chosen.contains(c)).cloned().collect()
+    }
+
     /// Whether the set differs from what it began as.
     pub fn changed(&self) -> bool {
         let mut a = self.chosen.clone();
@@ -675,5 +685,9 @@ mod tests {
         p.step(true);
         p.toggle();
         assert!(!p.is_chosen("lane:win") && p.changed());
+        assert_eq!((p.added(), p.removed()), (Vec::<String>::new(), vec!["lane:win".to_string()]));
+        p.cursor = 0;
+        p.toggle();
+        assert_eq!((p.added(), p.removed()), (vec!["bug".to_string()], vec!["lane:win".to_string()]));
     }
 }

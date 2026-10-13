@@ -46,6 +46,8 @@ pub fn parse(body: &str) -> Result<Vec<Item>, String> {
                 author: String::new(),
                 labels: Vec::new(),
                 assignees: Vec::new(),
+                milestone: String::new(),
+                reviewers: Vec::new(),
                 comments: 0,
                 created_at: String::new(),
                 updated_at: String::new(),

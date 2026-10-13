@@ -290,7 +290,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     p.galley(pos2(x, y), title, c.fg);
     y += th + 8.0;
     let dur = run.seconds(now).map(actions::duration).unwrap_or_default();
-    let branch = if run.pr.is_some() { format!("{} → main", run.branch) } else { run.branch.clone() };
+    let branch = if actions::has_pr(run) { format!("{} → main", run.branch) } else { run.branch.clone() };
     // The facts in a row, wrapping before one would run past the right.
     let mut mx = x;
     for m in [run.event.clone(), branch, run.sha.clone(), run.actor.clone(), dur, ago(&run.started_at, now)] {
@@ -328,7 +328,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         y += 12.0;
     }
     let mut keys = vec![("e", app.tr("key.logs"))];
-    if run.pr.is_some() {
+    if actions::has_pr(run) {
         keys.push(("p", app.tr("run.open_pr")));
     }
     keys.extend([("D", app.tr("key.dispatch")), ("o", app.tr("key.browser"))]);

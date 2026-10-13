@@ -390,7 +390,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 31.3 | Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` | No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows |
 | 31.4 | Narrow the window, press `1` and `/`, type a few letters | The search's hint goes first, then the field narrows; neither runs into the sync status |
 | 31.5 | On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` | Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out; the keybar keeps `F1 Esc` to the last (only its key when there is no room) |
-| 31.6 | Press `3` and select a passed run, a failed run, a running run, a run of a pull request | The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's; `F1` still lists them all |
+| 31.6 | Press `3` and select a passed run, a failed run, a running run, a run of a pull request | The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's (also when that PR is merged); `F1` still lists them all |
 | 31.7 | Open the palette and type part of a long title | The title is cut with `…` inside its row, clear of the key hint |
 | 31.8 | Press `r` on an issue, then `Alt+R` | A toast says reviewers are for pull requests; no picker opens |
 | 31.9 | Press `S` in the list | The repository settings' heading is the repository's name alone |
@@ -403,3 +403,15 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 31.16 | Rest the pointer on a row of the list until its body shows, then press `S` | The repository settings show without the row's body over them |
 | 31.17 | Press `2`, `C`, wait for the closed items, then `1` | The inbox shows its cards at once, not "nothing is waiting" |
 | 31.18 | Press `r` on an item, `Ctrl+P`, `Alt+L`, then `Esc` until the box closes; press `N`, also with the browser panel open; press `x`; open the palette; press `L` on a failed job; then narrow the window in each | The keybar shows the keys of what is open, not the view's: the box's `Ctrl+Enter` (comment, or create for a new issue), `Ctrl+P`, `Ctrl+Shift+Enter` and the fields' `Alt` keys (none for a new issue) and `Esc` (back to writing in the preview); the picker's `Enter` `↑ ↓` `Esc`; the confirmation's `Enter` and `Esc`; the palette's and the log's keys; the foot of the box over the view (`N`) lists the same keys as the keybar; narrowed, the other keys go first and `Esc` stays, with its words when it is alone and they fit |
+
+## 32. The writing box's fields, the preview and the filter cursor
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 32.1 | Press `r` on an issue and `Alt+R`; switch Milestone off, then `Alt+M` | Each says so in a toast; no `r` or `m` is typed into the box |
+| 32.2 | Press `r`, write more Markdown than the box holds, `Ctrl+P`; turn the wheel over the preview; `Ctrl+P` twice | The preview starts at the top; the wheel scrolls it 3 lines a notch and stops at its end, and the detail behind does not move; shown again it starts at the top |
+| 32.3 | Select an item in the Project with a Status and a Priority, then a PR with a milestone and a review asked | The chips above the box show the Status, the Priority, the milestone and the reviewers (a team by its name); a field with nothing set shows "—" |
+| 32.4 | Press `3` and select a `pull_request` run whose PR is merged; press `p` | The facts show "branch → main" and the keys `p`; `p` opens GitHub's PR search for the run's branch |
+| 32.5 | In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` | The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there |
+| 32.6 | Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set | The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)` |
+| 32.7 | On a PR with a review asked press `r`, `Alt+R`, untick the person, `Esc` | The person is ticked at first; after `Esc` a toast says the request was taken off and GitHub no longer lists them |

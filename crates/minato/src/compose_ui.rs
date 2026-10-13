@@ -4,7 +4,8 @@
 //! as a panel over the view. It holds a multi-line field (or the preview)
 //! and, on Alt+L / Alt+A and the rest (or a click on a field chip), the
 //! picker. No scrollbar: the field shows the end of what is typed, the
-//! picker a window around its cursor.
+//! preview scrolls with the wheel from its top, the picker shows a window
+//! around its cursor.
 
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
@@ -98,7 +99,8 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
             Some(Pick::Reviewers) => app.tr("pick.reviewers"),
             _ => app.tr("pick.priority"),
         };
-        picker(ui, &p, &mut c, [pick_at, outer], &mut act, [app.tr("pick.loading"), title]);
+        let empty = if c.picker_ready() { app.tr("pick.none") } else { app.tr("pick.loading") };
+        picker(ui, &p, &mut c, [pick_at, outer], &mut act, [empty, title]);
         if inline.is_some() {
             p.text(pos2(pick_at.right(), pick_at.top() + 10.0), Align2::RIGHT_CENTER, app.tr("pick.hint"), FontId::proportional(11.0), colors.dim);
         }
@@ -121,6 +123,11 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
                 i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
+        // On Windows an Alt key comes as its letter too: not for the field.
+        let letters: Vec<char> = [(labels, 'l'), (people, 'a'), (status, 's'), (priority, 'p'), (mile, 'm'), (review, 'r')].into_iter().filter(|(on, _)| *on).map(|(_, ch)| ch).collect();
+        if !letters.is_empty() {
+            ctx.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Text(t) if t.chars().count() == 1 && t.chars().all(|ch| letters.contains(&ch.to_ascii_lowercase())))));
+        }
         // A field the settings hide does nothing but say so.
         let fresh = new_repo.is_none();
         let (labels, people, status, priority, mile, review) = (
@@ -169,7 +176,7 @@ fn compose(ui: &mut Ui, app: &mut App, at: Option<Rect>) {
         }
         c.tool = None;
         if c.preview {
-            draw_preview(&p, field, &c.text, app.tr("compose.empty"));
+            draw_preview(ui, &p, field, &c.text, app.tr("compose.empty"));
         } else if c.picker.is_none() {
             let mut child = ui.new_child(UiBuilder::new().max_rect(field));
             child.set_clip_rect(field);
@@ -226,7 +233,7 @@ fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::l
 }
 
 /// The picker in `at[0]`, taking the clicks over `at[1]`. `words` are
-/// loading and the title. A click on a row ticks it (and closes a picker of
+/// what it says with nothing to show (loading, or none) and the title. A click on a row ticks it (and closes a picker of
 /// one choice); a click outside closes it.
 fn picker(ui: &Ui, p: &egui::Painter, c: &mut Compose, at: [Rect; 2], act: &mut Act, words: [&str; 2]) {
     let colors = ito_theme::colors();
@@ -288,9 +295,12 @@ fn picker(ui: &Ui, p: &egui::Painter, c: &mut Compose, at: [Rect; 2], act: &mut 
     }
 }
 
-/// The preview of the Markdown as the detail draws it; it shows the end
-/// when the text is longer than the field.
-fn draw_preview(p: &egui::Painter, field: Rect, text: &str, empty: &str) {
+/// The preview of the Markdown as the detail draws it, from the top; the
+/// wheel over it scrolls it (not the view behind), 3 lines a notch.
+fn draw_preview(ui: &Ui, p: &egui::Painter, field: Rect, text: &str, empty: &str) {
+    let ctx = ui.ctx();
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.insert_temp(Id::new(crate::ui::OWN_WHEEL), (field, pass)));
     let colors = ito_theme::colors();
     let p = p.with_clip_rect(field);
     if text.trim().is_empty() {
@@ -298,5 +308,14 @@ fn draw_preview(p: &egui::Painter, field: Rect, text: &str, empty: &str) {
         return;
     }
     let md = crate::md_ui::layout(&p, text, field.width(), 13.5);
-    md.paint(&p, field.left(), field.top() - (md.height - field.height()).max(0.0));
+    // Back at the top when the preview was not there the pass before.
+    let id = Id::new("minato-preview-top");
+    let (top, last) = ctx.data(|d| d.get_temp::<(f32, u64)>(id)).unwrap_or_default();
+    let mut top = if last + 1 >= pass { top } else { 0.0 };
+    if ctx.rect_contains_pointer(ui.layer_id(), field) {
+        top -= crate::ui::notches(ctx) * 3.0 * 19.0;
+    }
+    let top = top.clamp(0.0, (md.height - field.height()).max(0.0));
+    ctx.data_mut(|d| d.insert_temp(id, (top, pass)));
+    md.paint(&p, field.left(), field.top() - top);
 }
