@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.7] - 2026-10-13
+
+### Fixed
+
+- 通知で、minato の一覧に無いスレッド（merged の PR・閉じた issue）に `Enter` を押すと、取りに行くクエリを GitHub が断り（discussion の断片が `resource` に合わない）、いつも横のブラウザでページが開いていた。discussion の断片を外し、一覧で選ぶ。
+
 ## [0.39.6] - 2026-10-13
 
 ### Fixed

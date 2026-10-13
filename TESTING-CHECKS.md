@@ -108,7 +108,7 @@
 - [x] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
 - [x] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [x] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
-- [ ] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
+- [x] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
 - [x] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [x] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
@@ -117,7 +117,7 @@
 - [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button (an arrow over the empty parts of the columns); the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
 - [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 - [ ] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds)
-- [ ] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
+- [x] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
 
 ## 10. Board
 
@@ -208,7 +208,7 @@
 
 - [x] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
 - [ ] **18.2** Have someone mention you on their open issue → The issue is in the inbox with "Mentions you"
-- [ ] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
+- [x] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
 - [ ] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
 - [x] **18.5** Start minato with the inbox view → Cards are listed at the left (title, repository, reason) and the detail at the right; the list is not blank
 
@@ -246,7 +246,7 @@
 - [x] **24.3** In each view press `←` `↓` `↑` `→` instead of `h j k l` → They do the same as `h j k l`, also in the notifications list and the filters
 - [x] **24.4** Open the palette and look at the commands tsumugi also has → They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き)
 - [~] **24.5** Compare the inbox, list, Actions and notifications with `docs/mock/minato.html` → The same layout: the inbox's tag chips, "Your turn" / "Waiting" / "Done today" with their hints, the detail's "Next" box and keys, the list's filter column with counts, the Actions run rows and detail
-- [ ] **24.6** Select an item that is a stub for a red main CI (no thread) → The card has no `Issue` chip; the detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…"
+- [x] **24.6** Select an item that is a stub for a red main CI (no thread) → The card has no `Issue` chip; the detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…"
 
 ## 25. Comment box, Markdown, kept widths and the cache
 
@@ -291,7 +291,7 @@
 - [x] **28.8** Press `4` on a fresh start (no cache), then again after `1` and back → The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once
 - [ ] **28.9** Select a run in Actions while the network is off for 15 seconds, then turn it on → Its jobs come within about 10 seconds of the network coming back, not after the next refresh
 - [x] **28.10** In Actions select a finished run, move away and back; quit minato, start it and select it again → The second time and after the restart its jobs, artifacts and graph show at once, with no "loading"
-- [ ] **28.11** Select a running run and wait for two refreshes of the runs (about a minute) → Its jobs' marks and durations follow the run; when it finishes the detail shows the final jobs and artifacts
+- [x] **28.11** Select a running run and wait for two refreshes of the runs (about a minute) → Its jobs' marks and durations follow the run; when it finishes the detail shows the final jobs and artifacts
 - [x] **28.12** Hold `j` across many runs in Actions, then let go → The detail of the run you stop on comes within a few seconds, not after those of the runs passed
 - [x] **28.13** Press `4` on a Project with more than 100 cards → Every card shows (up to 500); the cards appear together, not 100 first and the rest later
 - [x] **28.14** Rest the pointer on a board card for the first time, then again → The first time the box with the body's start comes after a moment; the second time at once

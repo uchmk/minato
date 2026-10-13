@@ -22,15 +22,15 @@ commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }}
     )
 }
 
-/// One issue, PR or discussion by its page, open or closed (for a
-/// notification of one the searches do not list). Variables: `url`.
+/// One issue or PR by its page, open or closed (for a notification of
+/// one the searches do not list). A discussion's page is no resource
+/// there: its answer is null and the page opens. Variables: `url`.
 pub fn item_query() -> String {
     format!(
         "query($url: URI!) {{ resource(url: $url) {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
 ... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
-commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} \
-... on Discussion {{ {ITEM_COMMON} }} }} }}"
+commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }}"
     )
 }
 
@@ -399,6 +399,9 @@ mod tests {
         assert!(items_query().contains("$q: String!"));
         assert!(items_query().contains("milestone { title }") && item_query().contains("reviewRequests(first: 5)"));
         assert!(item_query().contains("resource(url: $url)"));
+        // A discussion is no `UniformResourceLocatable`: GitHub refuses
+        // the whole query with a fragment on it.
+        assert!(!item_query().contains("on Discussion"));
         assert!(discussions_query().contains("type: DISCUSSION"));
         assert!(detail_query().contains("$id: ID!"));
     }
