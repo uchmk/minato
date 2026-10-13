@@ -23,7 +23,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 2.1 | Press `1`, `2`, `3`, `4` | The matching tab lights with an underline and the empty view's name and text change |
 | 2.2 | Click each tab | Same as the digit |
-| 2.3 | Press `?`, then `F1` | A card lists in two columns the global keys and the notifications' at the left and the current view's at the right; `F1`, `?` or `Esc` closes it; digits do nothing while it is open |
+| 2.3 | Press `?`, then `F1` | A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open |
 | 2.3a | In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board | In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table |
 | 2.4 | Press `,` or click the comma button | The settings screen opens; `Esc` closes it |
 | 2.5 | Press `Ctrl+Shift+P` | A toast says it is not connected yet (the palette comes later) |
@@ -67,6 +67,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.6 | Press `l` twice and `j` | The detail scrolls by lines, with no scrollbar; moving the row resets it |
 | 6.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 6.8 | Look at a PR with checks | The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation |
+| 6.9 | Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' | A long repository name ends with "…" before its count; "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half |
 
 ## 7. Inbox view
 
@@ -77,7 +78,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 7.3 | Press `d`, then `u` | The card moves to "Done today" with a toast, and `u` brings it back |
 | 7.4 | Press `s` | The card disappears (back tomorrow 9:00) with a toast; `u` brings it back |
 | 7.5 | Press `f`, `F`, `t` | The chips at the lower left change and the cards narrow; after the last choice they return to All |
-| 7.6 | Shrink the window height | As many whole cards as fit show around the selected one; the rest hide with "⋯" lines; no card is folded to its title and no scrollbar |
+| 7.6 | Shrink the window height | As many whole cards as fit show around the selected one; the rest hide behind a "⋯" line inside their own section, under its header ("⋯ 下に N 件", or "⋯ N 件" for a section with none shown); no card is folded to its title and no scrollbar |
 | 7.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 7.8 | Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) | The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room |
 
@@ -109,6 +110,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 8.15 | With a picker open, click Comment or Close in the box's footer | The picker's change is written first, then the comment is sent (or the item closed) |
 | 8.16 | Select an item of a repository not looked at yet and at once press `r` then `Alt+A` | The picker may say loading for a moment, then the names fill in by themselves (no need to close and reopen it) |
 | 8.17 | Select an item, wait a second, then press `r` and `Alt+A`; quit, start again and do the same | The names are there at once both times (read ahead on the selection, then kept in the cache) |
+| 8.18 | Zoom in (`Ctrl+=` twice) and look at the field chips above the writing box | A chip that does not fit is left out whole, none is cut at the right; "⚙ 出す項目は設定（,）で選ぶ" shows only when it fits |
 
 ## 9. Actions
 
@@ -142,6 +144,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 10.8 | Press `o` on a card | The built-in browser shows the issue or PR |
 | 10.9 | Use a token without the `project` scope and press `L` | An error toast appears and, after a moment, the card returns to its column |
 | 10.10 | Put many cards in one column | No scrollbar; the cards that do not fit hide and "more" shows; none is folded |
+| 10.11 | Look at a card with a long title | The title ends with "…" inside the card, not cut mid-glyph at its edge |
 
 ## 11. Notifications and palette
 
@@ -186,7 +189,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 13.4 | In the inbox press `d` on a card and `s` on another, quit minato and start it again | Both cards are still hidden; `minato-marks.json` sits beside common.toml |
 | 13.5 | Press `d`, then `u`, quit and start again | The card is back (the undo was saved too) |
 | 13.6 | In the inbox press `c` on a card, then paste into a Claude Code session (or Notepad) | A toast says a prompt for Claude was copied; the paste has the repository, the kind and number, the title and the URL, then the reason the card is there and what to do, in the app's language |
-| 13.7 | Look at "Waiting" in the inbox | No `Re-test: …` issue, no `Lane status: …` issue, no issue labelled `lane:win`/`lane:arm` and no lane PR (`test/win-*`, `test/arm-*`) is in it; your own other open issues and PRs still are |
+| 13.7 | Look at "Waiting" in the inbox | No `Re-test: …` issue, no `Lane status: …` issue, no issue labelled `lane:win`/`lane:arm` or `needs-pc` and no lane PR (`test/win-*`, `test/arm-*`) is in it; your own other open issues and PRs still are |
 
 ## 14. Settings key, palette field and bell
 
@@ -317,7 +320,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | # | Do | Expect |
 | --- | --- | --- |
 | 27.1 | Look at the detail of an item in the inbox and the list, and of a run in Actions | The title, the meta line, the next box, the checks, the body and the comments read a step larger than in 0.23.0; nothing overlaps |
-| 27.2 | In an inbox with 30 cards and a short window, select one in the middle | The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines |
+| 27.2 | In an inbox with 30 cards and a short window, select one in the middle | The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines in their own sections, each saying how many of that section are hidden |
 | 27.3 | Focus a long detail (`l` in the list, Actions' detail) and hold `j`, then press `k` once; turn the wheel down over it too | The scroll stops once the end shows; one `k` moves it up at once |
 | 27.4 | Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications | `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd |
 | 27.5 | Press `F1` in each view, with the palette open and in the notifications | The key list opens (the palette closes); `F1` again closes it; the keybar ends with `F1`; the list has "gg G" |

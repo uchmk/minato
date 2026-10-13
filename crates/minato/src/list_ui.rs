@@ -93,7 +93,12 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             k += 1;
         }
     }
-    let mut y = r.top() + 6.0 - (cursor_y + ENT_H + 16.0 - r.height()).max(0.0);
+    // Only whole rows; an end with rows past it says how many.
+    let lift = if yy + 10.0 > r.height() { (cursor_y + ENT_H + 16.0 + MORE_H - r.height()).max(0.0) } else { 0.0 };
+    let top = r.top() + if lift > 0.0 { MORE_H } else { 0.0 };
+    let bottom = r.bottom() - if r.top() + 6.0 - lift + yy > r.bottom() { MORE_H } else { 0.0 };
+    let (mut above, mut below) = (0, 0);
+    let mut y = r.top() + 6.0 - lift;
     let mut flat = 0;
     for (name, picks) in &groups {
         let word = app.tr(match *name {
@@ -102,10 +107,18 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             "author" => "list.author",
             _ => "list.saved",
         });
-        style::bold(&p, pos2(r.left() + 14.0, y + 12.0 + 7.0), Align2::LEFT_CENTER, word, FontId::proportional(11.0), c.dim);
+        if y >= top && y + GROUP_H <= bottom {
+            style::bold(&p, pos2(r.left() + 14.0, y + 12.0 + 7.0), Align2::LEFT_CENTER, word, FontId::proportional(11.0), c.dim);
+        }
         y += GROUP_H;
         for pick in picks {
             let row = Rect::from_min_size(pos2(r.left(), y), vec2(r.width(), ENT_H));
+            if row.top() < top || row.bottom() > bottom {
+                if row.top() < top { above += 1 } else { below += 1 }
+                y += ENT_H;
+                flat += 1;
+                continue;
+            }
             let resp = ui::hit(ui, row, ("list-filter", flat));
             if resp.clicked() {
                 out.click = Some(Click::ListFilter(flat));
@@ -120,14 +133,29 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             if app.list.is_chosen(pick) {
                 p.text(pos2(row.left() + 14.0, cy), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), ACCENT);
             }
-            p.text(pos2(row.left() + 14.0 + 18.0, cy), Align2::LEFT_CENTER, pick_label(app, pick), FontId::proportional(13.0), c.fg);
+            // The count first, so a long name stops short of it.
+            let mut end = row.right() - 14.0;
             if let Pick::Repo(repo) = pick {
                 let n = app.items.iter().filter(|i| !minato_core::mainci::is_stub(i) && repo.as_ref().is_none_or(|r| *r == i.repo)).count();
-                p.text(pos2(row.right() - 14.0, cy), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(11.5), c.dim);
+                end = p.text(pos2(end, cy), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(11.5), c.dim).left() - 6.0;
             }
+            let x = row.left() + 14.0 + 18.0;
+            let g = style::truncated(&p, pick_label(app, pick), FontId::proportional(13.0), c.fg, end - x);
+            p.galley(pos2(x, cy - g.size().y / 2.0), g, c.fg);
             y += ENT_H;
             flat += 1;
         }
+    }
+    filter_more(&p, app, r, above, below);
+}
+
+/// The "⋯ 上に N 件" / "⋯ 下に N 件" lines of a filter column.
+pub fn filter_more(p: &Painter, app: &App, r: Rect, above: usize, below: usize) {
+    if above > 0 {
+        style::more(p, app.ja(), app.tr("list.above"), r.left() + 14.0, r.top() + MORE_H / 2.0, above);
+    }
+    if below > 0 {
+        style::more(p, app.ja(), app.tr("list.below"), r.left() + 14.0, r.bottom() - MORE_H / 2.0, below);
     }
 }
 

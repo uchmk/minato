@@ -137,7 +137,8 @@ fn card_box(p: &egui::Painter, app: &App, r: Rect, ci: usize, picked: bool, now:
         }
     }
     p.text(pos2(x, r.top() + 12.0), Align2::LEFT_CENTER, line1, FontId::proportional(10.5), c.dim);
-    p.text(pos2(x, r.top() + 31.0), Align2::LEFT_CENTER, &card.title, FontId::proportional(12.5), c.fg);
+    let g = crate::style::truncated(&p, card.title.clone(), FontId::proportional(12.5), c.fg, r.right() - 8.0 - x);
+    p.galley(pos2(x, r.top() + 31.0 - g.size().y / 2.0), g, c.fg);
     let mut lx = x;
     let ly = r.top() + 53.0;
     for l in card.labels.iter().take(3) {

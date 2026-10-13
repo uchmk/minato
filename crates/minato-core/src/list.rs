@@ -216,7 +216,8 @@ pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pi
     let mut repos = vec![Pick::Repo(None)];
     repos.extend(distinct(&|i| i.repo.clone()).into_iter().map(|r| Pick::Repo(Some(r))));
     let mut authors = vec![Pick::Author(None)];
-    authors.extend(distinct(&|i| i.author.clone()).into_iter().map(|a| Pick::Author(Some(a))));
+    // A main-branch stub has no author.
+    authors.extend(distinct(&|i| i.author.clone()).into_iter().filter(|a| !a.is_empty()).map(|a| Pick::Author(Some(a))));
     vec![
         ("repo", repos),
         ("kind", vec![Pick::Kind(None), Pick::Kind(Some(Kind::Issue)), Pick::Kind(Some(Kind::Pr)), Pick::Kind(Some(Kind::Discussion))]),

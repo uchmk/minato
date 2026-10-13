@@ -20,37 +20,37 @@
 
 ## 2. Views and keys
 
-- [ ] **2.1** Press `1`, `2`, `3`, `4` → The matching tab lights with an underline and the empty view's name and text change
+- [x] **2.1** Press `1`, `2`, `3`, `4` → The matching tab lights with an underline and the empty view's name and text change
 - [ ] **2.2** Click each tab → Same as the digit
-- [ ] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right; `F1`, `?` or `Esc` closes it; digits do nothing while it is open
-- [ ] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
+- [x] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open
+- [x] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
 - [ ] **2.4** Press `,` or click the comma button → The settings screen opens; `Esc` closes it
 - [ ] **2.5** Press `Ctrl+Shift+P` → A toast says it is not connected yet (the palette comes later)
-- [ ] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go and `F1` stays, never under `⟳`, `API` or the clock
+- [x] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go and `F1` stays, never under `⟳`, `API` or the clock
 
 ## 3. Keybar status and clock
 
-- [ ] **3.1** Look at the right of the keybar → `⟳ —`, `API —` and the clock `2026/10/12 (Mon) 17:40`-style text; the minute changes on its own
+- [x] **3.1** Look at the right of the keybar → `⟳ —`, `API —` and the clock `2026/10/12 (Mon) 17:40`-style text; the minute changes on its own
 - [ ] **3.2** Switch the language to Japanese in the settings → Tabs, empty texts, help and the weekday (月) change; Japanese glyphs show (a system font loads in the background)
 - [ ] **3.3** Turn the clock off in the settings → The clock disappears from the keybar
 
 ## 4. Settings
 
-- [ ] **4.1** Open the settings → The common screen of the uchmk apps: General (language, size, clock) and Theme pages, a search, `Ctrl+Tab` moves between pages
+- [x] **4.1** Open the settings → The common screen of the uchmk apps: General (language, size, clock) and Theme pages, a search, `Ctrl+Tab` moves between pages
 - [ ] **4.2** Change the scale to 150% → The whole window is drawn larger at once and stays so after a restart
 - [ ] **4.3** Pick another theme → The window's colours change at once; the sample card follows the theme
 - [ ] **4.4** Edit `%APPDATA%\uchmk\common.toml` by hand while the app runs → The change shows within a few seconds
 
 ## 5. GitHub connection
 
-- [ ] **5.1** Start `minato` where `gh auth login` is done → Within a few seconds the account mark shows your initial (hover: your login) and the keybar shows `API 4,xxx/5,000` and `⟳ 0s ago`
+- [x] **5.1** Start `minato` where `gh auth login` is done → Within a few seconds the account mark shows your initial (hover: your login) and the keybar shows `API 4,xxx/5,000` and `⟳ 0s ago`
 - [ ] **5.2** Start it with no `gh` login and no `GITHUB_TOKEN` → A toast says there is no token and how to get one; the account mark stays `?`
 - [ ] **5.3** Start it with `GITHUB_TOKEN=bad` → A toast says GitHub refused the token (401); the token text appears nowhere
 - [ ] **5.4** Leave it open for 3 minutes → The `⟳` age counts up and drops back to a few seconds after each poll; the window stays idle otherwise
 
 ## 6. List view
 
-- [ ] **6.1** Press `2` after the connection is up → Within a few seconds your open issues, PRs and discussions list in three lines each; on the title's line at the right stand, in this order, the CI mark, the comment count and the `受信箱` badge, inside the row even when it has no labels
+- [x] **6.1** Press `2` after the connection is up → Within a few seconds your open issues, PRs and discussions list in three lines each; on the title's line at the right stand, in this order, the CI mark, the comment count and the `受信箱` badge, inside the row even when it has no labels
 - [ ] **6.2** Press `j` / `k` → The selected row moves; the detail at the right follows within a second
 - [ ] **6.3** Shrink the window height until the rows do not fit → As many whole rows as fit show around the selected one; the rest hide with "⋯ 上に/下に N 件"; no row is folded to one line and no scrollbar appears
 - [ ] **6.4** Press `h`, then `j` and `Space` on a repository → The list narrows to it and the query line over the list changes; the chosen option is filled
@@ -58,17 +58,18 @@
 - [ ] **6.6** Press `l` twice and `j` → The detail scrolls by lines, with no scrollbar; moving the row resets it
 - [ ] **6.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 - [ ] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation
+- [ ] **6.9** Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' → A long repository name ends with "…" before its count; "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half
 
 ## 7. Inbox view
 
-- [ ] **7.1** Press `1` after the connection is up → Cards of your turn (red or ready PRs, `question` / `needs-owner` / `lane-stalled` items, unassigned findings) stand under "Your turn"; each shows its reason in colour
+- [x] **7.1** Press `1` after the connection is up → Cards of your turn (red or ready PRs, `question` / `needs-owner` / `lane-stalled` items, unassigned findings) stand under "Your turn"; each shows its reason in colour
 - [ ] **7.2** Select a card with `j` / `k` → The detail at the right follows; its top line shows the reason and the next key
 - [ ] **7.3** Press `d`, then `u` → The card moves to "Done today" with a toast, and `u` brings it back
 - [ ] **7.4** Press `s` → The card disappears (back tomorrow 9:00) with a toast; `u` brings it back
 - [ ] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
-- [ ] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide with "⋯" lines; no card is folded to its title and no scrollbar
+- [x] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide behind a "⋯" line inside their own section, under its header ("⋯ 下に N 件", or "⋯ N 件" for a section with none shown); no card is folded to its title and no scrollbar
 - [ ] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
-- [ ] **7.8** Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) → The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room
+- [x] **7.8** Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) → The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room
 
 ## 8. Writing box and fields
 
@@ -96,10 +97,11 @@
 - [ ] **8.15** With a picker open, click Comment or Close in the box's footer → The picker's change is written first, then the comment is sent (or the item closed)
 - [ ] **8.16** Select an item of a repository not looked at yet and at once press `r` then `Alt+A` → The picker may say loading for a moment, then the names fill in by themselves (no need to close and reopen it)
 - [ ] **8.17** Select an item, wait a second, then press `r` and `Alt+A`; quit, start again and do the same → The names are there at once both times (read ahead on the selection, then kept in the cache)
+- [x] **8.18** Zoom in (`Ctrl+=` twice) and look at the field chips above the writing box → A chip that does not fit is left out whole, none is cut at the right; "⚙ 出す項目は設定（,）で選ぶ" shows only when it fits
 
 ## 9. Actions
 
-- [ ] **9.1** Press `3` → The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others show whole too, as many as fit
+- [x] **9.1** Press `3` → The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others show whole too, as many as fit
 - [ ] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
 - [ ] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
@@ -115,7 +117,7 @@
 
 ## 10. Board
 
-- [ ] **10.1** Press `4` → Project "uchmk" shows its Status options as columns with counts; each card shows repo, number, kind, title and labels; a "No status" column leads if some card has none
+- [x] **10.1** Press `4` → Project "uchmk" shows its Status options as columns with counts; each card shows repo, number, kind, title and labels; a "No status" column leads if some card has none
 - [ ] **10.2** Move with `h l j k` → The column header and the card are highlighted; the cursor stays inside the columns
 - [ ] **10.3** Press `L` on a card → The card moves to the next column at once, a toast says so, and the card's Status changes in the GitHub Project
 - [ ] **10.4** Press `H` on a card in the first Status column → Nothing moves (no write)
@@ -125,10 +127,11 @@
 - [ ] **10.8** Press `o` on a card → The built-in browser shows the issue or PR
 - [ ] **10.9** Use a token without the `project` scope and press `L` → An error toast appears and, after a moment, the card returns to its column
 - [ ] **10.10** Put many cards in one column → No scrollbar; the cards that do not fit hide and "more" shows; none is folded
+- [x] **10.11** Look at a card with a long title → The title ends with "…" inside the card, not cut mid-glyph at its edge
 
 ## 11. Notifications and palette
 
-- [ ] **11.1** Press `n` with unread GitHub notifications → A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line
+- [x] **11.1** Press `n` with unread GitHub notifications → A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line
 - [ ] **11.2** Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) → The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one
 - [ ] **11.2a** Press `d` on a card in the inbox, then `Enter` on a notification of the same thread → The inbox opens on that card under "Done today" (the notification has no `Inbox` badge)
 - [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
@@ -137,7 +140,7 @@
 - [ ] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens the inbox on that repository's "CI is red on main" card when there is one, else Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato has neither, the repository's Actions page is shown, not its top
 - [ ] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
 - [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the button marks every row read
-- [ ] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
+- [x] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
 - [ ] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
 - [ ] **11.8** Type `board`, press `Enter` → The Board view opens
 - [ ] **11.9** Press `Esc`, and `Ctrl+Shift+P` twice → The palette closes; the second press closes it again
@@ -162,8 +165,8 @@
 - [ ] **13.3** On an issue press `Alt+R` → A toast says reviewers can only be asked on a PR; no picker opens
 - [ ] **13.4** In the inbox press `d` on a card and `s` on another, quit minato and start it again → Both cards are still hidden; `minato-marks.json` sits beside common.toml
 - [ ] **13.5** Press `d`, then `u`, quit and start again → The card is back (the undo was saved too)
-- [ ] **13.6** In the inbox press `c` on a card, then paste into a Claude Code session (or Notepad) → A toast says a prompt for Claude was copied; the paste has the repository, the kind and number, the title and the URL, then the reason the card is there and what to do, in the app's language
-- [ ] **13.7** Look at "Waiting" in the inbox → No `Re-test: …` issue, no `Lane status: …` issue, no issue labelled `lane:win`/`lane:arm` and no lane PR (`test/win-*`, `test/arm-*`) is in it; your own other open issues and PRs still are
+- [x] **13.6** In the inbox press `c` on a card, then paste into a Claude Code session (or Notepad) → A toast says a prompt for Claude was copied; the paste has the repository, the kind and number, the title and the URL, then the reason the card is there and what to do, in the app's language
+- [x] **13.7** Look at "Waiting" in the inbox → No `Re-test: …` issue, no `Lane status: …` issue, no issue labelled `lane:win`/`lane:arm` or `needs-pc` and no lane PR (`test/win-*`, `test/arm-*`) is in it; your own other open issues and PRs still are
 
 ## 14. Settings key, palette field and bell
 
@@ -237,7 +240,7 @@
 - [ ] **24.1** In the inbox, list and Actions, drag the line between two columns → The pointer turns to a resize arrow over the line and the columns follow; nothing scrolls; each column keeps a usable width
 - [ ] **24.2** Click a row in each column (filter, item, run, card) → The row is selected and that column gets the focus (a lit line on top); the detail follows
 - [ ] **24.3** In each view press `←` `↓` `↑` `→` instead of `h j k l` → They do the same as `h j k l`, also in the notifications list and the filters
-- [ ] **24.4** Open the palette and look at the commands tsumugi also has → They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き)
+- [x] **24.4** Open the palette and look at the commands tsumugi also has → They read as in tsumugi: "Settings", "Notifications", "Keys: every key and what it does" (Japanese: 設定, 通知, キー: すべてのキーとその働き)
 - [ ] **24.5** Compare the inbox, list, Actions and notifications with `docs/mock/minato.html` → The same layout: the inbox's tag chips, "Your turn" / "Waiting" / "Done today" with their hints, the detail's "Next" box and keys, the list's filter column with counts, the Actions run rows and detail
 - [ ] **24.6** Select an item that is a stub for a red main CI (no thread) → The detail shows its title and the next step only; no "opened by" line, no "the item is gone" toast and no endless "Loading…"
 
@@ -266,21 +269,21 @@
 ## 27. Larger details, the ends, F1 and the palette
 
 - [ ] **27.1** Look at the detail of an item in the inbox and the list, and of a run in Actions → The title, the meta line, the next box, the checks, the body and the comments read a step larger than in 0.23.0; nothing overlaps
-- [ ] **27.2** In an inbox with 30 cards and a short window, select one in the middle → The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines
+- [ ] **27.2** In an inbox with 30 cards and a short window, select one in the middle → The selected card and as many whole cards as fit around it show; the others hide behind "⋯" lines in their own sections, each saying how many of that section are hidden
 - [ ] **27.3** Focus a long detail (`l` in the list, Actions' detail) and hold `j`, then press `k` once; turn the wheel down over it too → The scroll stops once the end shows; one `k` moves it up at once
 - [ ] **27.4** Press `G`, then `gg`, in the inbox, the list's filters, rows and detail, Actions' columns, a board column and the notifications → `G` goes to the last (a detail to its end), `gg` to the first (a detail to its top); one `g` then another key does nothing odd
 - [ ] **27.5** Press `F1` in each view, with the palette open and in the notifications → The key list opens (the palette closes); `F1` again closes it; the keybar ends with `F1`; the list has "gg G"
-- [ ] **27.6** Open the palette → There are no lines to go to Inbox, List, Actions or Board
+- [x] **27.6** Open the palette → There are no lines to go to Inbox, List, Actions or Board
 
 ## 28. Search, Tab and the board's speed
 
 - [ ] **28.1** In the inbox press `/`, type `font kura` → A field opens in the keybar after a lit `/` chip (the `/` itself is not typed in); the cards narrow as you type to those with both words in the title, #number, repository, labels, author or body start; the keybar shows "N 件" (red at 0) and "Enter 決定 · Esc 消す"; the words are marked in the card titles and in the detail's body and comments
 - [ ] **28.2** Type a Japanese word with the IME in the search field → The IME's candidate window shows by the field; the committed word filters and is marked
 - [ ] **28.3** Search `preview`, then `Preview` → Lower case finds "Preview" and "preview"; once a capital is typed only "Preview" is found
-- [ ] **28.4** With the field open press `Down`/`Up`, then `Enter`, then `j k`, then `Esc` → The arrows move the selection; `Enter` closes the field but keeps the filter and the keybar line; `j k` move again; `Esc` clears the words and every card comes back
-- [ ] **28.5** Search in the inbox, press `2`, then `/` again → The list is filtered by the same words; `/` reopens the field with them, the cursor at the end
+- [x] **28.4** With the field open press `Down`/`Up`, then `Enter`, then `j k`, then `Esc` → The arrows move the selection; `Enter` closes the field but keeps the filter and the keybar line; `j k` move again; `Esc` clears the words and every card comes back
+- [x] **28.5** Search in the inbox, press `2`, then `/` again → The list is filtered by the same words; `/` reopens the field with them, the cursor at the end
 - [ ] **28.6** With the field open click a view tab for Actions, open the palette, press `n` (bell) by mouse → The field closes each time; in Actions the keybar shows its keys again
-- [ ] **28.7** Press `Tab` five times from the inbox, then `Shift+Tab` → Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open
+- [x] **28.7** Press `Tab` five times from the inbox, then `Shift+Tab` → Inbox → List → Actions → Board → Inbox → List; `Shift+Tab` goes back; nothing happens with the writing box, the palette, the notifications or the help open
 - [ ] **28.8** Press `4` on a fresh start (no cache), then again after `1` and back → The board shows within a few seconds (it asks for the one Project); while it loads, `Enter` on an inbox card shows its detail at once
 - [ ] **28.9** Select a run in Actions while the network is off for 15 seconds, then turn it on → Its jobs come within about 10 seconds of the network coming back, not after the next refresh
 - [ ] **28.10** In Actions select a finished run, move away and back; quit minato, start it and select it again → The second time and after the restart its jobs, artifacts and graph show at once, with no "loading"

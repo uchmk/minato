@@ -5,7 +5,7 @@
 //! scrolling. A click does what the keys that get there do.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
-use minato_core::fold::{Show, fold};
+use minato_core::fold::{Fold, Show, fold};
 use minato_core::inbox::{Card, Group, InboxState, Status};
 use minato_core::list::{Label, age, epoch};
 
@@ -104,21 +104,40 @@ fn tags(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, top: f32, out: &
     y + 9.0 + 6.0
 }
 
+/// How many of a section's cards the fold hides before its first shown
+/// card and after its last, and whether any is shown.
+fn hidden(shown: &[Card], f: &Fold, g: Group) -> (usize, usize, bool) {
+    let rows: Vec<Show> = shown.iter().zip(&f.rows).filter(|(card, _)| card.group == g).map(|(_, s)| *s).collect();
+    let Some(first) = rows.iter().position(|s| *s == Show::Full) else {
+        return (0, rows.len(), false);
+    };
+    let last = rows.iter().rposition(|s| *s == Show::Full).unwrap_or(first);
+    (first, rows.len() - 1 - last, true)
+}
+
 /// The sections あなたの番, 待っている and 今日済んだ that the status lets
-/// through, with their cards folded to fit.
+/// through, with their cards folded to fit; each says under its own header
+/// how many of its cards are hidden.
 fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let groups: Vec<Group> = [Group::Mine, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).collect();
     let empties = groups.iter().filter(|g| !shown.iter().any(|card| card.group == **g)).count();
     let room = body.height() - groups.len() as f32 * SEC_H - empties as f32 * EMPTY_H;
     let sel = app.inbox.sel.min(shown.len().saturating_sub(1));
-    let f = fold(&vec![CARD_FULL; shown.len()], MORE_H, room, sel);
+    let heights = vec![CARD_FULL; shown.len()];
+    // A "⋯ N 件" line for each side of a section with hidden cards; fold
+    // again with room for them until the lines it needs are counted.
+    let mut lines = 0;
+    let f = loop {
+        let f = fold(&heights, 0.0, room - lines as f32 * MORE_H, sel);
+        let need: usize = groups.iter().map(|g| hidden(shown, &f, *g)).map(|(a, b, any)| if any { usize::from(a > 0) + usize::from(b > 0) } else { usize::from(b > 0) }).sum();
+        if need <= lines {
+            break f;
+        }
+        lines = need;
+    };
     let now = now_epoch();
     let mut y = body.top();
-    if f.above > 0 {
-        more(p, app, body.left(), y, f.above, "list.above");
-        y += MORE_H;
-    }
     for g in groups {
         let (name, hint) = match g {
             Group::Mine => ("inbox.mine", "inbox.mine_hint"),
@@ -138,6 +157,16 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
             y += EMPTY_H;
             continue;
         }
+        let (above, below, any) = hidden(shown, &f, g);
+        if !any {
+            more(p, app, body.left(), y, below, "inbox.hidden");
+            y += MORE_H;
+            continue;
+        }
+        if above > 0 {
+            more(p, app, body.left(), y, above, "list.above");
+            y += MORE_H;
+        }
         for (k, card) in shown.iter().enumerate().filter(|(_, card)| card.group == g) {
             if f.rows[k] == Show::Hidden {
                 continue;
@@ -151,9 +180,10 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
             ui::peek(&resp, &app.items[card.at].peek);
             y = rect.bottom() + CARD_GAP;
         }
-    }
-    if f.below > 0 {
-        more(p, app, body.left(), y, f.below, "list.below");
+        if below > 0 {
+            more(p, app, body.left(), y, below, "list.below");
+            y += MORE_H;
+        }
     }
 }
 

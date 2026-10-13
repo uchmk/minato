@@ -245,9 +245,17 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
             1 if !item.assignees.is_empty() => item.assignees.join(", "),
             _ => "—".into(),
         };
+        // Only whole chips: one that would run past the right is left out.
+        let key = format!("Alt+{}", ALT[k]);
+        let w = |s: &str, font: FontId| p.layout_no_wrap(s.to_owned(), font, c.fg).size().x;
+        let wide = 9.0 + w(app.tr(FIELDS[k]), FontId::proportional(11.5)) + 6.0 + w(&value, FontId::proportional(12.0)) + 6.0 + w(&key, FontId::monospace(11.0)) + 10.0 + 5.0;
+        if x > x0 && x + wide > right {
+            x = right + 1.0;
+            break;
+        }
         let n = p.text(pos2(x + 9.0, y), Align2::LEFT_CENTER, app.tr(FIELDS[k]), FontId::proportional(11.5), c.dim);
         let v = p.text(pos2(n.right() + 6.0, y), Align2::LEFT_CENTER, value, FontId::proportional(12.0), c.fg);
-        let e = style::kbd(&p, v.right() + 6.0, y, &format!("Alt+{}", ALT[k]));
+        let e = style::kbd(&p, v.right() + 6.0, y, &key);
         let chip = Rect::from_min_max(pos2(x, y - 13.0), pos2(e + 5.0, y + 13.0));
         let hot = ui::hit(ui, chip, ("field-chip", k));
         p.rect_stroke(chip, CornerRadius::same(6), Stroke::new(1.0, if hot.hovered() { ACCENT } else { c.border }), StrokeKind::Inside);
@@ -259,7 +267,11 @@ fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
             break;
         }
     }
-    p.text(pos2(x + 4.0, y), Align2::LEFT_CENTER, app.tr("compose.gear"), FontId::proportional(11.5), c.dim);
+    // The hint only where it fits whole.
+    let gear = p.layout_no_wrap(app.tr("compose.gear").to_owned(), FontId::proportional(11.5), c.dim);
+    if x + 4.0 + gear.size().x <= right {
+        p.galley(pos2(x + 4.0, y - gear.size().y / 2.0), gear, c.dim);
+    }
     let open = app.compose.as_ref().filter(|w| w.id == item.id);
     let edit_h = r.height() - CHIPS_H - BAR_H - FOOT_H - 12.0;
     let bx = Rect::from_min_size(pos2(x0, r.top() + CHIPS_H), vec2(right - x0, BAR_H + edit_h + FOOT_H));

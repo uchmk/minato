@@ -94,7 +94,12 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             k += 1;
         }
     }
-    let mut y = r.top() + 6.0 - (cursor_y + ENT_H + 16.0 - r.height()).max(0.0);
+    // Only whole rows; an end with rows past it says how many.
+    let lift = if yy + 10.0 > r.height() { (cursor_y + ENT_H + 16.0 + MORE_H - r.height()).max(0.0) } else { 0.0 };
+    let top = r.top() + if lift > 0.0 { MORE_H } else { 0.0 };
+    let bottom = r.bottom() - if r.top() + 6.0 - lift + yy > r.bottom() { MORE_H } else { 0.0 };
+    let (mut above, mut below) = (0, 0);
+    let mut y = r.top() + 6.0 - lift;
     let mut flat = 0;
     for (name, picks) in &groups {
         let word = match *name {
@@ -102,10 +107,18 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             "state" => "run.state",
             _ => "run.workflow",
         };
-        style::bold(&p, pos2(r.left() + 14.0, y + 12.0 + 7.0), Align2::LEFT_CENTER, app.tr(word), FontId::proportional(11.0), c.dim);
+        if y >= top && y + GROUP_H <= bottom {
+            style::bold(&p, pos2(r.left() + 14.0, y + 12.0 + 7.0), Align2::LEFT_CENTER, app.tr(word), FontId::proportional(11.0), c.dim);
+        }
         y += GROUP_H;
         for pick in picks {
             let row = Rect::from_min_size(pos2(r.left(), y), vec2(r.width(), ENT_H));
+            if row.top() < top || row.bottom() > bottom {
+                if row.top() < top { above += 1 } else { below += 1 }
+                y += ENT_H;
+                flat += 1;
+                continue;
+            }
             let resp = ui::hit(ui, row, ("acts-filter", flat));
             if resp.clicked() {
                 out.click = Some(Click::ActFilter(flat));
@@ -132,6 +145,7 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             flat += 1;
         }
     }
+    crate::list_ui::filter_more(&p, app, r, above, below);
 }
 
 /// How many runs a filter choice would show on its own.
