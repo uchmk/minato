@@ -8,9 +8,9 @@
 //! searches, the board, the runs; those of the open view go first, the
 //! others' less often), `quick` for what a key asks for (a detail, a run's
 //! jobs, a log, a write), so it never waits behind a poll, and `back` for
-//! reading the finished runs' jobs ahead. The runs of each repository are
-//! asked on `runs`, a few at once, so Actions does not wait for them one by
-//! one. They share one ETag cache, filled from disk at a start, so an
+//! reading the finished runs' jobs ahead. The repositories and the runs of
+//! each are asked on `runs`, a few at once, so Actions does not wait for
+//! them one by one or behind a search. They share one ETag cache, filled from disk at a start, so an
 //! answer that has not changed costs a 304.
 //!
 //! A run's jobs, artifacts and workflow are kept by run with its
@@ -95,6 +95,10 @@ pub struct Net {
     /// When the runs and the board were last asked for (`None`: ask now).
     runs_asked: Option<Instant>,
     board_asked: Option<Instant>,
+    /// Whether the runs and the board were last asked behind the searches
+    /// (another view was open).
+    runs_away: bool,
+    board_away: bool,
     /// The number of the Project the board shows, once `board-pick` has said.
     board_no: Option<u64>,
     next_notes: Instant,
@@ -211,7 +215,7 @@ impl Net {
             None => (None, None),
         };
         let now = Instant::now();
-        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rates: [None; 2], next_search: now, searched_closed: false, searched_custom: None, stash: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
+        Net { token_rx, worker: None, quick: None, back: None, runs: Vec::new(), etags: Etags::default(), back_busy: 0, back_tried: HashSet::new(), next_poll: now, rates: [None; 2], next_search: now, searched_closed: false, searched_custom: None, stash: None, found: [Vec::new(), Vec::new()], mentioned: Default::default(), stubs: Vec::new(), asked: None, refetch: false, pending: Default::default(), repos: Vec::new(), run_found: Default::default(), runs_asked: None, board_asked: None, runs_away: false, board_away: false, board_no: None, next_notes: now, asked_run: None, run_retry: now, run_kept: Default::default(), yaml_by: HashMap::new(), run_refetch: false, board_pages: Vec::new(), peek_asked: None, cache_rx, cache_tx, kept: Default::default(), live: Default::default(), scope: None }
     }
 
     /// The kept answers, once the thread has read them: each one GitHub has
@@ -299,7 +303,13 @@ impl Net {
         let mut all: Vec<Run> = self.run_found.values().flatten().cloned().collect();
         all.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         let before = std::mem::replace(&mut app.runs, all);
-        app.acts.stay(&before, &app.runs);
+        // While the first answers come in, a cursor at the top stays there:
+        // the runs found later are often newer.
+        if self.run_found.len() < self.repos.len() && app.acts.sel == 0 {
+            app.acts.clamp(&app.runs);
+        } else {
+            app.acts.stay(&before, &app.runs);
+        }
     }
 
     /// Write an answer to the cache (on the writer's thread).
@@ -667,6 +677,7 @@ impl Net {
                     self.next_poll = Instant::now() + POLL;
                 }
                 Ok(None) => {
+                    app.signed_out = true;
                     let words = app.tr("net.no_token");
                     app.say(words);
                     // Do not look again; a restart does.
@@ -745,7 +756,13 @@ impl Net {
                             d.yaml_tried = true;
                         }
                     }
-                    app.say(e);
+                    if e == client::REFUSED {
+                        app.signed_out = true;
+                        let words = app.tr("net.refused");
+                        app.say(words);
+                    } else {
+                        app.say(e);
+                    }
                 }
             }
         }
@@ -858,17 +875,32 @@ impl Net {
         // on them.
         let send = |job: Job, open: bool| if open { worker.send_first(job) } else { worker.send(job) };
         let open = app.view == View::Board;
+        // Asked behind the searches and not answered yet (the owner changed
+        // in the settings): the view opening on it asks again, first.
+        if open && self.board_away && app.board.is_none() {
+            self.board_asked = None;
+        }
         if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }, now) <= now {
             match self.board_no {
                 None => send(Job { key: "board-pick".into(), call: Call::Graphql { query: board::pick_query(self.other()), variables: "{}".into() } }, open),
                 Some(n) => send(Job { key: "board".into(), call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, None) } }, open),
             }
             self.board_asked = Some(now);
+            self.board_away = !open;
         }
         let open = app.view == View::Actions;
+        if open && self.runs_away && self.run_found.is_empty() {
+            self.runs_asked = None;
+        }
         if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }, now) <= now {
             if self.repos.is_empty() {
-                send(get("a-repos", &actions::repos_path(self.other())), open);
+                // On a runs lane: not behind a slow search of a new owner.
+                let job = get("a-repos", &actions::repos_path(self.other()));
+                match self.runs.first() {
+                    Some(w) if open => w.send_first(job),
+                    Some(w) => w.send(job),
+                    None => send(job, open),
+                }
             } else {
                 for (k, r) in self.repos.iter().enumerate() {
                     let job = Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) };
@@ -884,6 +916,7 @@ impl Net {
                 }
             }
             self.runs_asked = Some(now);
+            self.runs_away = !open;
         }
         if app.viewer.is_some() && open {
             // The run selected: what is kept shows at once. A finished run's

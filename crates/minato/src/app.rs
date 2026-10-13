@@ -302,6 +302,9 @@ pub struct App {
     pub toast: Option<(String, Instant)>,
     /// The login the token belongs to, once GitHub has said.
     pub viewer: Option<String>,
+    /// No token was found, or GitHub refused it: the account mark is `?`
+    /// though the kept answers still show whose they were.
+    pub signed_out: bool,
     /// The open issues, PRs and discussions of the last search.
     pub items: Vec<Item>,
     /// The inbox's selection and filters.
@@ -533,6 +536,7 @@ impl App {
             find_open: false,
             find_fresh: false,
             viewer: None,
+            signed_out: false,
             items: Vec::new(),
             inbox: InboxState::default(),
             marks: HashMap::new(),

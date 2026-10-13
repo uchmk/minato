@@ -38,14 +38,14 @@
 
 - [x] **4.1** Open the settings → The common screen of the uchmk apps: General (language, size, clock) and Theme pages, a search, `Ctrl+Tab` moves between pages
 - [x] **4.2** Change the scale to 150% → The whole window is drawn larger at once and stays so after a restart
-- [ ] **4.3** Pick another theme → The window's colours change at once; the sample card follows the theme and is in the app's language (Japanese: 受信箱, 一覧, … and 成功, 失敗, 実行中)
+- [x] **4.3** Pick another theme → The window's colours change at once; the sample card follows the theme and is in the app's language (Japanese: 受信箱, 一覧, … and 成功, 失敗, 実行中)
 - [x] **4.4** Edit `%APPDATA%\uchmk\common.toml` by hand while the app runs → The change shows within a few seconds
 
 ## 5. GitHub connection
 
 - [x] **5.1** Start `minato` where `gh auth login` is done → Within a few seconds the account mark shows your initial (hover: your login) and the keybar shows `API 4,xxx/5,000` and `⟳ 0s ago`
-- [ ] **5.2** Start it with no `gh` login and no `GITHUB_TOKEN` → A toast says there is no token and how to get one; the account mark stays `?`
-- [ ] **5.3** Start it with `GITHUB_TOKEN=bad` → A toast says GitHub refused the token (401); the token text appears nowhere
+- [x] **5.2** Start it with no `gh` login and no `GITHUB_TOKEN` → A toast says there is no token and how to get one; the account mark stays `?`
+- [x] **5.3** Start it with `GITHUB_TOKEN=bad` → A toast says GitHub refused the token (401) and how to get a new one; the account mark turns `?`; the token text appears nowhere
 - [x] **5.4** Leave it open for 3 minutes → The `⟳` age counts up and drops back to a few seconds after each poll; the window stays idle otherwise
 
 ## 6. List view
@@ -90,7 +90,7 @@
 - [x] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
 - [x] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
 - [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
-- [ ] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
+- [x] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [x] **8.11** Press `a` on an issue → You are assigned; a toast says so
 - [x] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
@@ -116,7 +116,7 @@
 - [x] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
 - [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button (an arrow over the empty parts of the columns); the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
 - [x] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
-- [ ] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds)
+- [x] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds); the cursor stays on the newest run at the top
 - [x] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
 
 ## 10. Board
@@ -164,7 +164,7 @@
 
 ## 13. Milestone, reviewers and saved marks
 
-- [ ] **13.1** In the list, press `r`, then `Alt+M`, pick a milestone, `Esc` → A toast says the milestone was updated; the issue or PR shows it on GitHub
+- [x] **13.1** In the list, press `r`, then `Alt+M`, pick a milestone, `Esc` → A toast says the milestone was updated; the issue or PR shows it on GitHub
 - [ ] **13.2** On a PR press `Alt+R`, tick a person, `Esc` → A toast says the review was requested; GitHub lists the person under Reviewers
 - [x] **13.3** On an issue press `Alt+R` → A toast says reviewers can only be asked on a PR; no picker opens
 - [x] **13.4** In the inbox press `d` on a card and `s` on another, quit minato and start it again → Both cards are still hidden; `minato-marks.json` sits beside common.toml
@@ -184,7 +184,7 @@
 
 - [x] **15.1** `Ctrl+,`, open the "minato" page → Cards for whose repositories (the owner and the board Project), the nine inbox rules and the six writing-box fields, each with a switch, and the saved searches; Milestone, Priority, Reviewers and the dependabot rule are off
 - [ ] **15.2** Switch the dependabot rule on and go to the inbox → A dependabot PR now appears with its reason
-- [ ] **15.3** Switch Milestone on, press `r` then `Alt+M` on an item → The milestone picker opens; with it off, a toast says the field is hidden
+- [x] **15.3** Switch Milestone on, press `r` then `Alt+M` on an item → The milestone picker opens; with it off, a toast says the field is hidden
 - [x] **15.4** Change a switch, quit and start again → The switches keep their state; `minato-settings.json` sits beside common.toml
 - [x] **15.5** Open the minato page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
 - [x] **15.6** Type `https://github.com/@rust-lang` in the owner box and press Enter → The box shows `rust-lang`
@@ -209,7 +209,7 @@
 - [x] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
 - [ ] **18.2** Have someone mention you on their open issue → The issue is in the inbox with "Mentions you"
 - [x] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
-- [ ] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
+- [x] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
 - [x] **18.5** Start minato with the inbox view → Cards are listed at the left (title, repository, reason) and the detail at the right; the list is not blank
 
 ## 19. New issue
@@ -356,5 +356,5 @@
 - [ ] **32.3** Select an item in the Project with a Status and a Priority, then a PR with a milestone and a review asked → The chips above the box show the Status, the Priority, the milestone and the reviewers (a team by its name); a field with nothing set shows "—"
 - [x] **32.4** Press `3` and select a `pull_request` run whose PR is merged; press `p` → The facts show "branch → main" and the keys `p`; `p` opens GitHub's PR search for the run's branch
 - [x] **32.5** In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` → The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there
-- [ ] **32.6** Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set → The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)`
+- [x] **32.6** Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set → The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)`
 - [ ] **32.7** On a PR with a review asked press `r`, `Alt+R`, untick the person, `Esc` → The person is ticked at first; after `Esc` a toast says the request was taken off and GitHub no longer lists them

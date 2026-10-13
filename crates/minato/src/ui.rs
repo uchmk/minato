@@ -254,9 +254,10 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let acct = Rect::from_center_size(pos2(right - 12.0, mid), vec2(24.0, 24.0));
     let resp = ui.interact(acct, ui.id().with("account"), Sense::click());
     p.circle_filled(acct.center(), 11.0, c.border);
-    let initial = app.viewer.as_deref().and_then(|l| l.chars().next()).map_or('?'.to_string(), |ch| ch.to_uppercase().to_string());
-    p.text(acct.center(), Align2::CENTER_CENTER, initial, FontId::proportional(12.0), if app.viewer.is_some() { c.fg } else { c.dim });
-    let mut hover = app.viewer.clone().unwrap_or_else(|| app.tr("account").into());
+    let viewer = app.viewer.as_deref().filter(|_| !app.signed_out);
+    let initial = viewer.and_then(|l| l.chars().next()).map_or('?'.to_string(), |ch| ch.to_uppercase().to_string());
+    p.text(acct.center(), Align2::CENTER_CENTER, initial, FontId::proportional(12.0), if viewer.is_some() { c.fg } else { c.dim });
+    let mut hover = viewer.map_or_else(|| app.tr("account").into(), str::to_string);
     if !app.settings.owner.is_empty() {
         p.circle_stroke(acct.center(), 11.5, Stroke::new(1.5, ACCENT));
         hover = format!("{hover}

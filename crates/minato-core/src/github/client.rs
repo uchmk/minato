@@ -64,7 +64,7 @@ impl<T: Transport> Client<T> {
                 }
                 Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: r.etag })
             }
-            401 => Err("GitHub refused the token (401)".into()),
+            401 => Err(REFUSED.into()),
             s => Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
         }
     }
@@ -74,7 +74,7 @@ impl<T: Transport> Client<T> {
         let r = self.transport.send(&self.token, &Request::Send { method, url: url(path), body: body.to_string() })?;
         match r.status {
             200..=299 => Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: None }),
-            401 => Err("GitHub refused the token (401)".into()),
+            401 => Err(REFUSED.into()),
             403 => Err(format!("GitHub said no (403): {}", first_line(&r.body))),
             s => Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
         }
@@ -85,12 +85,17 @@ impl<T: Transport> Client<T> {
         let vars: serde_json::Value = serde_json::from_str(variables).map_err(|e| e.to_string())?;
         let body = serde_json::json!({ "query": query, "variables": vars }).to_string();
         let r = self.transport.send(&self.token, &Request::Graphql { body })?;
-        if !(200..=299).contains(&r.status) {
-            return Err(format!("GitHub answered {}: {}", r.status, first_line(&r.body)));
+        match r.status {
+            200..=299 => {}
+            401 => return Err(REFUSED.into()),
+            s => return Err(format!("GitHub answered {s}: {}", first_line(&r.body))),
         }
         Ok(Fetched { body: r.body, cached: false, rate: r.rate, etag: None })
     }
 }
+
+/// What a 401 says, whichever way the token was used.
+pub const REFUSED: &str = "GitHub refused the token (401)";
 
 fn first_line(s: &str) -> String {
     s.lines().next().unwrap_or("").chars().take(120).collect()
@@ -155,6 +160,10 @@ mod tests {
         let (mut c, _) = client(vec![resp(401, None, "{}"), resp(404, None, "Not Found\nmore")]);
         assert_eq!(c.get("/user").unwrap_err(), "GitHub refused the token (401)");
         assert_eq!(c.get("/x").unwrap_err(), "GitHub answered 404: Not Found");
+        let (mut g, _) = client(vec![resp(401, None, "{
+  \"message\": \"Bad credentials\"
+}")]);
+        assert_eq!(g.graphql("q", "{}").unwrap_err(), REFUSED);
     }
 
     #[test]

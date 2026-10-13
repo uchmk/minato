@@ -52,7 +52,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | --- | --- | --- |
 | 5.1 | Start `minato` where `gh auth login` is done | Within a few seconds the account mark shows your initial (hover: your login) and the keybar shows `API 4,xxx/5,000` and `⟳ 0s ago` |
 | 5.2 | Start it with no `gh` login and no `GITHUB_TOKEN` | A toast says there is no token and how to get one; the account mark stays `?` |
-| 5.3 | Start it with `GITHUB_TOKEN=bad` | A toast says GitHub refused the token (401); the token text appears nowhere |
+| 5.3 | Start it with `GITHUB_TOKEN=bad` | A toast says GitHub refused the token (401) and how to get a new one; the account mark turns `?`; the token text appears nowhere |
 | 5.4 | Leave it open for 3 minutes | The `⟳` age counts up and drops back to a few seconds after each poll; the window stays idle otherwise |
 
 ## 6. List view
@@ -131,7 +131,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 9.10 | Fill the list with many runs | No scrollbar; the rows that do not fit hide and "more" shows; none is folded |
 | 9.11 | Select a failed run and click the `R` button in its "Next" box; on a running run click `X` | The pointer turns to a hand over the button (an arrow over the empty parts of the columns); the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5) |
 | 9.12 | In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) | The click does what the key does |
-| 9.13 | In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions | The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds) |
+| 9.13 | In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions | The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds); the cursor stays on the newest run at the top |
 | 9.14 | In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh | The selection stays on the same run, which moves down a row (or to the top); the detail does not change |
 
 ## 10. Board
