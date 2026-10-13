@@ -360,6 +360,8 @@ pub struct App {
     /// The unread notifications.
     pub notes: Vec<Note>,
     pub ns: NotesState,
+    /// The notifications marked read here.
+    notes_read: notes::Read,
     /// The wheel's turn not yet a whole step (a touchpad's small ones).
     pub wheel_acc: f32,
     /// How far the detail drawn last can scroll, in lines: the keys and the
@@ -469,6 +471,7 @@ impl App {
             unread: 0,
             notes: Vec::new(),
             ns: NotesState::default(),
+            notes_read: notes::Read::default(),
             palette: None,
             synced: None,
             api: None,
@@ -920,22 +923,57 @@ impl App {
         }
     }
 
+    /// The unread notifications as GitHub listed them, less those marked
+    /// read here since.
+    pub fn take_notes(&mut self, v: Vec<Note>) {
+        self.notes = self.notes_read.unread(v);
+        self.unread = self.notes.len() as u32;
+        self.ns.clamp(self.notes.len());
+    }
+
     /// Mark the notification at `k` read; `how` is the key (`d` `o` `Enter`).
     fn read_note(&mut self, k: usize, how: char) {
         let note = self.notes.remove(k);
+        self.notes_read.mark(&note);
         self.queue(&format!("note:{}", note.id), notes::mark_read(&note.id), None);
         self.unread = self.notes.len() as u32;
         self.ns.clamp(self.notes.len());
+        let page = self.note_run(&note).map_or_else(|| note.url.clone(), |k| self.runs[k].url.clone());
         match how {
-            'o' => self.open_url = Some(note.url),
+            'o' => self.open_url = Some(page),
             '\n' => {
                 self.mode = Mode::Main;
-                if !self.open_item(&note.url) {
-                    self.open_url = Some(note.url);
+                if !self.open_item(&note.url) && !self.open_run(&note) {
+                    self.open_url = Some(page);
                 }
             }
             _ => {}
         }
+    }
+
+    /// The run a notification of a workflow run is about: the newest of
+    /// its workflow on its branch done by the time it came (else the
+    /// newest).
+    fn note_run(&self, note: &Note) -> Option<usize> {
+        let (workflow, branch) = notes::workflow_run(note)?;
+        let of = |r: &&Run| r.repo == note.repo && r.workflow == workflow && r.branch == branch;
+        let newest = |done: bool| self.runs.iter().enumerate().filter(|(_, r)| of(r) && (!done || r.updated_at <= note.updated_at)).max_by(|a, b| a.1.started_at.cmp(&b.1.started_at)).map(|(k, _)| k);
+        newest(true).or_else(|| newest(false))
+    }
+
+    /// Show the run a notification is about in Actions, the filters
+    /// cleared if they hide it. False if minato does not have it.
+    fn open_run(&mut self, note: &Note) -> bool {
+        let Some(k) = self.note_run(note) else { return false };
+        if !self.acts.matches(&self.runs[k]) {
+            self.acts = ActState::default();
+        }
+        let id = self.runs[k].id;
+        self.acts.col = actions::Col::Runs;
+        self.acts.sel = self.acts.shown(&self.runs).iter().position(|r| r.id == id).unwrap_or(0);
+        self.acts.scroll = 0.0;
+        self.view = View::Actions;
+        true
     }
 
     /// Where a notification's thread is in minato, by the page it opens:
@@ -1119,7 +1157,9 @@ impl App {
         if self.notes.is_empty() {
             return;
         }
-        self.notes.clear();
+        for n in std::mem::take(&mut self.notes) {
+            self.notes_read.mark(&n);
+        }
         self.unread = 0;
         self.ns = NotesState::default();
         self.queue("note:all", notes::mark_all(), Some("notes.all_read"));
@@ -1872,6 +1912,43 @@ mod tests {
         assert_eq!((a.acts.col, a.acts.sel), (actions::Col::Runs, 1));
         a.click(Click::ActCol(actions::Col::Detail));
         assert_eq!(a.acts.col, actions::Col::Detail);
+    }
+
+    #[test]
+    fn a_runs_note_opens_its_run_in_actions() {
+        let mut a = app();
+        let mut old = run(1, actions::Status::Bad, None);
+        old.started_at = "2026-10-12T08:00:00Z".into();
+        let later = Run { updated_at: "2026-10-12T10:00:00Z".into(), ..run(3, actions::Status::Running, None) };
+        let other = Run { branch: "dev".into(), ..run(4, actions::Status::Bad, None) };
+        a.runs = vec![run(2, actions::Status::Ok, None), later, old, other];
+        a.acts.state = Some(actions::Bucket::Bad);
+        let ci = Note { repo: "uchmk/kura".into(), kind: "CheckSuite".into(), title: "check workflow run failed for main branch".into(), updated_at: "2026-10-12T09:01:00Z".into(), url: "https://github.com/uchmk/kura/actions".into(), ..note("1") };
+        a.notes = vec![ci.clone(), Note { title: "gone workflow run failed for main branch".into(), ..ci }];
+        a.feed('n');
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.view, View::Actions);
+        assert_eq!(a.run().map(|r| r.id), Some(2), "the newest done by then, the filters cleared");
+        assert_eq!(a.acts.state, None);
+        assert_eq!(a.open_url, None);
+        // A run minato does not have opens the repository's Actions.
+        a.feed('n');
+        a.note_click(NoteClick::Open(0));
+        assert_eq!(a.open_url.as_deref(), Some("https://github.com/uchmk/kura/actions"));
+    }
+
+    #[test]
+    fn a_note_read_here_is_not_listed_again_by_an_old_list() {
+        let mut a = app();
+        a.take_notes(vec![note("1"), note("2")]);
+        a.feed('n');
+        a.feed('d');
+        assert_eq!(a.unread, 1);
+        a.take_notes(vec![note("1"), note("2")]);
+        assert_eq!((a.notes.len(), a.notes[0].id.as_str()), (1, "2"));
+        a.feed('A');
+        a.take_notes(vec![note("1"), note("2")]);
+        assert_eq!(a.unread, 0);
     }
 
     #[test]

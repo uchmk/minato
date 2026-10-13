@@ -356,11 +356,7 @@ impl Net {
                 }
             }
             "notes" => match notes::parse(body) {
-                Ok(v) => {
-                    app.unread = v.len() as u32;
-                    app.notes = v;
-                    app.ns.clamp(app.notes.len());
-                }
+                Ok(v) => app.take_notes(v),
                 Err(e) => app.say(e),
             },
             k if k.starts_with("note:") => {
@@ -780,6 +776,9 @@ impl Net {
             }
         }
         if app.viewer.is_some() && now >= self.next_notes {
+            // Asked without its ETag: GitHub answers 304 while no thread is
+            // new, even after some were marked read.
+            self.etags.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&client::url(notes::PATH));
             worker.send(get("notes", notes::PATH));
             self.next_notes = now + NOTES;
         }
@@ -868,7 +867,7 @@ impl Net {
 fn cached(key: &str, narrowed: bool) -> bool {
     match key {
         "items" => !narrowed,
-        "me" | "discussions" | "mentions" | "mainci" | "notes" | "board-pick" | "a-repos" => true,
+        "me" | "discussions" | "mentions" | "mainci" | "board-pick" | "a-repos" => true,
         k => k.starts_with("a-runs:") || list_repo(k).is_some(),
     }
 }
@@ -899,7 +898,6 @@ fn due(asked: Option<Instant>, every: Duration, now: Instant) -> Instant {
 fn rest_path(key: &str, other: Option<&str>) -> Option<String> {
     match key {
         "me" => Some("/user".into()),
-        "notes" => Some(notes::PATH.into()),
         "a-repos" => Some(actions::repos_path(other)),
         k if k.starts_with("labels:") => list_repo(k).map(write::labels_path),
         k if k.starts_with("people:") => list_repo(k).map(write::assignees_path),

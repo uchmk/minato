@@ -2,6 +2,8 @@
 //! `/notifications`, the cursor, and the two writes (one thread read, all
 //! read).
 
+use std::collections::HashMap;
+
 use serde_json::{Value, json};
 
 use crate::github::http::Method;
@@ -41,8 +43,32 @@ pub fn web_url(subject_api: &str, repo: &str) -> String {
         "pulls" => format!("https://github.com/{owner}/{name}/pull/{num}"),
         "issues" => format!("https://github.com/{owner}/{name}/issues/{num}"),
         "commits" => format!("https://github.com/{owner}/{name}/commit/{num}"),
+        "releases" => format!("https://github.com/{owner}/{name}/releases"),
         _ => format!("https://github.com/{owner}/{name}"),
     }
+}
+
+/// The page of a thread of `kind` whose subject has no API address: a
+/// workflow run's is the repository's Actions, a discussion's its
+/// discussions.
+fn page(kind: &str, subject_api: &str, repo: &str) -> String {
+    match kind {
+        _ if !subject_api.is_empty() => web_url(subject_api, repo),
+        "CheckSuite" => format!("https://github.com/{repo}/actions"),
+        "Discussion" => format!("https://github.com/{repo}/discussions"),
+        _ => web_url(subject_api, repo),
+    }
+}
+
+/// The workflow and the branch a run's notification is about, from its
+/// title (`CI workflow run failed for main branch`).
+pub fn workflow_run(note: &Note) -> Option<(&str, &str)> {
+    if note.kind != "CheckSuite" {
+        return None;
+    }
+    let (workflow, rest) = note.title.split_once(" workflow run ")?;
+    let (_, branch) = rest.rsplit_once(" for ")?;
+    Some((workflow, branch.strip_suffix(" branch")?))
 }
 
 /// The colour a line is drawn in, by what it is about.
@@ -98,7 +124,7 @@ pub fn parse(body: &str) -> Result<Vec<Note>, String> {
                 kind: text(n, "/subject/type"),
                 reason: text(n, "/reason"),
                 updated_at: text(n, "/updated_at"),
-                url: web_url(&text(n, "/subject/url"), &repo),
+                url: page(&text(n, "/subject/type"), &text(n, "/subject/url"), &repo),
                 repo,
             }
         })
@@ -113,6 +139,26 @@ pub fn mark_read(id: &str) -> Call {
 /// Mark every notification read.
 pub fn mark_all() -> Call {
     Call::Send { method: Method::Put, path: "/notifications".into(), body: json!({}).to_string() }
+}
+
+/// The threads marked read here, by when they were last updated: GitHub may
+/// still list them for a while (a list asked before the mark, or one it
+/// had not made again), and they are not shown again unless something new
+/// happens in them.
+#[derive(Clone, Debug, Default)]
+pub struct Read(HashMap<String, String>);
+
+impl Read {
+    pub fn mark(&mut self, note: &Note) {
+        self.0.insert(note.id.clone(), note.updated_at.clone());
+    }
+
+    /// The threads of `notes` still unread; a thread GitHub no longer
+    /// lists is forgotten.
+    pub fn unread(&mut self, notes: Vec<Note>) -> Vec<Note> {
+        self.0.retain(|id, _| notes.iter().any(|n| n.id == *id));
+        notes.into_iter().filter(|n| self.0.get(&n.id) != Some(&n.updated_at)).collect()
+    }
 }
 
 /// The cursor on the list.
@@ -156,16 +202,46 @@ mod tests {
        "subject":{"title":"Old","type":"Issue","url":"https://api.github.com/repos/uchmk/kura/issues/1"},
        "repository":{"full_name":"uchmk/kura"}},
       {"id":"3","unread":true,"reason":"ci_activity","updated_at":"2026-10-11T00:00:00Z",
-       "subject":{"title":"CI","type":"CheckSuite","url":null},
-       "repository":{"full_name":"uchmk/tsumugi"}}]"#;
+       "subject":{"title":"CI workflow run failed for test/win-17 branch","type":"CheckSuite","url":null},
+       "repository":{"full_name":"uchmk/tsumugi"}},
+      {"id":"4","unread":true,"reason":"subscribed","updated_at":"2026-10-10T00:00:00Z",
+       "subject":{"title":"Hi","type":"Discussion","url":null},
+       "repository":{"full_name":"uchmk/kura"}},
+      {"id":"5","unread":true,"reason":"subscribed","updated_at":"2026-10-10T00:00:00Z",
+       "subject":{"title":"v1","type":"Release","url":"https://api.github.com/repos/uchmk/kura/releases/77"},
+       "repository":{"full_name":"uchmk/kura"}}]"#;
 
     #[test]
     fn only_unread_threads_are_kept_with_their_web_pages() {
         let n = parse(BODY).unwrap();
-        assert_eq!(n.len(), 2);
+        assert_eq!(n.len(), 4);
         assert_eq!((n[0].id.as_str(), n[0].kind.as_str(), n[0].reason.as_str()), ("1", "PullRequest", "review_requested"));
         assert_eq!(n[0].url, "https://github.com/uchmk/kura/pull/5");
-        assert_eq!(n[1].url, "https://github.com/uchmk/tsumugi");
+        assert_eq!(n[1].url, "https://github.com/uchmk/tsumugi/actions");
+        assert_eq!(n[2].url, "https://github.com/uchmk/kura/discussions");
+        assert_eq!(n[3].url, "https://github.com/uchmk/kura/releases");
+    }
+
+    #[test]
+    fn a_runs_notification_names_its_workflow_and_branch() {
+        let n = parse(BODY).unwrap();
+        assert_eq!(workflow_run(&n[1]), Some(("CI", "test/win-17")));
+        assert_eq!(workflow_run(&n[0]), None);
+        let odd = Note { title: "Deploy".into(), ..n[1].clone() };
+        assert_eq!(workflow_run(&odd), None);
+    }
+
+    #[test]
+    fn a_thread_marked_read_stays_away_until_it_changes() {
+        let n = parse(BODY).unwrap();
+        let mut read = Read::default();
+        read.mark(&n[0]);
+        assert_eq!(read.unread(n.clone()).len(), 3, "a list made before the mark");
+        let newer = Note { updated_at: "2026-10-12T02:00:00Z".into(), ..n[0].clone() };
+        assert_eq!(read.unread(vec![newer]).len(), 1, "something new happened in it");
+        read.mark(&n[0]);
+        assert_eq!(read.unread(n[1..].to_vec()).len(), 3);
+        assert_eq!(read.unread(n.clone()).len(), 4, "forgotten once GitHub stopped listing it");
     }
 
     #[test]

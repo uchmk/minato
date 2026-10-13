@@ -130,6 +130,8 @@
 - [ ] **11.2** Press `Enter` on a thread minato has, then on one it does not → The list closes and the inbox (or the list) selects that thread; for the other, the notifications close and the built-in browser shows it. Each time the row goes and the count drops by one
 - [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
 - [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
+- [ ] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
+- [ ] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato does not have the run, the repository's Actions page is shown, not its top
 - [ ] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
 - [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the button marks every row read
 - [ ] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
@@ -283,7 +285,7 @@
 - [ ] **28.14** Rest the pointer on a board card for the first time, then again → The first time the box with the body's start comes after a moment; the second time at once
 - [ ] **28.15** Start minato, stay in the inbox for about 30 seconds, then press `3` and `4` → Actions shows its runs and the board its cards at once, with no "loading"
 - [ ] **28.16** Stay in the inbox for a minute after a start, then in Actions select a finished run never selected before → Its jobs, artifacts and graph show at once; the runs next to it too
-- [ ] **28.17** Quit minato and start it again; note the API counter in the status bar, wait two minutes in the inbox → The counter goes down by only a few (the unchanged runs and notifications cost nothing)
+- [ ] **28.17** Quit minato and start it again; note the API counter in the status bar, wait two minutes in the inbox → The counter goes down by only a few (the unchanged runs cost nothing; the notifications one each 90 seconds)
 
 ## 29. The built-in browser
 
