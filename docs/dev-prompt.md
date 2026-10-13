@@ -8,7 +8,7 @@ uchmk/minato で、GitHub を扱うデスクトップのアプリ minato を作�
 
 ## まず読むもの
 
-1. `CLAUDE.md`（作業ルール。返答は日本語、コード・コメント・コミットは英語、LF、`cargo fmt` は走らせない、push の前に `scripts/verify.sh`）
+1. `CLAUDE.md`（作業ルール。返答は日本語、コード・コメント・コミットは英語、LF、`cargo fmt --all` で整形、push の前に `scripts/verify.sh`）
 2. `docs/design.md`（確定した設計。画面・キー・受信箱の規則・折りたたみ・ロゴ）
 3. `docs/mock/minato.html`（動くモック。ブラウザで開いて `?`。迷ったらこれと同じ動きにする）
 4. 姉妹の作りを見本にする: tsumugi（`crates/tsumugi/src/icon.rs`・`build.rs`・`scripts/verify.sh`・`.github/workflows/`・
@@ -70,5 +70,5 @@ Project「uchmk」の Status の列、`H` `L` とドラッグで動かして Git
 - UI スレッドでディスクとネットワークに触らない。
 - GitHub を変える操作はトーストで結果を出し、失敗したら表示を戻す。戻せるものは `u` で戻す。
 - スクロールバーを出さない（折りたたみ）。色は ito-theme の Dark。漢字の「港」をロゴの横に出さない。
-- ito に足りないものは ito に入れて push し、`rev` を上げる（ito は `cargo fmt` で整形、ito の CLAUDE.md に従う）。
+- ito に足りないものは ito に入れて push し、`rev` を上げる（ito の CLAUDE.md に従う）。
 - 実機の印 `[x]` は付けない（持ち主か実機のセッションだけ）。

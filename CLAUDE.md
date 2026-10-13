@@ -23,7 +23,8 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
   TODO.md の項目には `（要確認: #N）` を付ける。回答が来るまでは推奨で進めてよい。持ち主のコメント `回答: …` がいつも優先する。
 - 持ち主の Windows の PC でしかできないこと（実機の確認・リリース・PC の環境）は、ラベル `needs-pc` の issue で PC のセッションに頼む。
   やること・終わりの条件・版かコミットを、会話の記録を読まなくても進められるように書く。
-- **`cargo fmt` は走らせない。**tsumugi と同じく手で整形する（`Self { a, b, c }` を 1 行に収める書き方）。整形の確認は `cargo fmt --check` で見るだけ。
+- **整形は `cargo fmt --all` で揃える**（v0.39.11 から。uchmk の全部のプロジェクトで使う）。設定は ito・yagura と同じ `rustfmt.toml`（`max_width = 140`、
+  `use_small_heuristics = "Max"`）。CI と verify.sh が `cargo fmt --all --check` で見る。整形だけのコミットは `.git-blame-ignore-revs` に書く。
 - clippy は `--all-targets -- -D warnings` で警告ゼロを保つ。検証は CI と同じ stable で回す。
 
 ## 共有のクレート（ito）
@@ -31,7 +32,7 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
 - `ito-* = { git = "https://github.com/uchmk/ito", rev = "…" }` で読む。**全部のクレートを同じ `rev` にそろえる。**
   使えそうなもの: `ito-common`・`ito-theme`・`ito-prefs`（設定）、`ito-i18n`（言語）、`ito-keys`（キー）、`ito-palette`（パレット）、
   `ito-match`（あいまい検索）、`ito-notify`（トースト）、`ito-winres`（exe のアイコン）、`ito-testcheck`（TESTING の表）。
-- 足りないものや直しは ito に入れて push し、ここの `rev` を上げる（`cargo build` で `Cargo.lock` も合わせる）。ito は `cargo fmt` で整形し、ito の CLAUDE.md に従う。
+- 足りないものや直しは ito に入れて push し、ここの `rev` を上げる（`cargo build` で `Cargo.lock` も合わせる）。ito のファイルは ito の CLAUDE.md に従う。
 - 手元で一緒に直すときは `rev` を書き換えずにローカルの ito を差し込む（クレートごとに 1 つ `--config`）:
 
   ```sh

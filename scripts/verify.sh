@@ -5,8 +5,8 @@
 #
 # The Windows clippy is a type check only -- it never runs Windows code, so
 # read path strings by eye. Off Windows it is left to CI: ring (rustls, under
-# ureq) builds its C for MSVC only with the MSVC tools. Never add `cargo fmt`
-# here.
+# ureq) builds its C for MSVC only with the MSVC tools. `cargo fmt --check`
+# only looks; run `cargo fmt --all` to fix what it finds.
 
 set -o pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -28,6 +28,7 @@ run() {
     last=$out
 }
 
+run cargo fmt --all --check
 run cargo build -q --locked --workspace --all-features
 run cargo test -q --workspace --all-features
 tests=$(echo "$last" | grep 'test result' | awk '{p+=$4; f+=$6} END {print p " passed; " f " failed"}')

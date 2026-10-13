@@ -57,6 +57,13 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all --check
+
   # ARM64, Windows and Linux: the tests on GitHub's ARM64 runners.
   # On a push to main and by hand, not on a pull request -- the x64 jobs gate
   # those, and this would add its wait to every one.

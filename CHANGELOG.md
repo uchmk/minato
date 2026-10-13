@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.11] - 2026-10-14
+
+### Changed
+
+- コードを `cargo fmt` で整形した（uchmk の全部のプロジェクトで使うことにしたため）。設定は ito・yagura と同じ `rustfmt.toml`（`max_width = 140`）。CI と `scripts/verify.sh` が `cargo fmt --all --check` で確かめる。整形だけのコミットは `.git-blame-ignore-revs` で `git blame` から外す。動きは変わらない。
+
 ## [0.39.10] - 2026-10-13
 
 ### Fixed
