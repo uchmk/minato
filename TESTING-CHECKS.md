@@ -12,9 +12,9 @@
 ## 1. Window and title bar
 
 - [x] **1.1** Start `minato` → A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board`, a palette field in the middle, the bell, the account mark and three window buttons on the right
-- [ ] **1.2** Drag the empty part of the title bar → The window moves; double-click maximises and restores
-- [ ] **1.3** Click minimise, maximise, close → Each does what it says; close shows a red button under the pointer
-- [ ] **1.4** Drag each edge and corner → The window resizes with the matching pointer; nothing resizes while maximised
+- [x] **1.2** Drag the empty part of the title bar → The window moves; double-click maximises and restores
+- [x] **1.3** Click minimise, maximise, close → Each does what it says; close shows a red button under the pointer
+- [x] **1.4** Drag each edge and corner → The window resizes with the matching pointer; nothing resizes while maximised
 - [x] **1.5** Shrink the window → It stops at 720x420; nothing scrolls and no scrollbar appears anywhere; each view still fits (section 30)
 - [~] **1.6** Look at the exe in Explorer and the taskbar → The same logo as in the title bar (tile, cyan and gold walls, blue wave, two lights)
 
