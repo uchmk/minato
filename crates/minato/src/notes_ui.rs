@@ -39,7 +39,7 @@ pub fn show(ui: &Ui, app: &App, out: &mut Out) {
                 let n = app.notes.len().to_string();
                 ui.label(egui::RichText::new(app.tr("notes.unread").replace("{}", &n)).size(12.0).color(c.dim));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add_enabled(!app.notes.is_empty(), egui::Button::new(app.tr("notes.mark_read")).small()).clicked() {
+                    if ui.add_enabled(!app.notes.is_empty(), egui::Button::new(app.tr("notes.mark_read")).small()).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                         action = Some(NoteClick::ReadAll);
                     }
                     ui.label(egui::RichText::new(app.tr("notes.hint")).size(11.5).color(c.dim));

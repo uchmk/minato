@@ -115,7 +115,7 @@
 - [x] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [x] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
 - [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button (an arrow over the empty parts of the columns); the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
-- [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
+- [x] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 - [ ] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds)
 - [x] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
 
@@ -136,14 +136,14 @@
 ## 11. Notifications and palette
 
 - [x] **11.1** Press `n` with unread GitHub notifications → A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line
-- [ ] **11.2** Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) → The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one
+- [x] **11.2** Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) → The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one
 - [ ] **11.2a** Press `d` on a card in the inbox, then `Enter` on a notification of the same thread → The inbox opens on that card under "Done today" (the notification has no `Inbox` badge)
-- [ ] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
+- [x] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
 - [ ] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
-- [ ] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
-- [ ] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens the inbox on that repository's "CI is red on main" card when there is one, else Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato has neither, the repository's Actions page is shown, not its top
+- [x] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
+- [x] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens the inbox on that repository's "CI is red on main" card when there is one, else Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato has neither, the repository's Actions page is shown, not its top
 - [x] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
-- [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the button marks every row read
+- [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the pointer is a hand over the button; the button marks every row read
 - [x] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
 - [x] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
 - [x] **11.8** Type `board` → No line opens a view: the views are on `1`–`4` and the tabs (see 27.6)
@@ -335,7 +335,7 @@
 - [x] **31.3** Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` → No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows
 - [x] **31.4** Narrow the window, press `1` and `/`, type a few letters → The search's hint goes first, then the field narrows; neither runs into the sync status
 - [x] **31.5** On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` → Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out; the keybar keeps `F1 Esc` to the last (only its key when there is no room)
-- [ ] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's (also when that PR is merged); `F1` still lists them all
+- [x] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's (also when that PR is merged); `F1` still lists them all
 - [~] **31.7** Open the palette and type part of a long title → The title is cut with `…` inside its row, clear of the key hint
 - [x] **31.8** Press `r` on an issue, then `Alt+R` → A toast says reviewers are for pull requests; no picker opens
 - [x] **31.9** Press `S` in the list → The repository settings' heading is the repository's name alone
