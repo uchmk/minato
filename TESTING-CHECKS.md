@@ -16,7 +16,7 @@
 - [ ] **1.3** Click minimise, maximise, close → Each does what it says; close shows a red button under the pointer
 - [ ] **1.4** Drag each edge and corner → The window resizes with the matching pointer; nothing resizes while maximised
 - [x] **1.5** Shrink the window → It stops at 720x420; nothing scrolls and no scrollbar appears anywhere; each view still fits (section 30)
-- [ ] **1.6** Look at the exe in Explorer and the taskbar → The same logo as in the title bar (tile, cyan and gold walls, blue wave, two lights)
+- [~] **1.6** Look at the exe in Explorer and the taskbar → The same logo as in the title bar (tile, cyan and gold walls, blue wave, two lights)
 
 ## 2. Views and keys
 
@@ -306,10 +306,10 @@
 - [x] **29.3** Press `O` on a card → The system's browser opens the page; the panel does not change
 - [ ] **29.4** Sign in to GitHub in the panel, quit minato, start it and press `o` → Still signed in (the cookies are in `%LOCALAPPDATA%\uchmk\minato\webview`, or the state folder of the OS); nothing new beside `minato.exe`
 - [x] **29.5** Follow a link in the page, then press ← → The address field shows each page's address as it loads; ← goes back; ↗ opens the page shown in the system's browser
-- [ ] **29.6** Click a link that opens a new window (`target="_blank"`, e.g. a file in a PR's "Files changed" opened in a new tab) → It loads in the same panel; no other window appears
+- [x] **29.6** Click a link that opens a new window (`target="_blank"`, e.g. a file in a PR's "Files changed" opened in a new tab) → It loads in the same panel; no other window appears
 - [ ] **29.7** Click in the page, then click a card in the view and press `j` `k`; click in the address field and type → The keys move the selection again (not the page's); the field takes the typing
 - [x] **29.8** Drag the line left of the panel left and right; make the window narrow → The panel follows the pointer and the page with it; it stays at least 320 wide and leaves the view 300 while it can; the window's right edge still resizes the window
-- [ ] **29.9** With the panel open press `Ctrl+Shift+P`, `n`, `?`, `,`, `N`, and `m` on a PR → The page hides while the palette, the notifications, the help, the settings, the new-issue box and the merge question are up, and comes back when each closes
+- [x] **29.9** With the panel open press `Ctrl+Shift+P`, `n`, `?`, `,`, `N`, and `m` on a PR → The page hides while the palette, the notifications, the help, the settings, the new-issue box and the merge question are up, and comes back when each closes
 - [x] **29.10** Press `Esc` with nothing else open, then open the panel again and click ✕ → `Esc` closes the panel and the view takes the whole width; ✕ does the same
 - [x] **29.11** Make a message show (e.g. `d` then `u`) with the panel open → The message is at the top right of the view, left of the panel, not under it
 - [ ] **29.12** On Linux press `o` → The system's browser opens the page; no panel
