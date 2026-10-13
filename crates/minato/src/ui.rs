@@ -15,8 +15,6 @@ pub const ACCENT: Color32 = Color32::from_rgb(0x5B, 0x9F, 0xD1);
 
 const TITLE_H: f32 = 40.0;
 const KEYBAR_H: f32 = 28.0;
-/// How many of a view's keys the keybar shows before "? all keys".
-const KEYBAR_KEYS: usize = 5;
 
 /// What the frame asks of the app.
 #[derive(Default)]
@@ -429,14 +427,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let p = ui.painter().clone();
     let mid = r.center().y;
     let mut x = r.left() + 12.0;
-    let mut keys: Vec<(&str, &str)> = match app.mode {
-        Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
-        Mode::Help if app.help_last.get() > 0 => vec![("j k", "help.more"), ("F1 Esc", "key.back")],
-        Mode::Help => vec![("F1 Esc", "key.back")],
-        Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
-        Mode::Main if app.find_on() => Vec::new(),
-        Mode::Main => app.keys_now().into_iter().take(KEYBAR_KEYS).chain([("F1", "key.help")]).collect(),
-    };
+    let mut keys = app.bar_keys();
     // The right side, from the right: the clock, the API budget, the sync.
     let mut right = r.right() - 12.0;
     let clock = app.prefs.common.clock_or(None);
@@ -455,8 +446,8 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
     }
     // The keys stop short of it, kept as wide as two digits so they do not
-    // come and go as the seconds tick: the view's last ones go first, then
-    // F1's word; its key stays.
+    // come and go as the seconds tick: the last ones go first, then the word
+    // of the way out (Esc, or F1); its key stays.
     let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x);
     let stop = right - t.width().max(widest) - 16.0;
     if app.find_on() {
@@ -470,19 +461,20 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             k + 12.0 + 6.0 + w + 14.0
         })
         .collect();
-    let help = keys.last().is_some_and(|k| k.1 == "key.help");
     let mut bare = false;
     while keys.len() > 1 && x + widths.iter().sum::<f32>() - 14.0 > stop {
-        if help && keys.len() == 2 && !bare {
-            let k = ui.fonts_mut(|f| f.layout_no_wrap("F1".to_owned(), FontId::monospace(11.0), c.fg).size().x);
-            widths[1] = k + 12.0 + 14.0;
+        let out = keys.iter().rposition(way_out);
+        if let Some(o) = out.filter(|_| keys.len() == 2 && !bare) {
+            let k = ui.fonts_mut(|f| f.layout_no_wrap(keys[o].0.to_owned(), FontId::monospace(11.0), c.fg).size().x);
+            widths[o] = k + 12.0 + 14.0;
             bare = true;
             continue;
         }
-        let at = if help { keys.len() - 2 } else { keys.len() - 1 };
+        let at = (0..keys.len()).rev().find(|&k| Some(k) != out).unwrap_or(0);
         keys.remove(at);
         widths.remove(at);
     }
+    let out = keys.iter().rposition(way_out);
     for (k, (key, word)) in keys.iter().enumerate() {
         let best = k == 0;
         let kc = if best { ACCENT } else { c.fg };
@@ -491,7 +483,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
         p.rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, if best { ACCENT.gamma_multiply(0.6) } else { c.border }), StrokeKind::Inside);
         p.galley(chip.min + vec2(6.0, 9.0 - galley.size().y / 2.0), galley, kc);
-        if bare && *word == "key.help" {
+        if bare && Some(k) == out {
             x = chip.right() + 14.0;
             continue;
         }
@@ -499,6 +491,11 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         let t = p.text(pos2(chip.right() + 6.0, mid), Align2::LEFT_CENTER, label, FontId::proportional(12.0), if best { c.fg } else { c.dim });
         x = t.right() + 14.0;
     }
+}
+
+/// The key that leaves what is open: Esc, or F1 to the list of keys.
+fn way_out(k: &(&str, &str)) -> bool {
+    k.0.contains("Esc") || k.1 == "key.help"
 }
 
 /// The search in the keybar: `/`, its words (the field while it has the

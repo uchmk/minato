@@ -351,7 +351,7 @@ pub struct App {
     lists_asked: HashMap<String, Instant>,
     state_tx: Option<std::sync::mpsc::Sender<String>>,
     /// What waits to be confirmed: the item's node id, or the run's id to
-    /// start its workflow again.
+    /// start its workflow again or stop it.
     pub confirm: Option<String>,
     /// What the confirmation is for.
     pub confirm_act: Confirm,
@@ -401,6 +401,9 @@ pub struct App {
     pub acts_split: Node<Pane>,
 }
 
+/// How many of a view's keys the keybar shows before "F1 all keys".
+const KEYBAR_KEYS: usize = 5;
+
 /// What a confirmation box asks about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Confirm {
@@ -409,6 +412,8 @@ pub enum Confirm {
     Reopen,
     /// Start a run's workflow by hand (one without inputs).
     Dispatch,
+    /// Stop a run that is going.
+    Cancel,
 }
 
 /// What GitHub said about one run.
@@ -803,9 +808,13 @@ impl App {
                 Confirm::Merge => self.merge(&id),
                 Confirm::Close => self.close(&id),
                 Confirm::Reopen => self.reopen(&id),
-                Confirm::Dispatch => {
+                Confirm::Dispatch | Confirm::Cancel => {
                     if let Some(run) = self.runs.iter().find(|r| r.id.to_string() == id).cloned() {
-                        self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
+                        if self.confirm_act == Confirm::Cancel {
+                            self.queue(&format!("write:{}:cancel", run.id), actions::cancel(&run), Some("run.cancelled"));
+                        } else {
+                            self.queue(&format!("write:{}:dispatch", run.id), actions::dispatch(&run), Some("run.dispatched"));
+                        }
                     }
                 }
             }
@@ -845,6 +854,54 @@ impl App {
             .collect()
     }
 
+    /// The keys for the keybar as things stand: a confirmation's, the writing
+    /// box's (or its picker's), the palette's, a form's or a log's, else the
+    /// mode's (none while the search has the bar). The bar keeps the way out
+    /// (Esc, or F1 for the list of keys) to the last.
+    pub fn bar_keys(&self) -> Vec<(&'static str, &'static str)> {
+        if self.confirm.is_some() {
+            return match self.confirm_act {
+                Confirm::Merge => vec![("Enter", "key.merge"), ("Esc", "bar.no")],
+                Confirm::Close => vec![("Enter", "key.close"), ("Esc", "bar.no")],
+                Confirm::Reopen => vec![("Enter", "bar.reopen"), ("Esc", "bar.no")],
+                Confirm::Dispatch => vec![("Enter", "bar.run"), ("Esc", "bar.no")],
+                Confirm::Cancel => vec![("Enter", "bar.stop"), ("Esc", "bar.keep")],
+            };
+        }
+        if let Some(c) = &self.compose {
+            if c.picker.is_some() {
+                return vec![("Enter", "bar.tick"), ("↑ ↓", "bar.move"), ("Esc", "bar.apply")];
+            }
+            if c.id.starts_with("new:") {
+                return vec![("Ctrl+Enter", "bar.create"), ("Ctrl+P", "compose.preview"), ("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.no" })];
+            }
+            let mut keys = vec![("Ctrl+Enter", "bar.send"), ("Ctrl+P", "compose.preview"), ("Ctrl+Shift+Enter", "bar.send_close")];
+            for k in self.settings.order {
+                if self.settings.fields[k] {
+                    keys.push((["Alt+L", "Alt+A", "Alt+S", "Alt+M", "Alt+P", "Alt+R"][k], ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k]));
+                }
+            }
+            keys.extend([("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.leave" })]);
+            return keys;
+        }
+        if self.palette.is_some() {
+            return vec![("Enter", "bar.do"), ("↑ ↓", "bar.choose"), ("Esc", "key.close")];
+        }
+        match &self.overlay {
+            Some(Overlay::Form(_)) => return vec![("Ctrl+Enter", "bar.start"), ("↑ ↓", "bar.input"), ("Enter", "bar.change"), ("Esc", "bar.no")],
+            Some(Overlay::Log(_)) => return vec![("j k", "bar.scroll"), ("Space", "bar.page"), ("g G", "bar.ends"), ("Esc", "key.close")],
+            None => {}
+        }
+        match self.mode {
+            Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
+            Mode::Help if self.help_last.get() > 0 => vec![("j k", "help.more"), ("F1 Esc", "key.back")],
+            Mode::Help => vec![("F1 Esc", "key.back")],
+            Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
+            Mode::Main if self.find_on() => Vec::new(),
+            Mode::Main => self.keys_now().into_iter().take(KEYBAR_KEYS).chain([("F1", "key.help")]).collect(),
+        }
+    }
+
     /// A key in the Actions view: `R` runs the failed jobs again, `X` stops,
     /// `D` starts the workflow by hand, `e` opens the failed job's log, `p`
     /// the pull request, `o` the run; the rest moves the cursor.
@@ -856,7 +913,10 @@ impl App {
         match c {
             'R' if run.status == actions::Status::Bad => self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran")),
             'R' => self.say_key("run.not_failed"),
-            'X' if run.status.active() => self.queue(&format!("write:{}:cancel", run.id), actions::cancel(&run), Some("run.cancelled")),
+            'X' if run.status.active() => {
+                self.confirm = Some(run.id.to_string());
+                self.confirm_act = Confirm::Cancel;
+            }
             'X' => self.say_key("run.not_active"),
             'D' => {
                 // Its inputs come with the workflow file: not before it.
@@ -1929,6 +1989,34 @@ mod tests {
     }
 
     #[test]
+    fn the_keybar_follows_what_is_open() {
+        let mut a = with_pr();
+        let bar = |a: &App| a.bar_keys().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
+        assert_eq!(bar(&a).last(), Some(&"key.help"));
+        a.feed('r');
+        let w = bar(&a);
+        assert_eq!((w[0], w.last()), ("bar.send", Some(&"bar.leave")));
+        a.compose.as_mut().unwrap().preview = true;
+        assert_eq!(bar(&a).last(), Some(&"bar.edit"));
+        a.open_pick(0);
+        assert_eq!(bar(&a), ["bar.tick", "bar.move", "bar.apply"]);
+        a.close_compose();
+        a.new_issue();
+        let w = bar(&a);
+        assert_eq!((w[0], w.last()), ("bar.create", Some(&"bar.no")));
+        assert!(!w.contains(&"bar.send_close") && !w.contains(&"pick.labels"), "a new issue has no fields");
+        a.close_compose();
+        a.feed('x');
+        assert_eq!(bar(&a), ["key.close", "bar.no"]);
+        a.escape();
+        a.palette = Some(ito_palette::View::new());
+        assert_eq!(bar(&a).last(), Some(&"key.close"));
+        a.palette = None;
+        a.toggle_help();
+        assert_eq!(a.bar_keys().last(), Some(&("F1 Esc", "key.back")));
+    }
+
+    #[test]
     fn actions_keys_rerun_cancel_and_open() {
         let mut a = app();
         a.feed('3');
@@ -1943,6 +2031,9 @@ mod tests {
         assert_eq!(a.open_url.take().as_deref(), Some("https://github.com/uchmk/kura/pull/9"));
         assert!(a.feed('j'));
         assert!(a.feed('X'));
+        assert_eq!((a.confirm.as_deref(), a.confirm_act), (Some("2"), Confirm::Cancel));
+        assert_eq!(a.outbox.len(), 1, "nothing stops before Enter");
+        assert!(a.enter());
         assert_eq!(a.outbox[1].key, "write:2:cancel");
         assert!(a.feed('R'));
         assert_eq!(a.outbox.len(), 2, "a running run is not re-run");

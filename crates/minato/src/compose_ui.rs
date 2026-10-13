@@ -45,7 +45,7 @@ fn confirm(ui: &mut Ui, app: &App) {
     p.rect_filled(b, CornerRadius::same(8), c.panel);
     p.rect_stroke(b, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
     let id = app.confirm.as_deref().unwrap_or_default();
-    let title = if app.confirm_act == Confirm::Dispatch {
+    let title = if matches!(app.confirm_act, Confirm::Dispatch | Confirm::Cancel) {
         app.runs.iter().find(|r| r.id.to_string() == id).map(|r| format!("{}  {}  ({})", r.repo, r.workflow, r.branch))
     } else {
         app.items.iter().find(|i| i.id == id).map(|i| format!("{} #{}  {}", i.repo, i.number, i.title))
@@ -55,6 +55,7 @@ fn confirm(ui: &mut Ui, app: &App) {
         Confirm::Close => ("confirm.close", "confirm.close_hint"),
         Confirm::Reopen => ("confirm.reopen", "confirm.reopen_hint"),
         Confirm::Dispatch => ("confirm.dispatch", "confirm.dispatch_hint"),
+        Confirm::Cancel => ("confirm.cancel", "confirm.cancel_hint"),
     };
     p.with_clip_rect(b.shrink(14.0)).text(pos2(b.left() + 18.0, b.top() + 32.0), Align2::LEFT_CENTER, title.unwrap_or_default(), FontId::proportional(12.5), c.dim);
     p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, app.tr(ask), FontId::proportional(14.0), c.fg);

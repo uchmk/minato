@@ -105,13 +105,13 @@
 - [x] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
 - [x] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts
 - [ ] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
-- [ ] **9.5** Select a running run and press `X` → A toast says it is stopping; the run turns to cancelled
+- [ ] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
 - [ ] **9.6** Press `D` on a run of a workflow with `workflow_dispatch` (no inputs), then `Enter` → A box asks first, naming the repository, the workflow and the branch; after `Enter` a toast says the workflow started and a new run appears
 - [ ] **9.7** Press `e` on a failed run → The built-in browser shows the failed job's page
 - [ ] **9.8** Press `p` on a run of a pull request, then `o` → The PR opens; then the run opens
 - [ ] **9.9** Press `R` on a passed run → A toast says only a failed run can be re-run; nothing is sent
 - [x] **9.10** Fill the list with many runs → No scrollbar; the rows that do not fit hide and "more" shows; none is folded
-- [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button; the click does what the key does (the toast and the run's change as in 9.4 and 9.5)
+- [ ] **9.11** Select a failed run and click the `R` button in its "Next" box; on a running run click `X` → The pointer turns to a hand over the button; the click does what the key does (`R`'s toast and the run's change as in 9.4; `X`'s box as in 9.5)
 - [ ] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 - [ ] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds)
 
@@ -330,7 +330,7 @@
 - [x] **31.2** Select a failed run of a workflow with fewer than ten runs loaded → The note and the squares' heading say how many runs they are about (Japanese: 直近 5 回, 最近 5 回で 1 回)
 - [x] **31.3** Press `L` on a failed job whose log has colours and long lines; press `G`, then `j` → No raw colour codes; `error:`, `error[` and `##[error]` lines are red; long lines wrap at the panel's width; `G` shows a full last page and `j` stops there; the line counter shows
 - [x] **31.4** Narrow the window, press `1` and `/`, type a few letters → The search's hint goes first, then the field narrows; neither runs into the sync status
-- [x] **31.5** On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` → Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out
+- [ ] **31.5** On a short window press `F1` in the inbox; then shrink the window to its least and press `j` `k` → Every key shows (the inbox's `/`, the notifications' `Shift+A`, `n` and `Esc` among them); the rows close up to fit; when even that is too tall, the corner and the keybar say `j k` and `j` `k` move the columns to the keys left out; the keybar keeps `F1 Esc` to the last (only its key when there is no room)
 - [ ] **31.6** Press `3` and select a passed run, a failed run, a running run, a run of a pull request → The keybar shows `R` only on the failed run, `X` only on the running one, `p` only on the pull request's; `F1` still lists them all
 - [ ] **31.7** Open the palette and type part of a long title → The title is cut with `…` inside its row, clear of the key hint
 - [ ] **31.8** Press `r` on an issue, then `Alt+R` → A toast says reviewers are for pull requests; no picker opens
@@ -343,3 +343,4 @@
 - [x] **31.15** Narrow the inbox column to its least, then zoom in; press `r` on the least window → A card's age goes before it touches the title; the write strip's close button goes before it leaves the detail; the open box stays inside the detail, its field chips going first
 - [x] **31.16** Rest the pointer on a row of the list until its body shows, then press `S` → The repository settings show without the row's body over them
 - [x] **31.17** Press `2`, `C`, wait for the closed items, then `1` → The inbox shows its cards at once, not "nothing is waiting"
+- [ ] **31.18** Press `r` on an item, `Ctrl+P`, `Alt+L`, then `Esc` until the box closes; press `N`, also with the browser panel open; press `x`; open the palette; press `L` on a failed job; then narrow the window in each → The keybar shows the keys of what is open, not the view's: the box's `Ctrl+Enter` (comment, or create for a new issue), `Ctrl+P`, `Ctrl+Shift+Enter` and the fields' `Alt` keys (none for a new issue) and `Esc` (back to writing in the preview); the picker's `Enter` `↑ ↓` `Esc`; the confirmation's `Enter` and `Esc`; the palette's and the log's keys; narrowed, the other keys go first and `Esc` stays
