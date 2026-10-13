@@ -854,6 +854,25 @@ impl App {
             .collect()
     }
 
+    /// The keys of the writing box `c` (or its picker's): for a new issue
+    /// create, else send and the fields' `Alt` keys; Esc last.
+    pub fn compose_keys(&self, c: &Compose) -> Vec<(&'static str, &'static str)> {
+        if c.picker.is_some() {
+            return vec![("Enter", "bar.tick"), ("↑ ↓", "bar.move"), ("Esc", "bar.apply")];
+        }
+        if c.id.starts_with("new:") {
+            return vec![("Ctrl+Enter", "bar.create"), ("Ctrl+P", "compose.preview"), ("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.no" })];
+        }
+        let mut keys = vec![("Ctrl+Enter", "bar.send"), ("Ctrl+P", "compose.preview"), ("Ctrl+Shift+Enter", "bar.send_close")];
+        for k in self.settings.order {
+            if self.settings.fields[k] {
+                keys.push((["Alt+L", "Alt+A", "Alt+S", "Alt+M", "Alt+P", "Alt+R"][k], ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k]));
+            }
+        }
+        keys.extend([("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.leave" })]);
+        keys
+    }
+
     /// The keys for the keybar as things stand: a confirmation's, the writing
     /// box's (or its picker's), the palette's, a form's or a log's, else the
     /// mode's (none while the search has the bar). The bar keeps the way out
@@ -869,20 +888,7 @@ impl App {
             };
         }
         if let Some(c) = &self.compose {
-            if c.picker.is_some() {
-                return vec![("Enter", "bar.tick"), ("↑ ↓", "bar.move"), ("Esc", "bar.apply")];
-            }
-            if c.id.starts_with("new:") {
-                return vec![("Ctrl+Enter", "bar.create"), ("Ctrl+P", "compose.preview"), ("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.no" })];
-            }
-            let mut keys = vec![("Ctrl+Enter", "bar.send"), ("Ctrl+P", "compose.preview"), ("Ctrl+Shift+Enter", "bar.send_close")];
-            for k in self.settings.order {
-                if self.settings.fields[k] {
-                    keys.push((["Alt+L", "Alt+A", "Alt+S", "Alt+M", "Alt+P", "Alt+R"][k], ["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k]));
-                }
-            }
-            keys.extend([("Ctrl+B I K", "bar.format"), ("Esc", if c.preview { "bar.edit" } else { "bar.leave" })]);
-            return keys;
+            return self.compose_keys(c);
         }
         if self.palette.is_some() {
             return vec![("Enter", "bar.do"), ("↑ ↓", "bar.choose"), ("Esc", "key.close")];

@@ -447,20 +447,18 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     }
     // The keys stop short of it, kept as wide as two digits so they do not
     // come and go as the seconds tick: the last ones go first, then the word
-    // of the way out (Esc, or F1); its key stays.
+    // of the way out (Esc, or F1), back when it is the only one; its key stays.
     let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x);
     let stop = right - t.width().max(widest) - 16.0;
     if app.find_on() {
         x = find_bar(ui, app, r, stop, out);
     }
-    let mut widths: Vec<f32> = keys
-        .iter()
-        .map(|(key, word)| {
-            let k = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), c.fg).size().x);
-            let w = ui.fonts_mut(|f| f.layout_no_wrap(word_for(app, word).to_owned(), FontId::proportional(12.0), c.fg).size().x);
-            k + 12.0 + 6.0 + w + 14.0
-        })
-        .collect();
+    let wide = |(key, word): &(&str, &'static str)| {
+        let k = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), c.fg).size().x);
+        let w = ui.fonts_mut(|f| f.layout_no_wrap(word_for(app, word).to_owned(), FontId::proportional(12.0), c.fg).size().x);
+        k + 12.0 + 6.0 + w + 14.0
+    };
+    let mut widths: Vec<f32> = keys.iter().map(wide).collect();
     let mut bare = false;
     while keys.len() > 1 && x + widths.iter().sum::<f32>() - 14.0 > stop {
         let out = keys.iter().rposition(way_out);
@@ -473,6 +471,10 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         let at = (0..keys.len()).rev().find(|&k| Some(k) != out).unwrap_or(0);
         keys.remove(at);
         widths.remove(at);
+    }
+    // Left alone, the way out has its word again where it fits.
+    if bare && keys.len() == 1 && x + wide(&keys[0]) - 14.0 <= stop {
+        bare = false;
     }
     let out = keys.iter().rposition(way_out);
     for (k, (key, word)) in keys.iter().enumerate() {

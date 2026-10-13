@@ -218,15 +218,8 @@ fn panel(p: &egui::Painter, app: &App, c: &Compose, item: Option<&minato_core::l
     let hint = if c.picker.is_some() {
         app.tr("pick.hint").to_string()
     } else {
-        let mut h = app.tr("compose.hint").to_string();
-        for k in app.settings.order {
-            if app.settings.fields[k] {
-                h.push_str(&format!("  Alt+{} {}", ["L", "A", "S", "M", "P", "R"][k], app.tr(["pick.labels", "pick.assignees", "pick.status", "pick.milestone", "pick.priority", "pick.reviewers"][k])));
-            }
-        }
-        h.push_str("  ");
-        h.push_str(app.tr("compose.esc"));
-        h
+        // The keybar's keys, so the two never differ.
+        app.compose_keys(c).iter().map(|(k, w)| format!("{k} {}", app.tr(w))).collect::<Vec<_>>().join("  ")
     };
     p.with_clip_rect(panel).text(pos2(panel.left() + 14.0, panel.bottom() - 14.0), Align2::LEFT_CENTER, hint, FontId::proportional(11.0), colors.dim);
     Rect::from_min_max(pos2(panel.left() + 14.0, panel.top() + 36.0), pos2(panel.right() - 14.0, panel.bottom() - 30.0))
