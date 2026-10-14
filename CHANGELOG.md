@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.42.1] - 2026-10-14
+
+### 変更
+
+- 見張った実行の終わりと「試しに送る」のシステムの通知に minato のアイコン（暗いタイルの 2 本の防波堤）を出すようにした。
+  Windows では通知の左と差出人の名前の横に出る（ito v0.31.0 の `toast::show_with_icon`。TESTING 35.7）。ito を v0.31.0 に上げた。
+
 ## [0.42.0] - 2026-10-14
 
 ### Added

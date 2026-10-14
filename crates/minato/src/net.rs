@@ -1486,7 +1486,12 @@ pub fn ring(app: &mut App) {
             ito_notify::webhook::send(h.url, h.format, h.level, r.title.clone(), r.body.clone(), h.folder);
         }
         if r.system {
-            ito_notify::toast::show(ito_notify::toast::App { id: "uchmk.minato", name: "minato" }, &r.title, &r.body);
+            ito_notify::toast::show_with_icon(
+                ito_notify::toast::App { id: "uchmk.minato", name: "minato" },
+                crate::icon::pixels,
+                &r.title,
+                &r.body,
+            );
         }
         if let Some(s) = r.sound.filter(|_| !(r.focus && ito_notify::sound::quiet_time())) {
             ito_notify::sound::play(&s);
