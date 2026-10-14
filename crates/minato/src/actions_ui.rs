@@ -195,7 +195,7 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         if resp.clicked() {
             out.click = Some(Click::ActRun(k));
         }
-        let watched = app.watched.contains(&run.id).then(|| app.tr("run.watched"));
+        let watched = app.watching(run.id).then(|| app.tr("run.watched"));
         run_row(&p, run, row, k == sel, resp.hovered(), now, watched);
         y += ROW_FULL;
     }

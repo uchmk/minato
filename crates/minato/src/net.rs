@@ -487,7 +487,7 @@ impl Net {
             app.acts.stay(&before, &app.runs);
         }
         // A run watched (`w`) that has finished says so.
-        app.runs_came();
+        app.runs_came(&[]);
         ring(app);
     }
 
@@ -662,6 +662,13 @@ impl Net {
                         self.show_runs(app);
                     }
                     Err(e) => app.say(e),
+                }
+            }
+            k if k.starts_with("a-watch:") => {
+                // A watched run newer ones pushed out of the runs.
+                if let Ok(r) = actions::parse_run(body) {
+                    app.runs_came(&[r]);
+                    ring(app);
                 }
             }
             k if run_part(k) => self.take_run(app, k, body, None),
@@ -1290,6 +1297,15 @@ impl Net {
                     track(&mut self.round, &job.key);
                     match self.runs.get(k % RUN_LANES) {
                         Some(w) if open => w.send_first(job),
+                        Some(w) => w.send(job),
+                        None => send(job, open),
+                    }
+                }
+                // Each watched run newer ones have pushed out of the runs.
+                for r in app.watched_away() {
+                    let job = Job { key: format!("a-watch:{}", r.id), call: Call::Get(actions::run_path(&r.repo, r.id)) };
+                    track(&mut self.round, &job.key);
+                    match self.runs.first() {
                         Some(w) => w.send(job),
                         None => send(job, open),
                     }

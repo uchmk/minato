@@ -453,8 +453,9 @@ pub struct App {
     pub inbox_split: Node<Pane>,
     pub list_split: Node<Pane>,
     pub acts_split: Node<Pane>,
-    /// The runs watched with `w` (ids): a toast and a sound when one ends.
-    pub watched: Vec<u64>,
+    /// The runs watched with `w`, as last seen: a toast and a sound when one
+    /// ends.
+    pub watched: Vec<Run>,
     /// The toasts of the system that wait to be shown (the network takes them).
     pub rings: Vec<Ring>,
     /// The status view's selection (a row of `status_rows`).
@@ -971,7 +972,7 @@ impl App {
                 "key.rerun" => run.is_some_and(|r| r.status == actions::Status::Bad),
                 "key.cancel" => run.is_some_and(|r| r.status.active()),
                 "run.open_pr" => run.is_some_and(actions::has_pr),
-                "key.watch" => run.is_some_and(|r| r.status.active() || self.watched.contains(&r.id)),
+                "key.watch" => run.is_some_and(|r| r.status.active() || self.watching(r.id)),
                 _ => true,
             })
             .collect()
@@ -1188,26 +1189,43 @@ impl App {
     /// `w`: watch the run (a toast of the system and a sound when it ends),
     /// or stop watching it.
     fn watch(&mut self, run: &Run) {
-        if let Some(at) = self.watched.iter().position(|&id| id == run.id) {
+        if let Some(at) = self.watched.iter().position(|w| w.id == run.id) {
             self.watched.remove(at);
             self.say_key("watch.off");
         } else if run.status.active() {
-            self.watched.push(run.id);
+            self.watched.push(run.clone());
             self.say_key("watch.on");
         } else {
             self.say_key("watch.done");
         }
     }
 
-    /// The runs came again: the watched ones that have ended ring.
-    pub fn runs_came(&mut self) {
+    /// Whether the run `id` is watched (`w`).
+    pub fn watching(&self, id: u64) -> bool {
+        self.watched.iter().any(|w| w.id == id)
+    }
+
+    /// The watched runs that newer ones have pushed out of `runs`: each is
+    /// asked for apart, or it would never be seen to end.
+    pub fn watched_away(&self) -> Vec<&Run> {
+        self.watched.iter().filter(|w| !self.runs.iter().any(|r| r.id == w.id)).collect()
+    }
+
+    /// The runs came again (`more`: watched runs asked for apart): the
+    /// watched ones that have ended ring.
+    pub fn runs_came(&mut self, more: &[Run]) {
         let mut ended = Vec::new();
-        self.watched.retain(|id| match self.runs.iter().find(|r| r.id == *id) {
-            Some(r) if !r.status.active() => {
-                ended.push(r.clone());
-                false
+        for w in &mut self.watched {
+            if let Some(r) = self.runs.iter().chain(more).find(|r| r.id == w.id) {
+                *w = r.clone();
             }
-            _ => true,
+        }
+        self.watched.retain(|w| {
+            if w.status.active() {
+                return true;
+            }
+            ended.push(w.clone());
+            false
         });
         for r in ended {
             let bad = r.status == actions::Status::Bad;
@@ -3007,7 +3025,7 @@ mod tests {
         let words = |a: &App| a.keys_now().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
         assert!(words(&a).contains(&"key.watch"));
         assert!(a.feed('w'));
-        assert_eq!(a.watched, [1]);
+        assert!(a.watching(1) && a.watched.len() == 1);
         // Watching again stops it; a run that has ended is not watched.
         a.feed('w');
         assert!(a.watched.is_empty());
@@ -3017,16 +3035,34 @@ mod tests {
         assert!(a.watched.is_empty());
         a.feed('k');
         a.feed('w');
-        assert_eq!(a.watched, [1]);
+        assert!(a.watching(1));
         // Still going: nothing rings.
-        a.runs_came();
-        assert!(a.rings.is_empty() && a.watched == [1]);
+        a.runs_came(&[]);
+        assert!(a.rings.is_empty() && a.watching(1));
         a.runs[0].status = actions::Status::Bad;
-        a.runs_came();
+        a.runs_came(&[]);
         assert!(a.watched.is_empty());
         assert_eq!(a.rings.len(), 1);
         assert!(a.rings[0].bad && a.rings[0].title == a.tr("watch.failed"));
         assert!(a.rings[0].body.contains("uchmk/kura") && a.rings[0].body.contains("check"));
+    }
+
+    #[test]
+    fn a_watched_run_pushed_out_of_the_runs_is_asked_apart_and_rings() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Running, None)];
+        a.feed('w');
+        assert!(a.watched_away().is_empty());
+        // Newer runs push it out of the ten asked for: it is still watched.
+        a.runs = vec![run(2, actions::Status::Running, None)];
+        a.runs_came(&[]);
+        assert!(a.watching(1) && a.rings.is_empty());
+        assert_eq!(a.watched_away().iter().map(|r| r.id).collect::<Vec<_>>(), [1]);
+        // Asked apart, it has ended.
+        a.runs_came(&[run(1, actions::Status::Ok, None)]);
+        assert!(a.watched.is_empty());
+        assert!(a.rings.len() == 1 && !a.rings[0].bad && a.rings[0].title == a.tr("watch.finished"));
     }
 
     #[test]

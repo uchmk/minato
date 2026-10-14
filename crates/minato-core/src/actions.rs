@@ -170,38 +170,46 @@ pub fn parse_repos(body: &str) -> Result<Vec<String>, String> {
 }
 
 pub fn parse_runs(body: &str) -> Result<Vec<Run>, String> {
-    Ok(list(body, "workflow_runs")?
-        .iter()
-        .map(|r| {
-            let conclusion = r.get("conclusion").and_then(Value::as_str);
-            Run {
-                id: num(r, "id"),
-                repo: r.pointer("/repository/full_name").and_then(Value::as_str).unwrap_or_default().to_string(),
-                workflow_id: num(r, "workflow_id"),
-                workflow: text(r, "name"),
-                number: num(r, "run_number"),
-                title: text(r, "display_title"),
-                event: text(r, "event"),
-                branch: text(r, "head_branch"),
-                sha: text(r, "head_sha").chars().take(7).collect(),
-                actor: r.pointer("/actor/login").and_then(Value::as_str).unwrap_or_default().to_string(),
-                status: Status::from(&text(r, "status"), conclusion),
-                started_at: {
-                    let s = text(r, "run_started_at");
-                    if s.is_empty() {
-                        text(r, "created_at")
-                    } else {
-                        s
-                    }
-                },
-                updated_at: text(r, "updated_at"),
-                url: text(r, "html_url"),
-                pr: r.pointer("/pull_requests/0/number").and_then(Value::as_u64),
-                path: text(r, "path"),
-                head_sha: text(r, "head_sha"),
+    Ok(list(body, "workflow_runs")?.iter().map(run_of).collect())
+}
+
+/// One run, as `run_path` answers.
+pub fn parse_run(body: &str) -> Result<Run, String> {
+    let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    match v.get("id").and_then(Value::as_u64) {
+        Some(_) => Ok(run_of(&v)),
+        None => Err(v.get("message").and_then(Value::as_str).unwrap_or("no run in the answer").to_string()),
+    }
+}
+
+fn run_of(r: &Value) -> Run {
+    let conclusion = r.get("conclusion").and_then(Value::as_str);
+    Run {
+        id: num(r, "id"),
+        repo: r.pointer("/repository/full_name").and_then(Value::as_str).unwrap_or_default().to_string(),
+        workflow_id: num(r, "workflow_id"),
+        workflow: text(r, "name"),
+        number: num(r, "run_number"),
+        title: text(r, "display_title"),
+        event: text(r, "event"),
+        branch: text(r, "head_branch"),
+        sha: text(r, "head_sha").chars().take(7).collect(),
+        actor: r.pointer("/actor/login").and_then(Value::as_str).unwrap_or_default().to_string(),
+        status: Status::from(&text(r, "status"), conclusion),
+        started_at: {
+            let s = text(r, "run_started_at");
+            if s.is_empty() {
+                text(r, "created_at")
+            } else {
+                s
             }
-        })
-        .collect())
+        },
+        updated_at: text(r, "updated_at"),
+        url: text(r, "html_url"),
+        pr: r.pointer("/pull_requests/0/number").and_then(Value::as_u64),
+        path: text(r, "path"),
+        head_sha: text(r, "head_sha"),
+    }
 }
 
 pub fn parse_jobs(body: &str) -> Result<Vec<Job>, String> {
@@ -233,6 +241,11 @@ pub fn repos_path(owner: Option<&str>) -> String {
 
 pub fn runs_path(repo: &str) -> String {
     format!("/repos/{repo}/actions/runs?per_page=10")
+}
+
+/// One run: a watched run that newer ones have pushed out of `runs_path`.
+pub fn run_path(repo: &str, id: u64) -> String {
+    format!("/repos/{repo}/actions/runs/{id}")
 }
 
 pub fn jobs_path(run: &Run) -> String {
@@ -647,6 +660,15 @@ mod tests {
     #[test]
     fn a_message_instead_of_runs_is_an_error() {
         assert_eq!(parse_runs(r#"{"message":"Not Found"}"#), Err("Not Found".into()));
+    }
+
+    #[test]
+    fn one_run_is_read_apart() {
+        let one = r#"{"id":12,"name":"release","display_title":"v1","run_number":3,"status":"completed","conclusion":"success","workflow_id":6,"repository":{"full_name":"uchmk/tsumugi"}}"#;
+        let r = parse_run(one).unwrap();
+        assert_eq!((r.id, r.repo.as_str(), r.status), (12, "uchmk/tsumugi", Status::Ok));
+        assert_eq!(parse_run(r#"{"message":"Not Found"}"#), Err("Not Found".into()));
+        assert_eq!(run_path("o/r", 12), "/repos/o/r/actions/runs/12");
     }
 
     #[test]
