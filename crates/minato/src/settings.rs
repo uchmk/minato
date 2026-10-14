@@ -1,7 +1,8 @@
 //! The settings screen (`,`): `ito-prefs` draws the nav and the cards, and
 //! the rows common to every uchmk app (the language, the size, the clock,
 //! the theme) write common.toml. minato's own (whose repositories, the
-//! inbox rules, the saved searches, the writing box's fields) are on its page.
+//! inbox rules, the saved searches, the writing box's fields) are on the
+//! Views page.
 
 use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
 use ito_common::{themes_dir, CommonChange};
@@ -11,7 +12,7 @@ use crate::app::App;
 
 const GENERAL: usize = 0;
 const THEME: usize = 1;
-const MINATO: usize = 2;
+const VIEWS: usize = 2;
 
 /// The rows on each page, for the search.
 fn index(w: &'static Words) -> Vec<(usize, &'static str)> {
@@ -42,7 +43,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let pages = [
         (app.tr("settings.general"), app.tr("settings.general_lead")),
         (app.tr("settings.theme"), app.tr("settings.theme_lead")),
-        (app.tr("settings.minato"), app.tr("settings.minato_lead")),
+        (app.tr("settings.views"), app.tr("settings.views_lead")),
     ];
     let index = index(w);
     let nav = ito_prefs::Nav { pages: &pages, index: &index, words: w, file: "common.toml" };
@@ -78,7 +79,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 preview(ui, tr("settings.sample"), tabs, ["run.ok", "run.bad", "run.running"].map(tr))
             }));
         }
-        MINATO => {
+        VIEWS => {
             section(ui, l, tr("settings.scope"), |ui| {
                 let rows = [("settings.owner", "settings.owner_note", me.as_str()), ("settings.project", "settings.project_note", "")];
                 for (k, (label, note, hint)) in rows.into_iter().enumerate() {

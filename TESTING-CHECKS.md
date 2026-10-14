@@ -180,13 +180,13 @@
 - [x] **14.4** With no unread notification look at the bell, then with some → Dim cup without a badge; with unread, a gold badge with the count (`9+` past nine), the same look as tsumugi's bell
 - [x] **14.5** Click the bell → The bell stands right of the palette field; the notifications list opens under it, its right edge under the bell
 
-## 15. The minato page of the settings
+## 15. The Views page of the settings
 
-- [x] **15.1** `Ctrl+,`, open the "minato" page → Cards for whose repositories (the owner and the board Project), the nine inbox rules and the six writing-box fields, each with a switch, and the saved searches; Milestone, Priority, Reviewers and the dependabot rule are off
+- [ ] **15.1** `Ctrl+,`, open the "Views" page (ビュー in Japanese) → Cards for whose repositories (the owner and the board Project), the nine inbox rules and the six writing-box fields, each with a switch, and the saved searches; Milestone, Priority, Reviewers and the dependabot rule are off
 - [ ] **15.2** Switch the dependabot rule on and go to the inbox → A dependabot PR now appears with its reason
 - [x] **15.3** Switch Milestone on, press `r` then `Alt+M` on an item → The milestone picker opens; with it off, a toast says the field is hidden
 - [x] **15.4** Change a switch, quit and start again → The switches keep their state; `minato-settings.json` sits beside common.toml
-- [x] **15.5** Open the minato page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
+- [x] **15.5** Open the Views page; type `rust-lang` in "User or organization" of "Whose repositories" and press Enter → The first card shows the owner (hint: your login) and the board Project (`uchmk`); after Enter the inbox, the list, Actions and the board fill with rust-lang's repositories within a few seconds; the account circle gets an accent ring and its hover says "Showing: rust-lang"
 - [x] **15.6** Type `https://github.com/@rust-lang` in the owner box and press Enter → The box shows `rust-lang`
 - [x] **15.7** Type `Triage Queue` in "Board Project" and press Enter, then open the board → The board shows that Project; a title no Project has shows the owner's first Project
 - [x] **15.8** Clear the owner box and press Enter; quit and start again → Your own repositories come back with no old rust-lang cards or runs left; the ring goes; the owner and the Project are kept across the restart
@@ -200,7 +200,7 @@
 
 ## 17. Field order and conflicts
 
-- [x] **17.1** In the "minato" page press ▼ on Labels, then open the writing box → The key line lists `Alt+A` before `Alt+L`; hidden fields are not listed
+- [x] **17.1** In the "Views" page press ▼ on Labels, then open the writing box → The key line lists `Alt+A` before `Alt+L`; hidden fields are not listed
 - [x] **17.2** Restart minato → The order is kept
 - [ ] **17.3** Have a green PR of yours with merge conflicts → It is not in the inbox as "ready to merge"
 
@@ -209,7 +209,7 @@
 - [x] **18.1** Use a Project that has no Priority field and open the inbox → No "FieldConfiguration … Priority" toast
 - [ ] **18.2** Have someone mention you on their open issue → The issue is in the inbox with "Mentions you"
 - [x] **18.3** Have a repository of yours whose main CI is red → A row "CI is red on main" is in the inbox; `o` opens its Actions page; `r`, `x`, `m` and `a` only show a toast
-- [x] **18.4** In the "minato" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
+- [x] **18.4** In the "Views" page press ▲ on a rule, then look at an item two rules fit → The reason is the upper rule; the order is kept after a restart
 - [x] **18.5** Start minato with the inbox view → Cards are listed at the left (title, repository, reason) and the detail at the right; the list is not blank
 
 ## 19. New issue
@@ -235,7 +235,7 @@
 
 ## 23. Saved searches
 
-- [x] **23.1** In the settings (`,`), minato page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
+- [x] **23.1** In the settings (`,`), Views page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
 - [x] **23.2** In the list move to the filter column and choose that search under saved → The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds
 - [x] **23.3** Choose "All" under saved, or switch to the inbox → The ordinary list comes back
 
