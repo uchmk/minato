@@ -16,6 +16,15 @@ pub const OWNERS: usize = 8;
 /// The sounds that can be picked, by their words (`ito_notify::SOUNDS`).
 pub const SOUNDS: [&str; 4] = ["chime", "low", "alert", "default"];
 
+/// The forms a webhook's address takes, by their words (`ito_notify::FORMATS`).
+pub const FORMATS: [&str; 3] = ["ntfy", "slack", "json"];
+
+/// Whether `url` is an address a webhook may be sent to (`ito_notify::is_http`).
+pub fn is_http(url: &str) -> bool {
+    let u = url.trim();
+    u.starts_with("http://") || u.starts_with("https://")
+}
+
 /// How a run watched with `w` tells that it has ended, by how it ended:
 /// passed, failed, cancelled (see [`Notify::slot`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,11 +37,26 @@ pub struct Notify {
     pub sounds: [String; 3],
     /// No sound in Windows' focus mode, a presentation or a full-screen game.
     pub focus: bool,
+    /// A message to `webhook_url`.
+    pub webhook: [bool; 3],
+    /// An ntfy topic, a Slack webhook or any address that takes JSON;
+    /// nothing is sent while it is not an http(s) address.
+    pub webhook_url: String,
+    /// The form the address takes (a word of [`FORMATS`]).
+    pub webhook_format: String,
 }
 
 impl Default for Notify {
     fn default() -> Self {
-        Notify { system: [true; 3], sound: [true; 3], sounds: ["chime", "alert", "chime"].map(String::from), focus: true }
+        Notify {
+            system: [true; 3],
+            sound: [true; 3],
+            sounds: ["chime", "alert", "chime"].map(String::from),
+            focus: true,
+            webhook: [true; 3],
+            webhook_url: String::new(),
+            webhook_format: "ntfy".into(),
+        }
     }
 }
 
@@ -47,13 +71,27 @@ impl Notify {
         }
     }
 
+    /// The webhook's address and form for a run that ended in `slot`, when
+    /// one is to be sent there.
+    pub fn hook(&self, slot: usize) -> Option<(&str, &str)> {
+        (self.webhook[slot] && is_http(&self.webhook_url)).then(|| (self.webhook_url.trim(), self.webhook_format.as_str()))
+    }
+
     fn to_json(&self) -> Value {
-        json!({ "system": self.system, "sound": self.sound, "sounds": self.sounds, "focus": self.focus })
+        json!({
+            "system": self.system,
+            "sound": self.sound,
+            "sounds": self.sounds,
+            "focus": self.focus,
+            "webhook": self.webhook,
+            "webhook_url": self.webhook_url,
+            "webhook_format": self.webhook_format,
+        })
     }
 
     fn parse(v: &Value) -> Notify {
         let mut n = Notify::default();
-        for (key, out) in [("system", &mut n.system), ("sound", &mut n.sound)] {
+        for (key, out) in [("system", &mut n.system), ("sound", &mut n.sound), ("webhook", &mut n.webhook)] {
             if let Some(list) = v.get(key).and_then(Value::as_array) {
                 for (slot, x) in out.iter_mut().zip(list) {
                     if let Some(b) = x.as_bool() {
@@ -71,6 +109,12 @@ impl Notify {
         }
         if let Some(b) = v.get("focus").and_then(Value::as_bool) {
             n.focus = b;
+        }
+        if let Some(s) = v.get("webhook_url").and_then(Value::as_str) {
+            n.webhook_url = s.trim().to_string();
+        }
+        if let Some(s) = v.get("webhook_format").and_then(Value::as_str).filter(|s| FORMATS.contains(s)) {
+            n.webhook_format = s.to_string();
         }
         n
     }
@@ -316,6 +360,27 @@ mod tests {
         assert_eq!(odd.sounds, ["chime", "low", "chime"]);
         assert!(odd.focus);
         assert_eq!([Status::Ok, Status::Bad, Status::Idle, Status::Running].map(Notify::slot), [0, 1, 2, 2]);
+    }
+
+    #[test]
+    fn the_webhook_round_trips_and_is_sent_only_to_an_http_address() {
+        let mut s = Settings::default();
+        assert_eq!((s.notify.webhook, s.notify.webhook_format.as_str()), ([true; 3], "ntfy"));
+        // Nothing until there is an address.
+        assert_eq!(s.notify.hook(0), None);
+        s.notify.webhook = [false, true, true];
+        s.notify.webhook_url = "https://ntfy.sh/my-topic".into();
+        s.notify.webhook_format = "slack".into();
+        assert_eq!(Settings::parse(&s.to_json()), s);
+        assert_eq!(s.notify.hook(0), None);
+        assert_eq!(s.notify.hook(1), Some(("https://ntfy.sh/my-topic", "slack")));
+        s.notify.webhook_url = "ntfy.sh/my-topic".into();
+        assert_eq!(s.notify.hook(1), None);
+        let odd =
+            Settings::parse(r#"{"notify":{"webhook":[1,false],"webhook_url":" http://127.0.0.1:9/x ","webhook_format":"xml"}}"#).notify;
+        assert_eq!(odd.webhook, [true, false, true]);
+        assert_eq!((odd.webhook_url.as_str(), odd.webhook_format.as_str()), ("http://127.0.0.1:9/x", "ntfy"));
+        assert!(is_http(" https://a") && !is_http("ftp://a") && !is_http(""));
     }
 
     #[test]

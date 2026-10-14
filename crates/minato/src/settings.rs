@@ -8,9 +8,9 @@
 use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
 use ito_common::{themes_dir, CommonChange};
 use ito_prefs::{section, Look, Words};
-use minato_core::prefs::{Notify, SOUNDS};
+use minato_core::prefs::{is_http, Notify, FORMATS, SOUNDS};
 
-use crate::app::{App, Ring};
+use crate::app::{App, Hook, Ring};
 
 const GENERAL: usize = 0;
 const THEME: usize = 1;
@@ -18,10 +18,13 @@ const NOTIFY: usize = 2;
 const VIEWS: usize = 3;
 
 /// The words of the Notifications page, for the search.
-const NOTIFY_WORDS: [&str; 9] = [
+const NOTIFY_WORDS: [&str; 12] = [
     "settings.notify_when",
     "settings.notify_system",
     "settings.notify_sound",
+    "settings.notify_webhook",
+    "settings.webhook_url",
+    "settings.webhook_format",
     "settings.sound_ok",
     "settings.sound_bad",
     "settings.sound_idle",
@@ -77,6 +80,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let st = &mut app.settings;
     let scope_text = &mut app.scope_text;
     let searches_text = &mut app.searches_text;
+    let drafts = &mut app.fields_typed;
     let mut searches_changed = false;
     let mut test = false;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
@@ -101,7 +105,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 preview(ui, tr("settings.sample"), tabs, ["run.ok", "run.bad", "run.running"].map(tr))
             }));
         }
-        NOTIFY => test = notify_page(ui, l, &tr, &mut st.notify),
+        NOTIFY => test = notify_page(ui, l, &tr, &mut st.notify, drafts),
         VIEWS => {
             section(ui, l, tr("settings.scope"), |ui| {
                 let rows = [("settings.owner", "settings.owner_note", me.as_str()), ("settings.project", "settings.project_note", "")];
@@ -185,7 +189,13 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     if test {
         let n = &app.settings.notify;
         let (title, body) = (app.tr("notify.test_title").to_string(), app.tr("notify.test_body").to_string());
-        app.rings.push(Ring { title, body, system: true, sound: Some(n.sounds[0].clone()), focus: n.focus });
+        let hook = is_http(&n.webhook_url).then(|| Hook {
+            url: n.webhook_url.trim().into(),
+            format: n.webhook_format.clone(),
+            level: ito_notify::webhook::Level::Done,
+            folder: String::new(),
+        });
+        app.rings.push(Ring { title, body, system: true, sound: Some(n.sounds[0].clone()), focus: n.focus, hook });
         crate::net::ring(app);
     }
     if searches_changed {
@@ -207,14 +217,20 @@ pub fn show(ui: &mut Ui, app: &mut App) {
 }
 
 /// The Notifications page: a switch per way of telling and per end (passed,
-/// failed, cancelled), then the sounds. Whether the test was asked for.
-fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, n: &mut Notify) -> bool {
+/// failed, cancelled), then the sounds and the webhook. Whether the test was
+/// asked for.
+fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, n: &mut Notify, drafts: &mut ito_prefs::Drafts) -> bool {
     let c = l.c;
     let mut test = false;
     ui.horizontal(|ui| {
         test = ito_prefs::button(ui, l, tr("settings.notify_test"));
         if ito_prefs::button(ui, l, tr("settings.notify_reset")) {
-            *n = Notify::default();
+            // The webhook's address and format stay: they are not a choice but a place.
+            *n = Notify {
+                webhook_url: std::mem::take(&mut n.webhook_url),
+                webhook_format: std::mem::take(&mut n.webhook_format),
+                ..Notify::default()
+            };
         }
     });
     ui.add_space(8.0);
@@ -244,6 +260,7 @@ fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, 
         let rows = [
             ("settings.notify_system", "settings.notify_system_note", &mut n.system),
             ("settings.notify_sound", "settings.notify_sound_note", &mut n.sound),
+            ("settings.notify_webhook", "settings.notify_webhook_note", &mut n.webhook),
         ];
         for (label, note, list) in rows {
             ito_prefs::sep(ui, l);
@@ -285,7 +302,36 @@ fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, 
             n.focus = !n.focus;
         }
     });
+    section(ui, l, tr("settings.webhook"), |ui| {
+        let typed = ito_prefs::row(ui, l, tr("settings.webhook_url"), tr("settings.webhook_url_note"), |ui| {
+            ito_prefs::field(ui, drafts, "webhook", &n.webhook_url, "https://ntfy.sh/my-topic", 260.0)
+        });
+        if let Some(t) = typed {
+            n.webhook_url = t.trim().to_string();
+        }
+        if !n.webhook_url.is_empty() && !is_http(&n.webhook_url) {
+            ito_prefs::status(ui, tr("settings.webhook_bad"), c.err);
+            ui.add_space(4.0);
+        }
+        ito_prefs::sep(ui, l);
+        let names: Vec<(&str, &str)> = FORMATS.iter().map(|f| (*f, format_word(f))).collect();
+        let picked = ito_prefs::row(ui, l, tr("settings.webhook_format"), tr("settings.webhook_format_note"), |ui| {
+            ito_prefs::select(ui, "webhook-format", n.webhook_format.as_str(), &names)
+        });
+        if let Some(f) = picked {
+            n.webhook_format = f.to_string();
+        }
+    });
     test
+}
+
+/// A webhook's form as it is written.
+fn format_word(f: &str) -> &'static str {
+    match f {
+        "slack" => "Slack",
+        "json" => "JSON",
+        _ => "ntfy",
+    }
 }
 
 /// The key of a sound's name.

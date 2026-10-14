@@ -366,6 +366,8 @@ pub struct App {
     /// minato's own settings: whose repositories, the inbox rules and the
     /// writing box's fields.
     pub settings: Settings,
+    /// The settings' one-line fields while they are typed in.
+    pub fields_typed: ito_prefs::Drafts,
     /// The text boxes of the owner and the board's Project in the settings
     /// (taken into `settings` on Enter).
     pub scope_text: [String; 2],
@@ -480,6 +482,18 @@ pub struct Ring {
     pub sound: Option<String>,
     /// No sound in Windows' focus mode.
     pub focus: bool,
+    /// A message for the webhook, if one is to be sent.
+    pub hook: Option<Hook>,
+}
+
+/// A message for a webhook (`ito_notify::webhook::send`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hook {
+    pub url: String,
+    pub format: String,
+    pub level: ito_notify::webhook::Level,
+    /// The repository.
+    pub folder: String,
 }
 
 /// What a confirmation box asks about.
@@ -624,6 +638,7 @@ impl App {
             marks: HashMap::new(),
             marks_tx: None,
             settings: Settings::default(),
+            fields_typed: ito_prefs::Drafts::new(),
             scope_text: [String::new(), board::TITLE.into()],
             settings_tx: None,
             searches_text: String::new(),
@@ -1238,7 +1253,9 @@ impl App {
             self.say(format!("{title}: {body}"));
             let n = &self.settings.notify;
             let sound = n.sound[k].then(|| n.sounds[k].clone());
-            self.rings.push(Ring { title, body, system: n.system[k], sound, focus: n.focus });
+            let level = if k == 1 { ito_notify::webhook::Level::Error } else { ito_notify::webhook::Level::Done };
+            let hook = n.hook(k).map(|(url, format)| Hook { url: url.into(), format: format.into(), level, folder: r.repo.clone() });
+            self.rings.push(Ring { title, body, system: n.system[k], sound, focus: n.focus, hook });
         }
     }
 
@@ -3076,8 +3093,35 @@ mod tests {
         assert!(r[0].system && r[0].sound.is_none() && r[0].title == a.tr("watch.finished"));
         assert!(!r[1].system && r[1].sound.as_deref() == Some("low") && r[1].title == a.tr("watch.cancelled"));
         assert!(!r[1].focus);
+        // No address, no webhook.
+        assert!(r.iter().all(|r| r.hook.is_none()));
         // Said in the window either way.
         assert!(a.toast.as_ref().is_some_and(|t| t.0.starts_with(a.tr("watch.cancelled"))));
+    }
+
+    #[test]
+    fn a_watched_run_goes_to_the_webhook_as_the_settings_say() {
+        use ito_notify::webhook::Level;
+        assert_eq!(minato_core::prefs::FORMATS, ito_notify::FORMATS);
+        let mut a = app();
+        a.feed('3');
+        a.runs = (1..=3).map(|id| run(id, actions::Status::Running, None)).collect();
+        for _ in 0..3 {
+            a.feed('w');
+            a.feed('j');
+        }
+        let n = &mut a.settings.notify;
+        n.webhook_url = "http://127.0.0.1:9/hook".into();
+        n.webhook_format = "json".into();
+        n.webhook[2] = false;
+        a.runs[0].status = actions::Status::Ok;
+        a.runs[1].status = actions::Status::Bad;
+        a.runs[2].status = actions::Status::Idle;
+        a.runs_came(&[]);
+        let hooks: Vec<_> = a.rings.iter().map(|r| r.hook.as_ref().map(|h| (h.url.as_str(), h.format.as_str(), h.level))).collect();
+        let url = "http://127.0.0.1:9/hook";
+        assert_eq!(hooks, [Some((url, "json", Level::Done)), Some((url, "json", Level::Error)), None]);
+        assert_eq!(a.rings[1].hook.as_ref().map(|h| h.folder.as_str()), Some(a.runs[1].repo.as_str()));
     }
 
     #[test]

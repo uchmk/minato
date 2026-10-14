@@ -1478,9 +1478,13 @@ fn cache_writer(dir: PathBuf) -> mpsc::Sender<cache::Entry> {
 }
 
 /// Tell of the watched runs that finished as the settings say: the
-/// system's notification and a sound (none in focus mode, if so set).
+/// webhook, the system's notification and a sound (none in focus mode, if
+/// so set).
 pub fn ring(app: &mut App) {
     for r in app.rings.drain(..) {
+        if let Some(h) = r.hook {
+            ito_notify::webhook::send(h.url, h.format, h.level, r.title.clone(), r.body.clone(), h.folder);
+        }
         if r.system {
             ito_notify::toast::show(ito_notify::toast::App { id: "uchmk.minato", name: "minato" }, &r.title, &r.body);
         }
