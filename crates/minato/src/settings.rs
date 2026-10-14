@@ -468,8 +468,10 @@ mod tests {
         let file = crate::prefs::keymap_path(&dir);
         // Esc gives up the key, and the screen stays open.
         start(&mut a);
+        a.mode = crate::app::Mode::Settings;
         press(&mut a, egui::Key::Escape, egui::Modifiers::NONE);
         assert!(a.prefs.keys_edit.capture.is_none(), "Esc gave the key up");
+        assert!(a.mode == crate::app::Mode::Settings, "the screen stays open");
         // Ctrl+Shift+Enter is a key; nothing is written before Enter.
         start(&mut a);
         let cs = egui::Modifiers { ctrl: true, shift: true, command: true, ..Default::default() };
@@ -477,6 +479,7 @@ mod tests {
         assert!(!file.exists(), "a key pressed is not written yet");
         assert_eq!(a.prefs.keys_edit.capture.as_ref().map(|c| c.keys.len()), Some(1), "{:?}", a.prefs.keys_edit.capture);
         press(&mut a, egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(a.mode == crate::app::Mode::Settings, "Enter set the key and did not close the screen");
         let mut text = String::new();
         for _ in 0..500 {
             text = std::fs::read_to_string(&file).unwrap_or_default();
@@ -485,14 +488,19 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        assert!(text.contains("notes"), "keymap.toml was not written within 5 s");
         assert!(text.contains("<C-S-Enter>") && text.contains(r#"run = "notes""#) && text.contains("prepend_keymap"), "{text}");
         assert!(!text.contains("none") && !text.contains("down"), "only the key set is written: {text}");
         // Taking keys, then gone to another page: the keys stop being taken.
         start(&mut a);
         a.prefs.keys_edit.listening = true;
         a.prefs.state.page = NOTIFY;
-        frame(&mut a, Vec::new());
+        press(&mut a, egui::Key::Escape, egui::Modifiers::NONE);
         assert!(!a.prefs.keys_edit.busy(), "another page takes no keys for the Keys page");
+        assert!(a.mode == crate::app::Mode::Settings, "the Esc that gave the key up did not close the screen");
+        // Nothing taken: Esc closes the screen again.
+        press(&mut a, egui::Key::Escape, egui::Modifiers::NONE);
+        assert!(a.mode != crate::app::Mode::Settings, "Esc with nothing taken closes the settings");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

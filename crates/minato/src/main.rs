@@ -256,6 +256,12 @@ impl eframe::App for Minato {
             settings::show(ui, &mut self.app);
             self.browser_ui(ui, frame, None);
         } else {
+            // Left the settings while a key was taken: give it up, or the
+            // page comes back still taking keys (Esc included).
+            if self.app.prefs.keys_edit.busy() {
+                self.app.prefs.keys_edit.capture = None;
+                self.app.prefs.keys_edit.listening = false;
+            }
             let was = self.app.mode;
             self.app.find_check();
             // After this frame's keys, before the runs are drawn.

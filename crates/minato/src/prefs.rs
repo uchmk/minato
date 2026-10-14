@@ -40,12 +40,13 @@ fn read_keymap(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
+/// Keys set fast one after another: each reads what the one before wrote,
+/// and their keymaps are sent back in the same order.
+static KEYMAP_ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Make `edits` in the keymap.toml at `path` (none yet is an empty one),
 /// written only when that changes it. Call it off the UI thread.
 pub fn write_keymap(path: &Path, edits: &[ito_keymap::Edit]) -> Result<(), String> {
-    // Two pages' worth of keys set fast: the second reads what the first wrote.
-    static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let at = |e: String| format!("{}: {e}", path.display());
     let text = read_keymap(path)?.unwrap_or_default();
     let new = ito_keymap::edit(&text, &crate::keymap::SPEC, edits, crate::keymap::NOOP).map_err(at)?;
@@ -265,6 +266,7 @@ impl Prefs {
             return;
         };
         std::thread::spawn(move || {
+            let _one = KEYMAP_ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
             let path = keymap_path(&base);
             let r = match write_keymap(&path, &edits) {
                 Ok(()) => Reload::Keymap(read_keymap(&path)),
