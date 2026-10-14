@@ -57,6 +57,12 @@ impl Status {
     pub fn active(self) -> bool {
         matches!(self, Status::Running | Status::Queued)
     }
+
+    /// Ended with nothing to do about it (passed, cancelled or skipped):
+    /// once looked at, such a run is seen.
+    pub fn settled(self) -> bool {
+        matches!(self, Status::Ok | Status::Idle)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -380,7 +386,8 @@ pub enum Bucket {
     Active,
     Ok,
     Idle,
-    /// The successful runs already looked at, which the others leave out.
+    /// The settled runs (passed, cancelled, skipped) already looked at,
+    /// which the others leave out.
     Seen,
 }
 
@@ -401,7 +408,7 @@ impl Bucket {
             Bucket::Active => s.active(),
             Bucket::Ok => s == Status::Ok,
             Bucket::Idle => s == Status::Idle,
-            Bucket::Seen => s == Status::Ok,
+            Bucket::Seen => s.settled(),
         }
     }
 }
@@ -414,7 +421,7 @@ pub enum Col {
     Detail,
 }
 
-/// How long a successful run stays selected before it counts as seen.
+/// How long a settled run stays selected before it counts as seen.
 pub const SEEN_AFTER: f64 = 1.0;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -426,7 +433,7 @@ pub struct ActState {
     pub cursor: usize,
     pub sel: usize,
     pub scroll: f32,
-    /// The successful runs looked at: left out of every filter but Seen.
+    /// The settled runs looked at: left out of every filter but Seen.
     pub seen: HashSet<u64>,
     /// The selected run, shown even when seen until the selection leaves it.
     pub keep: Option<u64>,
@@ -482,7 +489,7 @@ impl ActState {
     /// Whether the state choice takes the run: a seen one only under Seen,
     /// or while it is still the selected one.
     fn in_state(&self, b: Option<Bucket>, r: &Run) -> bool {
-        let seen = r.status == Status::Ok && self.seen.contains(&r.id);
+        let seen = r.status.settled() && self.seen.contains(&r.id);
         match b {
             Some(Bucket::Seen) => seen,
             b => b.is_none_or(|b| b.holds(r.status)) && (!seen || self.keep == Some(r.id)),
@@ -501,14 +508,14 @@ impl ActState {
     }
 
     /// Called every frame, `shown` while the view is on screen: a
-    /// successful run selected there for `SEEN_AFTER` becomes seen, and the
+    /// settled run selected there for `SEEN_AFTER` becomes seen, and the
     /// selection stays on its run when the one it left drops out. Returns
     /// whether a run became seen.
     pub fn settle(&mut self, runs: &[Run], now: f64, shown: bool) -> bool {
         // The run looked at was selected until this frame's keys.
         let mut grew = false;
         if let Some((was, since)) = self.looking {
-            if now - since >= SEEN_AFTER && runs.iter().any(|r| r.id == was && r.status == Status::Ok) {
+            if now - since >= SEEN_AFTER && runs.iter().any(|r| r.id == was && r.status.settled()) {
                 grew = self.seen.insert(was);
             }
         }
@@ -787,6 +794,20 @@ mod tests {
         s.apply(Pick::State(Some(Bucket::Seen)));
         s.settle(&runs, 13.0, true);
         assert_eq!(ids(&s), [13]);
+    }
+
+    #[test]
+    fn a_cancelled_run_looked_at_is_seen_too() {
+        let mut runs = runs();
+        runs[2].status = Status::Idle;
+        let mut s = ActState { sel: 2, ..Default::default() };
+        s.settle(&runs, 10.0, true);
+        assert!(s.settle(&runs, 11.0, true));
+        s.key('k', &runs);
+        s.settle(&runs, 12.0, true);
+        assert_eq!(s.shown(&runs).iter().map(|r| r.id).collect::<Vec<_>>(), [11, 12]);
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Seen)), &runs), 1);
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Idle)), &runs), 0);
     }
 
     #[test]
