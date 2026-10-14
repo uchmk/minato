@@ -38,6 +38,7 @@ fn bucket_mark(b: Bucket) -> (&'static str, Color32) {
         Bucket::Active => (Status::Running.mark(), style::RUN),
         Bucket::Ok => (Status::Ok.mark(), style::OK),
         Bucket::Idle => (Status::Idle.mark(), style::IDLE),
+        Bucket::Seen => (Status::Ok.mark(), style::IDLE),
     }
 }
 
@@ -143,19 +144,12 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
                 let (m, col) = bucket_mark(*b);
                 x = p.text(pos2(x, cy), Align2::LEFT_CENTER, m, FontId::proportional(12.5), col).right() + 6.0;
             }
-            crate::list_ui::filter_words(&p, row, x, pick_label(app, pick), Some(count(app, pick)));
+            crate::list_ui::filter_words(&p, row, x, pick_label(app, pick), Some(app.acts.count(pick, &app.runs)));
             y += ENT_H;
             flat += 1;
         }
     }
     crate::list_ui::filter_more(&p, app, r, above, below);
-}
-
-/// How many runs a filter choice would show on its own.
-fn count(app: &App, pick: &Pick) -> usize {
-    let mut only = actions::ActState::default();
-    only.apply(pick.clone());
-    only.shown(&app.runs).len()
 }
 
 /// The query and the count over the runs, each folded to fit.

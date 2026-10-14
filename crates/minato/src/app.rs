@@ -332,6 +332,7 @@ pub struct App {
     /// The text box of the saved searches in the settings (one per line).
     pub searches_text: String,
     searches_tx: Option<std::sync::mpsc::Sender<String>>,
+    seen_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The list shows closed issues and PRs (`C`), so `x` opens them again.
     pub show_closed: bool,
     /// Items fetched one by one for a notification the searches do not
@@ -474,6 +475,9 @@ fn writer(path: std::path::PathBuf) -> std::sync::mpsc::Sender<String> {
     tx
 }
 
+/// How many seen runs are written (the newest).
+const SEEN_KEPT: usize = 1000;
+
 /// How long a repository's lists for the writing box are not asked again.
 const LISTS_AGE: Duration = Duration::from_secs(600);
 
@@ -555,6 +559,7 @@ impl App {
             settings_tx: None,
             searches_text: String::new(),
             searches_tx: None,
+            seen_tx: None,
             show_closed: false,
             fetched: Vec::new(),
             list: ListState::default(),
@@ -1182,10 +1187,15 @@ impl App {
     /// cleared if they hide it. False if minato does not have it.
     fn open_run(&mut self, note: &Note) -> bool {
         let Some(k) = self.note_run(note) else { return false };
-        if !self.acts.matches(&self.runs[k]) {
-            self.acts = ActState::default();
-        }
         let id = self.runs[k].id;
+        // Shown even if seen, as the selected run.
+        self.acts.keep = Some(id);
+        if !self.acts.matches(&self.runs[k]) {
+            let seen = std::mem::take(&mut self.acts.seen);
+            self.acts = ActState::default();
+            self.acts.seen = seen;
+            self.acts.keep = Some(id);
+        }
         self.acts.col = actions::Col::Runs;
         self.acts.sel = self.acts.shown(&self.runs).iter().position(|r| r.id == id).unwrap_or(0);
         self.acts.scroll = 0.0;
@@ -1571,6 +1581,39 @@ impl App {
             self.marks = minato_core::inbox::marks_parse(&text);
         }
         self.marks_tx = Some(writer(path));
+    }
+
+    /// Keep the runs seen in Actions (one id per line) in `path`, the same way.
+    pub fn keep_seen(&mut self, path: std::path::PathBuf) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            self.acts.seen = text.lines().filter_map(|l| l.trim().parse().ok()).collect();
+        }
+        self.seen_tx = Some(writer(path));
+    }
+
+    /// Each frame: the run selected in Actions becomes seen after a while
+    /// on screen (written when it does).
+    pub fn settle_runs(&mut self, now: f64) {
+        let shown = self.view == View::Actions && self.mode == Mode::Main;
+        if self.acts.settle(&self.runs, now, shown) {
+            let mut ids: Vec<u64> = self.acts.seen.iter().copied().collect();
+            // The newest runs have the largest ids; the oldest are let go.
+            ids.sort_unstable_by(|a, b| b.cmp(a));
+            ids.truncate(SEEN_KEPT);
+            self.acts.seen = ids.iter().copied().collect();
+            if let Some(tx) = &self.seen_tx {
+                let _ = tx.send(
+                    ids.iter()
+                        .map(|i| {
+                            format!(
+                                "{i}
+"
+                            )
+                        })
+                        .collect(),
+                );
+            }
+        }
     }
 
     /// Keep the columns' widths in `path` (state.toml), the same way.
@@ -2303,6 +2346,8 @@ mod tests {
         let other = Run { branch: "dev".into(), ..run(4, actions::Status::Bad, None) };
         a.runs = vec![run(2, actions::Status::Ok, None), later, old, other];
         a.acts.state = Some(actions::Bucket::Bad);
+        // Seen, and still shown when a notification opens it.
+        a.acts.seen.insert(2);
         let ci = Note {
             repo: "uchmk/kura".into(),
             kind: "CheckSuite".into(),
@@ -2317,6 +2362,7 @@ mod tests {
         assert_eq!(a.view, View::Actions);
         assert_eq!(a.run().map(|r| r.id), Some(2), "the newest done by then, the filters cleared");
         assert_eq!(a.acts.state, None);
+        assert!(a.acts.seen.contains(&2));
         assert_eq!(a.open_url, None);
         // A run minato does not have opens the repository's Actions.
         a.feed('n');
@@ -2543,6 +2589,32 @@ mod tests {
         a.toast = None;
         assert!(!a.field_shown(5));
         assert_eq!(a.toast.as_ref().map(|t| t.0.clone()), Some(a.tr("write.not_pr").to_string()));
+    }
+
+    #[test]
+    fn seen_runs_drop_out_and_are_read_back_after_a_restart() {
+        let dir = std::env::temp_dir().join(format!("minato-seen-{}", std::process::id()));
+        let file = dir.join("seen.txt");
+        let mut a = app();
+        a.keep_seen(file.clone());
+        a.view = View::Actions;
+        a.runs = vec![run(1, actions::Status::Ok, None), run(2, actions::Status::Bad, None)];
+        a.settle_runs(1.0);
+        a.settle_runs(2.5);
+        assert!(a.feed('j'));
+        a.settle_runs(3.0);
+        assert_eq!(a.acts.shown(&a.runs).len(), 1);
+        assert_eq!(a.run().map(|r| r.id), Some(2));
+        for _ in 0..100 {
+            if file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let mut b = app();
+        b.keep_seen(file);
+        assert_eq!(b.acts.seen, [1].into());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

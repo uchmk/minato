@@ -236,11 +236,14 @@ impl eframe::App for Minato {
         }
         let mut page = None;
         if self.app.mode == Mode::Settings {
+            self.app.settle_runs(ctx.input(|i| i.time));
             settings::show(ui, &mut self.app);
             self.browser_ui(ui, frame, None);
         } else {
             let was = self.app.mode;
             self.app.find_check();
+            // After this frame's keys, before the runs are drawn.
+            self.app.settle_runs(ctx.input(|i| i.time));
             // A box over the view keeps the cards' peeks from showing over it.
             let boxed = self.app.palette.is_some()
                 || self.app.overlay.is_some()
@@ -444,6 +447,7 @@ fn main() -> eframe::Result {
             let settings_file = prefs.base.as_ref().map(|b| b.join("minato-settings.json"));
             let searches_file = prefs.base.as_ref().map(|b| b.join("minato-searches.txt"));
             let state_file = ito_common::state_dir("minato").map(|d| d.join("state.toml"));
+            let seen_file = ito_common::state_dir("minato").map(|d| d.join("seen-runs.txt"));
             let mut app = App::new(prefs);
             if let Some(f) = marks_file {
                 app.keep_marks(f);
@@ -456,6 +460,9 @@ fn main() -> eframe::Result {
             }
             if let Some(f) = state_file {
                 app.keep_state(f);
+            }
+            if let Some(f) = seen_file {
+                app.keep_seen(f);
             }
             let net = net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache")));
             Ok(Box::new(Minato { app, net, browser: None, web_dir: ito_common::state_dir("minato").map(|d| d.join("webview")) }))

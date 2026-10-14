@@ -105,7 +105,7 @@
 ## 9. Actions
 
 - [x] **9.1** Press `3` → The runs of your repositories appear, newest first, under a query box with the count; the selected run shows its mark (✓ ✗ ◐ ◷ ⊘), bold title, duration, a workflow chip, event · branch, then repository · #number · actor · age; the others show whole too, as many as fit
-- [x] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
+- [ ] **9.2** Press `h`, move with `j k`, press `Space` on "Failed" → Only failed runs stay; the query line and the count change; the filter shows counts
 - [ ] **9.3** Select a run → The detail shows the repository tag, `▶ Run`, workflow and number and a status pill; the title; the meta line; for a failed run a "Next" box with `R` and how often it failed, for a running one `X`; the keys `e p D o`; the jobs with durations; the last 10 results as squares ("failed N times" or "all passed") and artifacts; a long artifact name ends in `…` before its size and never runs over it
 - [x] **9.4** Select a failed run and press `R` → A toast says the failed jobs are re-running; after a moment the run shows as running
 - [x] **9.5** Select a running run and press `X`, then `Esc`; press `X` again and `Enter` → `X` opens a box asking to stop the run (its repository, workflow and branch, "Enter stop  Esc keep it going"); `Esc` closes it and nothing is sent; after `Enter` a toast says it is stopping and the run turns to cancelled
@@ -118,6 +118,7 @@
 - [x] **9.12** In the inbox, click the button of a "Next" box of a card of yours (`m`, `r`, `a` or `o`) → The click does what the key does
 - [x] **9.13** In the settings set "User or organization" to an owner not looked at yet (say `rust-lang`), press Enter and open Actions → The runs of its repositories fill in within about two seconds, several repositories at a time (not one by one over six or more seconds); the cursor stays on the newest run at the top
 - [x] **9.14** In Actions select a run below the top, then make a new run appear above it (press `R` on a failed run, or wait for a new run) and wait for the refresh → The selection stays on the same run, which moves down a row (or to the top); the detail does not change
+- [ ] **9.15** Select a successful run (✓), wait two seconds, press `j`; then press `h` and pick "Seen" under State; quit and start minato again → The run stays while selected, then leaves the list once the selection moves on (the selection stays on the run moved to); failed, running and cancelled runs never leave; "Seen" shows the seen runs with their count and "All" no longer counts them; after the restart they are still under "Seen" only
 
 ## 10. Board
 

@@ -2,6 +2,8 @@
 //! as GitHub sends them, the filters and the selection, and the calls that
 //! change a run (re-run, cancel, dispatch).
 
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
 
 use crate::github::worker::Call;
@@ -290,6 +292,8 @@ pub enum Bucket {
     Active,
     Ok,
     Idle,
+    /// The successful runs already looked at, which the others leave out.
+    Seen,
 }
 
 impl Bucket {
@@ -299,6 +303,7 @@ impl Bucket {
             Bucket::Active => "run.active",
             Bucket::Ok => "run.ok",
             Bucket::Idle => "run.idle",
+            Bucket::Seen => "run.seen",
         }
     }
 
@@ -308,6 +313,7 @@ impl Bucket {
             Bucket::Active => s.active(),
             Bucket::Ok => s == Status::Ok,
             Bucket::Idle => s == Status::Idle,
+            Bucket::Seen => s == Status::Ok,
         }
     }
 }
@@ -320,6 +326,9 @@ pub enum Col {
     Detail,
 }
 
+/// How long a successful run stays selected before it counts as seen.
+pub const SEEN_AFTER: f64 = 1.0;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ActState {
     pub col: Col,
@@ -329,11 +338,28 @@ pub struct ActState {
     pub cursor: usize,
     pub sel: usize,
     pub scroll: f32,
+    /// The successful runs looked at: left out of every filter but Seen.
+    pub seen: HashSet<u64>,
+    /// The selected run, shown even when seen until the selection leaves it.
+    pub keep: Option<u64>,
+    /// The run selected while the view is shown, and since when.
+    looking: Option<(u64, f64)>,
 }
 
 impl Default for ActState {
     fn default() -> Self {
-        ActState { col: Col::Runs, repo: None, state: None, workflow: None, cursor: 0, sel: 0, scroll: 0.0 }
+        ActState {
+            col: Col::Runs,
+            repo: None,
+            state: None,
+            workflow: None,
+            cursor: 0,
+            sel: 0,
+            scroll: 0.0,
+            seen: HashSet::new(),
+            keep: None,
+            looking: None,
+        }
     }
 }
 
@@ -349,7 +375,10 @@ pub fn options(runs: &[Run]) -> Vec<(&'static str, Vec<Pick>)> {
         ("repo", distinct(runs.iter().map(|r| r.repo.clone())).into_iter().map(Pick::Repo).collect()),
         (
             "state",
-            [None, Some(Bucket::Bad), Some(Bucket::Active), Some(Bucket::Ok), Some(Bucket::Idle)].into_iter().map(Pick::State).collect(),
+            [None, Some(Bucket::Bad), Some(Bucket::Active), Some(Bucket::Ok), Some(Bucket::Idle), Some(Bucket::Seen)]
+                .into_iter()
+                .map(Pick::State)
+                .collect(),
         ),
         ("workflow", distinct(runs.iter().map(|r| r.workflow.clone())).into_iter().map(Pick::Workflow).collect()),
     ]
@@ -358,8 +387,55 @@ pub fn options(runs: &[Run]) -> Vec<(&'static str, Vec<Pick>)> {
 impl ActState {
     pub fn matches(&self, r: &Run) -> bool {
         self.repo.as_ref().is_none_or(|x| *x == r.repo)
-            && self.state.is_none_or(|b| b.holds(r.status))
+            && self.in_state(self.state, r)
             && self.workflow.as_ref().is_none_or(|w| *w == r.workflow)
+    }
+
+    /// Whether the state choice takes the run: a seen one only under Seen,
+    /// or while it is still the selected one.
+    fn in_state(&self, b: Option<Bucket>, r: &Run) -> bool {
+        let seen = r.status == Status::Ok && self.seen.contains(&r.id);
+        match b {
+            Some(Bucket::Seen) => seen,
+            b => b.is_none_or(|b| b.holds(r.status)) && (!seen || self.keep == Some(r.id)),
+        }
+    }
+
+    /// How many runs a filter choice would show on its own.
+    pub fn count(&self, p: &Pick, runs: &[Run]) -> usize {
+        runs.iter()
+            .filter(|r| match p {
+                Pick::Repo(x) => x.as_ref().is_none_or(|x| *x == r.repo) && self.in_state(None, r),
+                Pick::State(b) => self.in_state(*b, r),
+                Pick::Workflow(w) => w.as_ref().is_none_or(|w| *w == r.workflow) && self.in_state(None, r),
+            })
+            .count()
+    }
+
+    /// Called every frame, `shown` while the view is on screen: a
+    /// successful run selected there for `SEEN_AFTER` becomes seen, and the
+    /// selection stays on its run when the one it left drops out. Returns
+    /// whether a run became seen.
+    pub fn settle(&mut self, runs: &[Run], now: f64, shown: bool) -> bool {
+        // The run looked at was selected until this frame's keys.
+        let mut grew = false;
+        if let Some((was, since)) = self.looking {
+            if now - since >= SEEN_AFTER && runs.iter().any(|r| r.id == was && r.status == Status::Ok) {
+                grew = self.seen.insert(was);
+            }
+        }
+        let id = self.selected(runs).map(|r| r.id);
+        let looked = id.filter(|_| shown);
+        if self.looking.map(|(was, _)| was) != looked {
+            self.looking = looked.map(|id| (id, now));
+        }
+        if id != self.keep {
+            self.keep = id;
+            if let Some(k) = id.and_then(|id| self.shown(runs).iter().position(|r| r.id == id)) {
+                self.sel = k;
+            }
+        }
+        grew
     }
 
     pub fn shown<'a>(&self, runs: &'a [Run]) -> Vec<&'a Run> {
@@ -557,6 +633,57 @@ mod tests {
         s.sel = 1;
         assert_eq!(ids(&s), [13, 11, 12]);
         assert!(ActState::default().near_first(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_successful_run_looked_at_drops_out_once_left() {
+        let runs = runs();
+        let ids = |s: &ActState| s.shown(&runs).iter().map(|r| r.id).collect::<Vec<_>>();
+        // 13 is the successful one, third.
+        let mut s = ActState { sel: 2, ..Default::default() };
+        assert!(!s.settle(&runs, 10.0, true));
+        assert!(!s.settle(&runs, 10.5, true));
+        assert!(s.settle(&runs, 11.0, true));
+        // Still selected: still there.
+        assert_eq!(ids(&s), [11, 12, 13]);
+        assert!(s.key('k', &runs));
+        assert!(!s.settle(&runs, 12.0, true));
+        assert_eq!(ids(&s), [11, 12]);
+        assert_eq!(s.selected(&runs).map(|r| r.id), Some(12));
+        // Under Seen, and counted there and nowhere else.
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Seen)), &runs), 1);
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Ok)), &runs), 0);
+        assert_eq!(s.count(&Pick::State(None), &runs), 2);
+        assert_eq!(s.count(&Pick::Repo(Some("uchmk/kura".into())), &runs), 1);
+        s.apply(Pick::State(Some(Bucket::Seen)));
+        s.settle(&runs, 13.0, true);
+        assert_eq!(ids(&s), [13]);
+    }
+
+    #[test]
+    fn a_run_passed_over_or_failed_stays() {
+        let runs = runs();
+        let mut s = ActState { sel: 2, ..Default::default() };
+        s.settle(&runs, 10.0, true);
+        // Left at once, by the key read before this frame.
+        s.key('k', &runs);
+        assert!(!s.settle(&runs, 10.5, true));
+        assert!(s.seen.is_empty());
+        // The failed one, however long.
+        s.sel = 0;
+        s.settle(&runs, 11.0, true);
+        assert!(!s.settle(&runs, 20.0, true));
+        // Not while the view is away.
+        s.sel = 2;
+        s.settle(&runs, 21.0, false);
+        assert!(!s.settle(&runs, 30.0, false));
+        assert!(s.seen.is_empty());
+        // A seen run that runs again is back.
+        s.seen.insert(13);
+        s.keep = None;
+        let mut again = runs.clone();
+        again[2].status = Status::Running;
+        assert_eq!(s.shown(&again).len(), 3);
     }
 
     #[test]
