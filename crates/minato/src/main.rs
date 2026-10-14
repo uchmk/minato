@@ -14,6 +14,7 @@ mod fonts;
 mod i18n;
 mod icon;
 mod inbox_ui;
+mod keymap;
 mod list_ui;
 mod md_ui;
 mod net;
@@ -148,23 +149,26 @@ impl Minato {
                         self.close_browser();
                     }
                 }
-                egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => {
+                // A question asked: Enter answers it, nothing else is read.
+                egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } if self.app.confirm.is_some() => {
                     self.app.enter();
                 }
-                egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. }
-                    if !modifiers.ctrl && !modifiers.alt && !modifiers.command =>
-                {
-                    self.app.cycle_view(modifiers.shift);
-                }
+                _ if self.app.confirm.is_some() => {}
+                // egui hands Ctrl+C, Ctrl+X and Ctrl+V over as these, not as
+                // keys.
+                egui::Event::Copy => _ = self.app.press(ito_keys::Key::ctrl('c')),
+                egui::Event::Cut => _ = self.app.press(ito_keys::Key::ctrl('x')),
+                egui::Event::Paste(_) => _ = self.app.press(ito_keys::Key::ctrl('v')),
+                // The rest through keymap.toml; the characters come as text.
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
-                    if let Some(c) = arrow_char(key, &modifiers) {
-                        self.app.feed(c);
+                    if let Some(k) = ito_keys::from_egui(key, &modifiers) {
+                        self.app.press(k);
                     }
                 }
                 egui::Event::Text(t) => {
                     let mut chars = t.chars();
                     while let Some(c) = chars.next() {
-                        self.app.feed(c);
+                        self.app.press(ito_keys::Key::char(c));
                         // Typed fast after `/`: the rest is the search's.
                         if self.app.find_open {
                             let text = format!("{}{}", self.app.find_text, chars.as_str());
@@ -231,6 +235,11 @@ impl eframe::App for Minato {
             self.keys(&ctx);
         }
         self.app.prefs.pump();
+        match self.app.prefs.keymap_new.take() {
+            Some(None) => self.app.load_keys(),
+            Some(Some(e)) => self.app.say(e),
+            None => {}
+        }
         self.net.pump(&mut self.app, &ctx);
         self.app.set_language();
         // common.toml's theme, or the OS's light or dark under `system`.
@@ -356,24 +365,6 @@ fn scale_key(i: &mut egui::InputState) -> Option<ito_common::ScaleTo> {
     got
 }
 
-/// The arrows as the letters they stand for (`←↓↑→` are `h j k l`, with
-/// Shift `H J K L`), read through ito-keys; none with Ctrl or Alt held.
-fn arrow_char(key: egui::Key, mods: &egui::Modifiers) -> Option<char> {
-    use ito_keys::{Code, Named};
-    let k = ito_keys::from_egui(key, mods)?;
-    if k.ctrl || k.alt {
-        return None;
-    }
-    let c = match k.code {
-        Code::Named(Named::Left) => 'h',
-        Code::Named(Named::Down) => 'j',
-        Code::Named(Named::Up) => 'k',
-        Code::Named(Named::Right) => 'l',
-        _ => return None,
-    };
-    Some(if k.shift { c.to_ascii_uppercase() } else { c })
-}
-
 /// An input event as the Actions boxes see it.
 fn overlay_keys(e: &egui::Event) -> Vec<overlay::K> {
     use egui::Key;
@@ -489,19 +480,5 @@ mod tests {
         let got = no_alt_letters(vec![key(egui::Key::Q, egui::Modifiers::ALT | egui::Modifiers::CTRL), text("@")]);
         assert_eq!(got.len(), 2);
         assert_eq!(no_alt_letters(vec![text("a")]).len(), 1);
-    }
-
-    #[test]
-    fn the_arrows_are_hjkl() {
-        let none = egui::Modifiers::NONE;
-        let got: Vec<_> = [egui::Key::ArrowLeft, egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::ArrowRight]
-            .into_iter()
-            .map(|k| arrow_char(k, &none))
-            .collect();
-        assert_eq!(got, [Some('h'), Some('j'), Some('k'), Some('l')]);
-        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::SHIFT), Some('J'));
-        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::CTRL), None);
-        assert_eq!(arrow_char(egui::Key::ArrowDown, &egui::Modifiers::ALT), None);
-        assert_eq!(arrow_char(egui::Key::A, &none), None);
     }
 }

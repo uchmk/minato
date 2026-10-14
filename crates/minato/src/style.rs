@@ -252,11 +252,12 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
     let c = ito_theme::colors();
     let y = y + 14.0;
     let pad = 14.0;
-    // The button at the right, measured first so the words wrap before it.
+    // The button at the right, measured first so the words wrap before it;
+    // without a chip when keymap.toml leaves its action no key.
     let go = n.key.map(|k| {
-        let kg = p.layout_no_wrap(k.to_owned(), FontId::monospace(11.0), ON_ACCENT);
+        let kw = if k.is_empty() { 0.0 } else { p.layout_no_wrap(k.to_owned(), FontId::monospace(11.0), ON_ACCENT).size().x + 10.0 + 8.0 };
         let lg = p.layout_no_wrap(n.label.to_owned(), FontId::proportional(12.5), ON_ACCENT);
-        (kg.size().x + 10.0 + 8.0 + lg.size().x + 24.0, k)
+        (kw + lg.size().x + 24.0, k)
     });
     // Too narrow for both side by side, the button goes under the words.
     let under = go.is_some_and(|(gw, _)| w - pad * 2.0 - gw - 14.0 < NEXT_WORDS);
@@ -285,19 +286,23 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
         let at = if under { pos2(x + pad, r.top() + 9.0 + words_h + 8.0) } else { pos2(r.right() - pad - gw, r.center().y - 14.0) };
         let b = Rect::from_min_size(at, vec2(gw, 28.0));
         p.rect_filled(b, CornerRadius::same(6), ACCENT);
-        let kx = chip(
-            p,
-            b.left() + 12.0,
-            b.center().y,
-            k,
-            FontId::monospace(11.0),
-            5.0,
-            18.0,
-            4,
-            Color32::TRANSPARENT,
-            Color32::from_white_alpha(128),
-            ON_ACCENT,
-        );
+        let kx = if k.is_empty() {
+            b.left() + 4.0
+        } else {
+            chip(
+                p,
+                b.left() + 12.0,
+                b.center().y,
+                k,
+                FontId::monospace(11.0),
+                5.0,
+                18.0,
+                4,
+                Color32::TRANSPARENT,
+                Color32::from_white_alpha(128),
+                ON_ACCENT,
+            )
+        };
         bold(p, pos2(kx + 8.0, b.center().y), Align2::LEFT_CENTER, n.label, FontId::proportional(12.5), ON_ACCENT);
         b
     });
@@ -305,15 +310,13 @@ pub fn next_box(p: &Painter, x: f32, y: f32, w: f32, n: &Next) -> (f32, Option<R
 }
 
 /// The key a next box's button stands for, once clicked.
-pub fn next_click(ui: &egui::Ui, button: Option<Rect>, key: Option<&str>, clip: Rect) -> Option<char> {
-    let (b, k) = (button?.intersect(clip), key?);
-    let mut chars = k.chars();
-    let (Some(c), None) = (chars.next(), chars.next()) else { return None };
+pub fn next_click(ui: &egui::Ui, button: Option<Rect>, key: Option<char>, clip: Rect) -> Option<char> {
+    let (b, c) = (button?.intersect(clip), key?);
     (b.is_positive() && crate::ui::hit(ui, b, ("next-box", c)).clicked()).then_some(c)
 }
 
 /// The other keys under the next box (`d 済み  s あとで`); the y under them.
-pub fn alt_keys(p: &Painter, x: f32, y: f32, right: f32, keys: &[(&str, &str)]) -> f32 {
+pub fn alt_keys(p: &Painter, x: f32, y: f32, right: f32, keys: &[(String, &str)]) -> f32 {
     let c = ito_theme::colors();
     let mut kx = x + 2.0;
     let mut y = y + 10.0;

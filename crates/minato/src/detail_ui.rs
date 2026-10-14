@@ -51,7 +51,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let y = head(&p, app, item, x, top, w);
     let card = card_of(app, item);
     let (y, key) = next(&p, app, card.as_ref(), x, y, w);
-    if let Some(k) = key.and_then(|(b, k)| style::next_click(ui, b, Some(k), body)) {
+    if let Some(k) = key.and_then(|(b, k)| style::next_click(ui, b, k.chars().next(), body)) {
         out.click = Some(Click::Key(k));
     }
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
@@ -111,8 +111,15 @@ fn strip_line(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     }
     p.rect_filled(bx, CornerRadius::same(8), c.bg);
     p.rect_stroke(bx, CornerRadius::same(8), Stroke::new(1.0, if resp.hovered() { ACCENT } else { c.border }), StrokeKind::Inside);
-    let kx = bx.right() - 10.0 - (p.layout_no_wrap("r".into(), FontId::monospace(11.0), c.fg).size().x + 10.0);
-    style::kbd(&p, kx, bx.center().y, "r");
+    // The reply key in force; no chip when keymap.toml leaves it none.
+    let rk = app.char_label(crate::keymap::Ctx::View(app.view), "r");
+    let kx = if rk.is_empty() {
+        bx.right() - 4.0
+    } else {
+        let kx = bx.right() - 10.0 - (p.layout_no_wrap(rk.clone(), FontId::monospace(11.0), c.fg).size().x + 10.0);
+        style::kbd(&p, kx, bx.center().y, &rk);
+        kx
+    };
     let draft = app.drafts.get(&item.id).and_then(|t| t.lines().find(|l| !l.trim().is_empty()));
     let (text, ink) = match draft {
         Some(t) => (t.to_owned(), c.fg),
@@ -192,17 +199,17 @@ fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> 
         return (y, None);
     };
     let why = crate::inbox_ui::card_why(app, card);
+    // The button runs the rule's built-in key; it shows the keys that do it
+    // now.
+    let shown = card.rule.map(|r| app.char_label(crate::keymap::Ctx::View(app.view), r.next().0)).unwrap_or_default();
     let n = match (card.group, card.rule) {
-        (Group::Mine, Some(rule)) => {
-            let (key, name) = rule.next();
-            Next {
-                tone: style::tone(rule.tone()),
-                lead: app.tr("detail.next"),
-                label: app.tr(name),
-                note: app.tr(rule.note()),
-                key: Some(key),
-            }
-        }
+        (Group::Mine, Some(rule)) => Next {
+            tone: style::tone(rule.tone()),
+            lead: app.tr("detail.next"),
+            label: app.tr(rule.next().1),
+            note: app.tr(rule.note()),
+            key: Some(&shown),
+        },
         (Group::Wait, _) => Next { tone: style::RUN, lead: app.tr("detail.wait"), label: why, note: app.tr("detail.back"), key: None },
         (Group::Done, _) => Next { tone: style::OK, lead: app.tr("detail.done"), label: why, note: "", key: None },
         (Group::Mine, None) => Next { tone: style::IDLE, lead: app.tr("detail.next"), label: why, note: "", key: None },
@@ -227,7 +234,7 @@ fn keys(p: &Painter, app: &App, item: &Item, card: Option<&Card>, x: f32, y: f32
     }
     ks.push(("o", app.tr("key.browser")));
     ks.retain(|(k, _)| Some(*k) != own);
-    style::alt_keys(p, x, y, x + w, &ks)
+    style::alt_keys(p, x, y, x + w, &app.alt_labels(&ks))
 }
 
 /// 検査, 本文 and 経過, once the detail has come.

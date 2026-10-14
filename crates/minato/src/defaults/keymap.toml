@@ -1,0 +1,111 @@
+# minato's built-in keymap. A keymap.toml in <config>/uchmk/minato/ is laid
+# over it, section by section, the way yazi's, kura's and yagura's are:
+# `keymap` replaces a section's list, `prepend_keymap` and `append_keymap` go
+# before and after it.
+#
+# `on` is one key token or several separated by spaces ("g g"), or an array
+# of tokens; `on_mac` is used instead on macOS. `run = "none"` makes a key do
+# nothing.
+#
+# A view's section ([inbox], [list], [actions], [board], [status]) and
+# [notes] come before [main]: a key bound there wins over [main]'s in that
+# view. [main] alone is read over the list of keys (F1).
+#
+# C = Ctrl on Windows and Linux, Cmd on macOS (where Ctrl works too).
+# <C-,> is Ctrl+, (Cmd+, on a Mac).
+#
+# Esc, F1, F5, <C-,>, <C-S-p> and <C-=> <C--> <C-0> are fixed, as are the
+# keys of the writing box, the palette and the Actions forms.
+
+[main]
+keymap = [
+    { on = "1", run = "view inbox", desc = "Inbox" },
+    { on = "2", run = "view list", desc = "List" },
+    { on = "3", run = "view actions", desc = "Actions" },
+    { on = "4", run = "view board", desc = "Board" },
+    { on = "5", run = "view status", desc = "Status" },
+    { on = "<Tab>", run = "next_view", desc = "Next view" },
+    { on = "<BackTab>", run = "prev_view", desc = "Previous view" },
+    { on = "j", run = "down", desc = "Down" },
+    { on = "<Down>", run = "down", desc = "Down" },
+    { on = "k", run = "up", desc = "Up" },
+    { on = "<Up>", run = "up", desc = "Up" },
+    { on = "h", run = "left", desc = "Column to the left" },
+    { on = "<Left>", run = "left", desc = "Column to the left" },
+    { on = "l", run = "right", desc = "Column to the right" },
+    { on = "<Right>", run = "right", desc = "Column to the right" },
+    { on = "g g", run = "top", desc = "First" },
+    { on = "G", run = "bottom", desc = "Last" },
+    { on = "<Enter>", run = "enter", desc = "Open or choose" },
+    { on = "o", run = "open", desc = "Open in the browser" },
+    { on = "O", run = "open_outside", desc = "Open in the system's browser" },
+    { on = "y", run = "copy_link", desc = "Copy the link" },
+    { on = "u", run = "undo", desc = "Undo" },
+    { on = "n", run = "notes", desc = "Notifications" },
+    { on = "@", run = "owner", desc = "Switch the owner" },
+    { on = ",", run = "settings", desc = "Settings" },
+    { on = "?", run = "help", desc = "List of keys" },
+]
+
+[inbox]
+keymap = [
+    { on = "<Space>", run = "details", desc = "Details" },
+    { on = "r", run = "reply", desc = "Reply" },
+    { on = "N", run = "new_issue", desc = "New issue" },
+    { on = "S", run = "repo_settings", desc = "Repository settings" },
+    { on = "M", run = "answer", desc = "Mark as answered" },
+    { on = "d", run = "done", desc = "Done" },
+    { on = "s", run = "later", desc = "Later" },
+    { on = "m", run = "merge", desc = "Merge" },
+    { on = "x", run = "close", desc = "Close" },
+    { on = "a", run = "assign", desc = "Assign to me" },
+    { on = "c", run = "prompt", desc = "Copy a prompt for Claude" },
+    { on = "f", run = "filter_status", desc = "Filter by status" },
+    { on = "F", run = "filter_repo", desc = "Filter by repository" },
+    { on = "t", run = "filter_tag", desc = "Filter by tag" },
+    { on = "/", run = "find", desc = "Find" },
+]
+
+[list]
+keymap = [
+    { on = "<Space>", run = "select", desc = "Choose" },
+    { on = "r", run = "reply", desc = "Reply" },
+    { on = "N", run = "new_issue", desc = "New issue" },
+    { on = "S", run = "repo_settings", desc = "Repository settings" },
+    { on = "M", run = "answer", desc = "Mark as answered" },
+    { on = "a", run = "assign", desc = "Assign to me" },
+    { on = "m", run = "merge", desc = "Merge" },
+    { on = "x", run = "close", desc = "Close or reopen" },
+    { on = "C", run = "closed", desc = "Show the closed ones" },
+    { on = "/", run = "find", desc = "Find" },
+]
+
+[actions]
+keymap = [
+    { on = "<Space>", run = "select", desc = "Choose" },
+    { on = "w", run = "watch", desc = "Watch the run" },
+    { on = "R", run = "rerun", desc = "Re-run the failed jobs" },
+    { on = "X", run = "cancel", desc = "Stop the run" },
+    { on = "D", run = "dispatch", desc = "Run the workflow" },
+    { on = "e", run = "logs", desc = "The failed job's page" },
+    { on = "L", run = "log", desc = "The failed job's log" },
+    { on = "p", run = "open_pr", desc = "The pull request" },
+]
+
+[board]
+keymap = [
+    { on = "H", run = "card_left", desc = "Move the card left" },
+    { on = "<S-Left>", run = "card_left", desc = "Move the card left" },
+    { on = "L", run = "card_right", desc = "Move the card right" },
+    { on = "<S-Right>", run = "card_right", desc = "Move the card right" },
+]
+
+[status]
+keymap = []
+
+[notes]
+keymap = [
+    { on = "d", run = "read", desc = "Mark as read" },
+    { on = "A", run = "read_all", desc = "Mark all as read" },
+    { on = "n", run = "close_notes", desc = "Close" },
+]

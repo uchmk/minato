@@ -330,19 +330,24 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         (false, 1) => "The last run of this workflow failed".to_owned(),
         (false, n) => format!("{bad} of the last {n} runs of this workflow failed"),
     };
+    // The button runs its built-in key; it shows the keys that do it now.
+    let ctx = crate::keymap::Ctx::View(app.view);
+    let (rerun, cancel) = (app.char_label(ctx, "R"), app.char_label(ctx, "X"));
     let next = match run.status {
-        Status::Bad => {
-            Some(Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some("R") })
-        }
-        Status::Running | Status::Queued => {
-            Some(Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some("X") })
-        }
+        Status::Bad => Some((
+            Next { tone: style::BAD, lead: app.tr("detail.next"), label: app.tr("run.next_bad"), note: &note, key: Some(&rerun) },
+            'R',
+        )),
+        Status::Running | Status::Queued => Some((
+            Next { tone: style::RUN, lead: app.tr("detail.next"), label: app.tr("run.next_active"), note: "", key: Some(&cancel) },
+            'X',
+        )),
         Status::Ok | Status::Idle => None,
     };
-    if let Some(n) = next {
+    if let Some((n, key)) = next {
         let (under, button) = style::next_box(&p, x, y, w, &n);
         y = under;
-        if let Some(k) = style::next_click(ui, button, n.key, r) {
+        if let Some(k) = style::next_click(ui, button, Some(key), r) {
             out.click = Some(Click::Key(k));
         }
     } else {
@@ -353,7 +358,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         keys.push(("p", app.tr("run.open_pr")));
     }
     keys.extend([("D", app.tr("key.dispatch")), ("o", app.tr("key.browser"))]);
-    y = style::alt_keys(&p, x, y, x + w, &keys);
+    y = style::alt_keys(&p, x, y, x + w, &app.alt_labels(&keys));
     let have = app.run_detail.as_ref().filter(|d| d.id == run.id);
     y = style::heading(&p, x, y, app.tr("run.jobs"));
     match have.and_then(|d| d.jobs.as_ref()) {

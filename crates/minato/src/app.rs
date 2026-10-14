@@ -20,8 +20,11 @@ use minato_core::prefs::Settings;
 
 use minato_core::workflow::{self, Workflow};
 
+use ito_keymap::Match;
+use ito_keys::Key;
 use ito_layout::{Dir, Node};
 
+use crate::keymap::{Cmd as KeyCmd, Ctx, Fire, Keys};
 use crate::overlay::{Form, LogView, Out, Overlay, K};
 use crate::prefs::Prefs;
 
@@ -72,6 +75,17 @@ impl View {
         }
     }
 
+    /// Its section of keymap.toml.
+    pub fn layer(self) -> &'static str {
+        match self {
+            View::Inbox => "inbox",
+            View::List => "list",
+            View::Actions => "actions",
+            View::Board => "board",
+            View::Status => "status",
+        }
+    }
+
     /// The word-table key of the line saying what will be here.
     pub fn empty(self) -> &'static str {
         match self {
@@ -85,88 +99,93 @@ impl View {
 
     /// The keys that work in this view: `(keys, word-table key)`, the one to
     /// recommend first. The keybar shows as many as fit; `?` shows them all.
+    /// `{action}` is the keys keymap.toml gives the action ([`Keys::fill`]).
     pub fn keys(self) -> &'static [(&'static str, &'static str)] {
         match self {
             View::Inbox => &[
-                ("j k", "key.next"),
-                ("Space", "key.details"),
-                ("r", "key.write"),
-                ("N", "key.new"),
-                ("S", "key.repo"),
-                ("M", "key.answer"),
-                ("d", "key.done"),
-                ("s", "key.later"),
-                ("u", "key.undo"),
-                ("m", "key.merge"),
-                ("x", "key.close"),
-                ("a", "key.assign"),
-                ("o", "key.browser"),
-                ("O", "key.outside"),
-                ("y", "key.copy_link"),
-                ("c", "key.prompt"),
-                ("f F t", "key.filter"),
-                ("/", "key.find"),
+                ("{down} {up}", "key.next"),
+                ("{details}", "key.details"),
+                ("{reply}", "key.write"),
+                ("{new_issue}", "key.new"),
+                ("{repo_settings}", "key.repo"),
+                ("{answer}", "key.answer"),
+                ("{done}", "key.done"),
+                ("{later}", "key.later"),
+                ("{undo}", "key.undo"),
+                ("{merge}", "key.merge"),
+                ("{close}", "key.close"),
+                ("{assign}", "key.assign"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
+                ("{prompt}", "key.prompt"),
+                ("{filter_status} {filter_repo} {filter_tag}", "key.filter"),
+                ("{find}", "key.find"),
             ],
             View::List => &[
-                ("j k", "key.next"),
-                ("h l", "key.columns"),
-                ("r", "key.write"),
-                ("N", "key.new"),
-                ("S", "key.repo"),
-                ("M", "key.answer"),
-                ("a", "key.assign"),
-                ("m", "key.merge"),
-                ("x", "key.close"),
-                ("C", "key.closed"),
+                ("{down} {up}", "key.next"),
+                ("{left} {right}", "key.columns"),
+                ("{reply}", "key.write"),
+                ("{new_issue}", "key.new"),
+                ("{repo_settings}", "key.repo"),
+                ("{answer}", "key.answer"),
+                ("{assign}", "key.assign"),
+                ("{merge}", "key.merge"),
+                ("{close}", "key.close"),
+                ("{closed}", "key.closed"),
                 ("i", "key.inbox_add"),
-                ("o", "key.browser"),
-                ("O", "key.outside"),
-                ("y", "key.copy_link"),
-                ("/", "key.find"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
+                ("{find}", "key.find"),
             ],
             View::Actions => &[
-                ("j k", "key.next"),
-                ("w", "key.watch"),
-                ("R", "key.rerun"),
-                ("X", "key.cancel"),
-                ("D", "key.dispatch"),
-                ("e", "key.logs"),
-                ("L", "key.log"),
-                ("p", "run.open_pr"),
-                ("o", "key.browser"),
-                ("O", "key.outside"),
-                ("y", "key.copy_link"),
+                ("{down} {up}", "key.next"),
+                ("{watch}", "key.watch"),
+                ("{rerun}", "key.rerun"),
+                ("{cancel}", "key.cancel"),
+                ("{dispatch}", "key.dispatch"),
+                ("{logs}", "key.logs"),
+                ("{log}", "key.log"),
+                ("{open_pr}", "run.open_pr"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
             ],
             View::Board => &[
-                ("h l", "key.columns"),
-                ("j k", "key.next"),
-                ("H L", "key.card"),
-                ("Enter", "key.open"),
-                ("u", "key.undo"),
-                ("o", "key.browser"),
-                ("O", "key.outside"),
-                ("y", "key.copy_link"),
+                ("{left} {right}", "key.columns"),
+                ("{down} {up}", "key.next"),
+                ("{card_left} {card_right}", "key.card"),
+                ("{enter}", "key.open"),
+                ("{undo}", "key.undo"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
             ],
-            View::Status => {
-                &[("j k", "key.next"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("y", "key.copy_link")]
-            }
+            View::Status => &[
+                ("{down} {up}", "key.next"),
+                ("{enter}", "key.open"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
+            ],
         }
     }
 }
 
-/// The keys that work in every view.
+/// The keys that work in every view, `{action}` as in [`View::keys`].
 pub const GLOBAL_KEYS: [(&str, &str); 11] = [
-    ("1 2 3 4 5", "key.views"),
-    ("Tab S-Tab", "key.cycle"),
-    ("gg G", "key.ends"),
+    ("{view inbox} {view list} {view actions} {view board} {view status}", "key.views"),
+    ("{next_view} {prev_view}", "key.cycle"),
+    ("{top} {bottom}", "key.ends"),
     ("Ctrl+,", "key.settings"),
     ("Ctrl+= - 0", "key.scale"),
     ("Ctrl+Shift+P", "key.palette"),
-    ("n", "key.notes"),
-    ("u", "key.undo"),
+    ("{notes}", "key.notes"),
+    ("{undo}", "key.undo"),
     ("F5", "key.sync"),
-    ("@", "key.owner"),
-    ("F1 ?", "key.help"),
+    ("{owner}", "key.owner"),
+    ("F1 {help}", "key.help"),
 ];
 
 /// The palette opened with `@`, to switch whose repositories are shown.
@@ -443,6 +462,10 @@ pub struct App {
     pub detail_max: Option<f32>,
     /// `g` typed once: a second makes `gg`.
     pub pending_g: bool,
+    /// The keys in force (keymap.toml over the built-in ones).
+    pub keys: Keys,
+    /// The keys of a chord typed so far (`g` of `g g`).
+    pub key_pending: Vec<Key>,
     /// The palette, while it is open.
     pub palette: Option<ito_palette::View>,
     /// The search box's text (`/`), which filters the inbox and the list.
@@ -628,6 +651,8 @@ impl App {
             wheel_acc: 0.0,
             detail_max: None,
             pending_g: false,
+            keys: Keys::default(),
+            key_pending: Vec::new(),
             find_text: String::new(),
             find_open: false,
             find_fresh: false,
@@ -682,7 +707,103 @@ impl App {
             status_repos: Vec::new(),
         };
         app.set_language();
+        app.load_keys();
         app
+    }
+
+    /// The keys again from keymap.toml as last read, what in it does not
+    /// work said in a toast.
+    pub fn load_keys(&mut self) {
+        let path = self.prefs.base.as_deref().map(|b| crate::prefs::keymap_path(b).display().to_string());
+        let path = path.unwrap_or_else(|| crate::keymap::FILE.to_owned());
+        let user = self.prefs.keymap.as_deref().map(|t| (path.as_str(), t));
+        let (keys, warnings) = Keys::load(user);
+        self.keys = keys;
+        self.key_pending.clear();
+        if let Some(first) = warnings.first() {
+            let more = warnings.len() - 1;
+            let words = if more == 0 { first.clone() } else { format!("{first} (+{more})") };
+            self.say(words);
+        }
+    }
+
+    /// Where the keys are read now.
+    pub fn key_ctx(&self) -> Ctx {
+        match self.mode {
+            Mode::Help => Ctx::Help,
+            Mode::Notes => Ctx::Notes,
+            _ => Ctx::View(self.view),
+        }
+    }
+
+    /// A key pressed with nothing over the view (no box, no search): run
+    /// what keymap.toml binds to it, or wait for the rest of a chord
+    /// (`g g`). Returns whether it was used.
+    pub fn press(&mut self, k: Key) -> bool {
+        self.key_pending.push(k);
+        let ctx = self.key_ctx();
+        let run = match ito_keymap::resolve(self.keys.bindings(ctx), &self.key_pending) {
+            Match::Exact(b) => b.run.clone(),
+            Match::Pending(_) => return true,
+            Match::None => {
+                // A key that ends no chord may start one of its own.
+                let alone = self.key_pending.len() > 1;
+                self.key_pending.clear();
+                return alone && self.press(k);
+            }
+        };
+        self.key_pending.clear();
+        for cmd in run {
+            let KeyCmd::Run(name) = cmd else { continue };
+            match crate::keymap::fire(name) {
+                Some(Fire::Char(c)) => _ = self.feed(c),
+                Some(Fire::Enter) => _ = self.enter(),
+                Some(Fire::Tab(back)) => _ = self.cycle_view(back),
+                Some(Fire::Top) => self.top(),
+                None => {}
+            }
+        }
+        true
+    }
+
+    /// `gg`: the first of the column in focus, the top of a detail.
+    pub fn top(&mut self) {
+        self.pending_g = false;
+        let free = self.compose.is_none()
+            && self.confirm.is_none()
+            && self.palette.is_none()
+            && self.overlay.is_none()
+            && matches!(self.mode, Mode::Main | Mode::Notes);
+        if free {
+            self.jump(false);
+            self.clamp_scroll();
+        }
+    }
+
+    /// `rows` with the keys of `ctx` filled in; a row no key does is left out.
+    pub fn key_rows(&self, ctx: Ctx, rows: &[(&str, &'static str)]) -> Vec<(String, &'static str)> {
+        rows.iter().map(|(spec, w)| (self.keys.fill(ctx, spec), *w)).filter(|(k, _)| !k.is_empty()).collect()
+    }
+
+    /// The keys that do now in `ctx` what the character `key` did before the
+    /// keys could be changed (`key` itself when it is no action; empty when
+    /// no key does it).
+    pub fn char_label(&self, ctx: Ctx, key: &str) -> String {
+        let mut chars = key.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => match Keys::name_of(ctx, c) {
+                Some(name) => self.keys.label(ctx, name),
+                None => key.to_owned(),
+            },
+            _ => key.to_owned(),
+        }
+    }
+
+    /// `keys` (`(character, words)`) as [`App::char_label`] shows them in
+    /// the view, those no key does left out.
+    pub fn alt_labels<'a>(&self, keys: &[(&str, &'a str)]) -> Vec<(String, &'a str)> {
+        let ctx = Ctx::View(self.view);
+        keys.iter().map(|(k, w)| (self.char_label(ctx, k), *w)).filter(|(k, _)| !k.is_empty()).collect()
     }
 
     /// The language common.toml names, else the OS's.
@@ -981,12 +1102,10 @@ impl App {
     /// The view's keys that do something now, for the keybar: in Actions,
     /// `R` only on a failed run, `X` on one still going, `p` on one from a
     /// pull request.
-    pub fn keys_now(&self) -> Vec<(&'static str, &'static str)> {
+    pub fn keys_now(&self) -> Vec<(String, &'static str)> {
         let run = self.run();
-        self.view
-            .keys()
-            .iter()
-            .copied()
+        self.key_rows(Ctx::View(self.view), self.view.keys())
+            .into_iter()
             .filter(|(_, w)| match *w {
                 "key.rerun" => run.is_some_and(|r| r.status == actions::Status::Bad),
                 "key.cancel" => run.is_some_and(|r| r.status.active()),
@@ -1028,36 +1147,45 @@ impl App {
     /// box's (or its picker's), the palette's, a form's or a log's, else the
     /// mode's (none while the search has the bar). The bar keeps the way out
     /// (Esc, or F1 for the list of keys) to the last.
-    pub fn bar_keys(&self) -> Vec<(&'static str, &'static str)> {
+    pub fn bar_keys(&self) -> Vec<(String, &'static str)> {
+        let own = |keys: Vec<(&str, &'static str)>| keys.into_iter().map(|(k, w)| (k.to_owned(), w)).collect();
         if self.confirm.is_some() {
-            return match self.confirm_act {
+            return own(match self.confirm_act {
                 Confirm::Merge => vec![("Enter", "key.merge"), ("Esc", "bar.no")],
                 Confirm::Close => vec![("Enter", "key.close"), ("Esc", "bar.no")],
                 Confirm::Reopen => vec![("Enter", "bar.reopen"), ("Esc", "bar.no")],
                 Confirm::Dispatch => vec![("Enter", "bar.run"), ("Esc", "bar.no")],
                 Confirm::Cancel => vec![("Enter", "bar.stop"), ("Esc", "bar.keep")],
-            };
+            });
         }
         if let Some(c) = &self.compose {
-            return self.compose_keys(c);
+            return own(self.compose_keys(c));
         }
         if self.palette.is_some() {
-            return vec![("Enter", "bar.do"), ("↑ ↓", "bar.choose"), ("Esc", "key.close")];
+            return own(vec![("Enter", "bar.do"), ("↑ ↓", "bar.choose"), ("Esc", "key.close")]);
         }
         match &self.overlay {
             Some(Overlay::Form(_)) => {
-                return vec![("Ctrl+Enter", "bar.start"), ("↑ ↓", "bar.input"), ("Enter", "bar.change"), ("Esc", "bar.no")]
+                return own(vec![("Ctrl+Enter", "bar.start"), ("↑ ↓", "bar.input"), ("Enter", "bar.change"), ("Esc", "bar.no")])
             }
-            Some(Overlay::Log(_)) => return vec![("j k", "bar.scroll"), ("Space", "bar.page"), ("g G", "bar.ends"), ("Esc", "key.close")],
+            Some(Overlay::Log(_)) => {
+                return own(vec![("j k", "bar.scroll"), ("Space", "bar.page"), ("g G", "bar.ends"), ("Esc", "key.close")])
+            }
             None => {}
         }
         match self.mode {
-            Mode::Settings => vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")],
-            Mode::Help if self.help_last.get() > 0 => vec![("j k", "help.more"), ("F1 Esc", "key.back")],
-            Mode::Help => vec![("F1 Esc", "key.back")],
-            Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
+            Mode::Settings => own(vec![("Esc", "key.back"), ("Ctrl+Tab", "settings.theme")]),
+            Mode::Help if self.help_last.get() > 0 => self.key_rows(Ctx::Help, &[("{down} {up}", "help.more"), ("F1 Esc", "key.back")]),
+            Mode::Help => own(vec![("F1 Esc", "key.back")]),
+            Mode::Notes => self.key_rows(
+                Ctx::Notes,
+                &[("{down} {up}", "notes.pick"), ("{enter}", "key.open"), ("{read_all}", "notes.read_all"), ("Esc", "notes.close")],
+            ),
             Mode::Main if self.find_on() => Vec::new(),
-            Mode::Main => self.keys_now().into_iter().chain([("F5", "key.sync"), ("@", "key.owner"), ("F1", "key.help")]).collect(),
+            Mode::Main => {
+                let tail = self.key_rows(Ctx::View(self.view), &[("F5", "key.sync"), ("{owner}", "key.owner"), ("F1", "key.help")]);
+                self.keys_now().into_iter().chain(tail).collect()
+            }
         }
     }
 
@@ -1637,8 +1765,8 @@ impl App {
         // the bar shows them with their keys.
         let mut e = vec![
             Entry::new(self.tr("cmd.sync"), "F5", Cmd::Sync),
-            Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes),
-            Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll),
+            Entry::new(self.tr("cmd.notes"), self.char_label(Ctx::View(self.view), "n"), Cmd::Notes),
+            Entry::new(self.tr("cmd.mark_all"), self.char_label(Ctx::Notes, "A"), Cmd::MarkAll),
             Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings),
             Entry::new(self.tr("cmd.zoom_in"), "Ctrl+=", Cmd::Scale(ito_common::ScaleTo::In)),
             Entry::new(self.tr("cmd.zoom_out"), "Ctrl+-", Cmd::Scale(ito_common::ScaleTo::Out)),
@@ -2368,6 +2496,15 @@ impl App {
 
     /// Escape: close the help or the settings.
     pub fn escape(&mut self) -> bool {
+        // A chord begun (`g`, `z`): Esc lets go of it, and only that.
+        let chord = !self.key_pending.is_empty() || self.pending_g;
+        if chord && self.confirm.is_none() && self.overlay.is_none() {
+            self.key_pending.clear();
+            self.pending_g = false;
+            return true;
+        }
+        self.key_pending.clear();
+        self.pending_g = false;
         if self.confirm.take().is_some() {
             return true;
         }
@@ -2479,7 +2616,7 @@ mod tests {
         assert_eq!(bar(&a).last(), Some(&"key.close"));
         a.palette = None;
         a.toggle_help();
-        assert_eq!(a.bar_keys().last(), Some(&("F1 Esc", "key.back")));
+        assert_eq!(a.bar_keys().last(), Some(&("F1 Esc".to_owned(), "key.back")));
     }
 
     #[test]
@@ -3725,6 +3862,74 @@ jobs:
         a.feed('k');
         a.feed('g');
         assert_eq!(a.list.sel, 1);
+    }
+
+    fn press(a: &mut App, keys: &str) {
+        for t in keys.split_whitespace() {
+            a.press(Key::parse(t).unwrap());
+        }
+    }
+
+    #[test]
+    fn the_keys_go_through_keymap_toml() {
+        let mut a = with_pr();
+        a.items.push(pr("P2"));
+        a.list.col = minato_core::list::Col::Items;
+        // The built-in keys: the arrows, a chord, Tab and Shift+Tab.
+        press(&mut a, "<Down>");
+        assert_eq!(a.list.sel, 1);
+        press(&mut a, "g");
+        assert_eq!((a.list.sel, a.key_pending.len()), (1, 1), "one g waits for the second");
+        press(&mut a, "g");
+        assert_eq!((a.list.sel, a.key_pending.len()), (0, 0));
+        // A key that ends no chord is read alone.
+        press(&mut a, "g j");
+        assert_eq!((a.list.sel, a.key_pending.len()), (1, 0));
+        // Esc lets go of a chord begun, and closes nothing.
+        a.mode = Mode::Help;
+        press(&mut a, "g");
+        assert!(a.escape());
+        assert_eq!((a.mode, a.key_pending.len()), (Mode::Help, 0));
+        a.mode = Mode::Main;
+        press(&mut a, "<Tab>");
+        assert_eq!(a.view, View::Actions);
+        press(&mut a, "<BackTab> 4");
+        assert_eq!(a.view, View::Board);
+        a.board = Some(board_with_two_cards());
+        press(&mut a, "<S-Right>");
+        assert_eq!(a.board.as_ref().unwrap().cards[0].option.as_deref(), Some("o2"));
+        // A user's file: F2 opens the list, `d` does nothing in the inbox and
+        // Ctrl+D marks done; the keybar and the help follow.
+        a.prefs.keymap = Some(
+            r#"
+            [main]
+            prepend_keymap = [{ on = "<F2>", run = "view list" }]
+            [inbox]
+            prepend_keymap = [{ on = "<C-d>", run = "done" }, { on = "d", run = "none" }]
+            "#
+            .into(),
+        );
+        a.toast = None;
+        a.load_keys();
+        assert!(a.toast.is_none());
+        press(&mut a, "<F2>");
+        assert_eq!(a.view, View::List);
+        a.view = View::Inbox;
+        let ctrl_d = if cfg!(target_os = "macos") { "⌘D" } else { "Ctrl+D" };
+        assert!(a.bar_keys().iter().any(|(k, w)| k == ctrl_d && *w == "key.done"), "{:?}", a.bar_keys());
+        assert_eq!(a.key_rows(Ctx::View(View::Inbox), &GLOBAL_KEYS)[0].0, "1 F2 3 4 5");
+        assert_eq!(a.char_label(Ctx::View(View::Inbox), "d"), ctrl_d);
+        assert_eq!(a.char_label(Ctx::View(View::List), "i"), "i", "no action: as it is");
+        // What does not work is said, and the rest stays.
+        a.prefs.keymap = Some(
+            "[main]
+prepend_keymap = [{ on = \"q\", run = \"fly\" }]"
+                .into(),
+        );
+        a.load_keys();
+        assert!(a.toast.as_ref().is_some_and(|(t, _)| t.contains("fly")), "{:?}", a.toast);
+        press(&mut a, "2");
+        assert_eq!(a.view, View::List);
     }
 
     #[test]

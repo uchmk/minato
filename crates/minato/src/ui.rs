@@ -9,6 +9,7 @@ use ito_layout::Node;
 use minato_core::inbox::RULES;
 
 use crate::app::{App, Click, Mode, NoteClick, Pane, View, Wheel, GLOBAL_KEYS};
+use crate::keymap::Ctx;
 
 /// The accent of the tabs, the palette and the best key.
 pub const ACCENT: Color32 = Color32::from_rgb(0x5B, 0x9F, 0xD1);
@@ -489,8 +490,8 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     if app.find_on() {
         x = find_bar(ui, app, r, stop, out);
     }
-    let wide = |(key, word): &(&str, &'static str)| {
-        let k = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), c.fg).size().x);
+    let wide = |(key, word): &(String, &'static str)| {
+        let k = ui.fonts_mut(|f| f.layout_no_wrap(key.clone(), FontId::monospace(11.0), c.fg).size().x);
         let w = ui.fonts_mut(|f| f.layout_no_wrap(word_for(app, word).to_owned(), FontId::proportional(12.0), c.fg).size().x);
         k + 12.0 + 6.0 + w + 14.0
     };
@@ -499,7 +500,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     while keys.len() > 1 && x + widths.iter().sum::<f32>() - 14.0 > stop {
         let out = keys.iter().rposition(way_out);
         if let Some(o) = out.filter(|_| keys.len() == 2 && !bare) {
-            let k = ui.fonts_mut(|f| f.layout_no_wrap(keys[o].0.to_owned(), FontId::monospace(11.0), c.fg).size().x);
+            let k = ui.fonts_mut(|f| f.layout_no_wrap(keys[o].0.clone(), FontId::monospace(11.0), c.fg).size().x);
             widths[o] = k + 12.0 + 14.0;
             bare = true;
             continue;
@@ -516,7 +517,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     for (k, (key, word)) in keys.iter().enumerate() {
         let best = k == 0;
         let kc = if best { ACCENT } else { c.fg };
-        let galley = ui.fonts_mut(|f| f.layout_no_wrap((*key).to_owned(), FontId::monospace(11.0), kc));
+        let galley = ui.fonts_mut(|f| f.layout_no_wrap(key.clone(), FontId::monospace(11.0), kc));
         let chip = Rect::from_min_size(pos2(x, mid - 9.0), vec2(galley.size().x + 12.0, 18.0));
         p.rect_filled(chip, CornerRadius::same(4), if best { ACCENT.gamma_multiply(0.18) } else { c.panel });
         p.rect_stroke(
@@ -538,7 +539,7 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
 }
 
 /// The key that leaves what is open: Esc, or F1 to the list of keys.
-fn way_out(k: &(&str, &str)) -> bool {
+fn way_out(k: &(String, &str)) -> bool {
     k.0.contains("Esc") || k.1 == "key.help"
 }
 
@@ -640,9 +641,13 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     let p = ui.painter().clone();
     // Two columns: the keys of everywhere and of the notifications at the
     // left, the view's at the right, so they all fit.
-    let left: [(&str, &[(&str, &'static str)]); 2] = [(app.tr("help.global"), &GLOBAL_KEYS), (app.tr("help.notes"), &NOTES_KEYS)];
-    let right: [(&str, &[(&str, &'static str)]); 1] = [(app.tr(app.view.label()), app.view.keys())];
-    let tall = |s: &[(&str, &[(&str, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
+    // The keys in force (keymap.toml), as they are read in the view.
+    let view = Ctx::View(app.view);
+    let (global, notes, own) =
+        (app.key_rows(view, &GLOBAL_KEYS), app.key_rows(Ctx::Notes, &NOTES_KEYS), app.key_rows(view, app.view.keys()));
+    let left: [(&str, &[(String, &'static str)]); 2] = [(app.tr("help.global"), &global), (app.tr("help.notes"), &notes)];
+    let right: [(&str, &[(String, &'static str)]); 1] = [(app.tr(app.view.label()), &own)];
+    let tall = |s: &[(&str, &[(String, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
     let rules = app.view == View::Inbox;
     let rules_h = 48.0 + (RULES.len() + HELP_MARKS.len()) as f32 * 20.0;
     // The table stands as a third column when the window is wide enough,
@@ -677,7 +682,7 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     // A column from its `top`-th key row (`j` `k` move it when even the
     // closest rows do not fit): the rows skipped and those left out.
     let bottom = card.bottom() - 28.0;
-    let column = |x: f32, col_w: f32, sections: &[(&str, &[(&str, &'static str)])], top: usize| {
+    let column = |x: f32, col_w: f32, sections: &[(&str, &[(String, &'static str)])], top: usize| {
         let (mut y, mut skip, mut out) = (card.top() + 50.0, top, 0);
         for (title, rows) in sections {
             let from = skip.min(rows.len());
@@ -696,7 +701,14 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
                     out += 1;
                     continue;
                 }
-                p.text(pos2(x, y), Align2::LEFT_TOP, *key, FontId::monospace(12.0), c.fg);
+                // A long key from keymap.toml is cut before the words.
+                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + 114.0, y + 20.0))).text(
+                    pos2(x, y),
+                    Align2::LEFT_TOP,
+                    key,
+                    FontId::monospace(12.0),
+                    c.fg,
+                );
                 p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(
                     pos2(x + 120.0, y),
                     Align2::LEFT_TOP,
@@ -722,14 +734,24 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
         // One row per rule (its key, reason and what to do), then the keys
         // for any card.
         let end = card.right() - 20.0;
-        let (why_x, do_x) = (x + 40.0, x + 40.0 + (end - x - 40.0) * 0.4);
+        let inbox = Ctx::View(View::Inbox);
+        let rows: Vec<_> = RULES
+            .iter()
+            .map(|rule| (rule.next().0, rule.why(), rule.todo()))
+            .chain(HELP_MARKS)
+            .map(|(k, why, todo)| (app.char_label(inbox, k), why, todo))
+            .collect();
+        // The key column is as wide as its widest key (`Ctrl+D` when
+        // keymap.toml moves one), at least 40.
+        let widest = rows.iter().map(|(k, _, _)| p.layout_no_wrap(k.clone(), FontId::monospace(12.0), c.fg).size().x).fold(0.0, f32::max);
+        let key_w = (widest + 12.0).max(40.0);
+        let (why_x, do_x) = (x + key_w, x + key_w + (end - x - key_w) * 0.4);
         p.text(pos2(x, y), Align2::LEFT_TOP, app.tr("help.rules"), FontId::proportional(11.5), ACCENT);
         y += 20.0;
         for (at, word) in [(x, "help.key"), (why_x, "help.why"), (do_x, "help.do")] {
             p.text(pos2(at, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(11.0), c.dim);
         }
         y += 20.0;
-        let rows = RULES.iter().map(|rule| (rule.next().0, rule.why(), rule.todo())).chain(HELP_MARKS);
         for (key, why, todo) in rows {
             if y + 18.0 > card.bottom() - 28.0 {
                 break;
@@ -768,13 +790,13 @@ const HELP_MARKS: [(&str, &str, &str); 3] =
 
 /// The keys over the notifications, for the help.
 const NOTES_KEYS: [(&str, &str); 7] = [
-    ("j k", "notes.pick"),
-    ("Enter", "key.open"),
-    ("o", "key.browser"),
-    ("O", "key.outside"),
-    ("d", "key.read"),
-    ("Shift+A", "notes.read_all"),
-    ("n Esc", "notes.close"),
+    ("{down} {up}", "notes.pick"),
+    ("{enter}", "key.open"),
+    ("{open}", "key.browser"),
+    ("{open_outside}", "key.outside"),
+    ("{read}", "key.read"),
+    ("{read_all}", "notes.read_all"),
+    ("{close_notes} Esc", "notes.close"),
 ];
 
 /// The message, while its time lasts: at the top right under the title bar,

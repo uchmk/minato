@@ -1,6 +1,6 @@
 //! What the settings screen reads and writes (ito's `docs/common-spec.md`):
 //! common.toml (the language, the scale, the theme and the clock, shared by
-//! every uchmk app) and the user's themes. The files are watched every 2 s
+//! every uchmk app), the user's themes and minato's keymap.toml. The files are watched every 2 s
 //! and written on threads of their own; what was read comes back as a
 //! [`Reload`], which [`Prefs::pump`] folds in. The UI thread never touches
 //! the disk.
@@ -20,7 +20,24 @@ const WATCH: Duration = Duration::from_secs(2);
 pub enum Reload {
     Common(Result<(Common, Vec<String>), String>),
     Themes(Vec<Theme>, Vec<String>),
+    /// keymap.toml's text (`None` when there is none), or why it could not
+    /// be read.
+    Keymap(Result<Option<String>, String>),
     Failed(String),
+}
+
+/// keymap.toml in `base`'s `minato` folder.
+pub fn keymap_path(base: &Path) -> PathBuf {
+    base.join("minato").join(crate::keymap::FILE)
+}
+
+/// The text of the file at `path`; `None` when there is none.
+fn read_keymap(path: &Path) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(t) => Ok(Some(t)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
 }
 
 pub struct Prefs {
@@ -37,6 +54,12 @@ pub struct Prefs {
     pub state: State,
     /// The last write that failed, for a toast.
     pub failed: Option<String>,
+    /// keymap.toml's text, `None` when there is none.
+    pub keymap: Option<String>,
+    /// `Some(None)` when keymap.toml has been read again (the keys are to be
+    /// made again from [`Prefs::keymap`]), `Some(Some(why))` when it could
+    /// not be (to be said; the keys stay).
+    pub keymap_new: Option<Option<String>>,
     tx: Sender<Reload>,
     rx: Receiver<Reload>,
     wake: Option<egui::Context>,
@@ -62,6 +85,8 @@ impl Prefs {
             theme_err: None,
             state: State::default(),
             failed: None,
+            keymap: None,
+            keymap_new: None,
             tx,
             rx,
             wake: None,
@@ -82,6 +107,10 @@ impl Prefs {
             let (user, warn) = ito_theme::load_dir(&themes_dir(b));
             p.themes.extend(user);
             p.theme_warn = warn;
+            match read_keymap(&keymap_path(b)) {
+                Ok(t) => p.keymap = t,
+                Err(e) => p.keymap_new = Some(Some(e)),
+            }
         }
         p.base = base;
         p
@@ -94,8 +123,8 @@ impl Prefs {
         let os_ctx = ctx.clone();
         self.os_light = ito_common::OsLight::watch(WATCH, move || os_ctx.request_repaint());
         let Some(base) = self.base.clone() else { return };
-        let (common, themes) = (common_path(&base), themes_dir(&base));
-        let mut paths = vec![common.clone(), themes.clone()];
+        let (common, themes, keymap) = (common_path(&base), themes_dir(&base), keymap_path(&base));
+        let mut paths = vec![common.clone(), themes.clone(), keymap.clone()];
         // A theme file edited in place; one added or taken away changes the
         // folder's time.
         if let Ok(entries) = std::fs::read_dir(&themes) {
@@ -111,6 +140,9 @@ impl Prefs {
                 let (user, warn) = ito_theme::load_dir(&themes);
                 let all = ito_theme::builtin().into_iter().chain(user).collect();
                 sent &= tx.send(Reload::Themes(all, warn)).is_ok();
+            }
+            if changed.contains(&keymap) {
+                sent &= tx.send(Reload::Keymap(read_keymap(&keymap))).is_ok();
             }
             ctx.request_repaint();
             sent
@@ -133,6 +165,12 @@ impl Prefs {
                 }
                 Reload::Common(Err(e)) => self.common_warn = vec![e],
                 Reload::Themes(t, w) => (self.themes, self.theme_warn) = (t, w),
+                // Unreadable (being written, say): the keys stay as they are.
+                Reload::Keymap(Err(e)) => self.keymap_new = Some(Some(e)),
+                Reload::Keymap(Ok(t)) => {
+                    self.keymap = t;
+                    self.keymap_new = Some(None);
+                }
                 Reload::Failed(e) => {
                     self.scale_wanted = None;
                     self.failed = Some(e);
