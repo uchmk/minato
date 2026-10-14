@@ -4,7 +4,8 @@ name: Release
 # created at the commit this runs on if it does not exist yet. It fails when
 # the tag differs from the version in Cargo.toml. Six files: Windows (x64 and
 # ARM64, built on the x64 runner) as .zip; macOS and Linux as .tar.gz.
-# Nothing is code-signed.
+# Nothing is code-signed. The tests on ARM64 (arm64.yml) go first, and the
+# SHA-256 of every file is written onto the page last (release-sums.yml).
 
 on:
   push:
@@ -22,7 +23,12 @@ permissions:
   contents: write
 
 jobs:
+  # Nothing is published until the tests pass on ARM64 (arm64.yml).
+  arm64:
+    uses: ./.github/workflows/arm64.yml
+
   windows:
+    needs: arm64
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -159,3 +165,12 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: dist/*.tar.gz
           fail_on_unmatched_files: true
+
+  # Every asset's SHA-256, and each Windows zip's files, onto the release
+  # page once all six are there (release-sums.yml; also runs by hand).
+  sums:
+    needs: [windows, unix]
+    if: always() && needs.windows.result == 'success'
+    uses: ./.github/workflows/release-sums.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}

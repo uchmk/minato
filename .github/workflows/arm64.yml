@@ -2,8 +2,8 @@ name: ARM64
 
 # The tests on ARM64 runners, Windows and Linux, as tsumugi's arm64.yml.
 # Whether the tests pass on ARM64 is answered here, on GitHub's own ARM64
-# runners. Called by ci.yml on a push to main and by hand (not on a pull
-# request: the x64 jobs already gate those).
+# runners. Called by ci.yml on a push to main, by release.yml before anything
+# is built, and by hand (not on a pull request: the x64 jobs already gate those).
 
 on:
   workflow_call:

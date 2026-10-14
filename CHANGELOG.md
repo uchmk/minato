@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.15] - 2026-10-14
+
+### Changed
+
+- リリースのワークフロー `release.yml` を tsumugi・kura・yagura と同じ形にした。先に ARM64 の実機（Windows と Linux）でテストを回し（`arm64.yml`）、通るまで何も出さない。6 つのファイルが揃ったら、`release-sums.yml` が全部のファイルと Windows の zip の中身の SHA-256 をリリースのページに足す（手でも回せる）。v0.39.13 にはこの 2 つが無かった。
+
 ## [0.39.14] - 2026-10-14
 
 ### Changed
