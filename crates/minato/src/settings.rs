@@ -1,21 +1,38 @@
 //! The settings screen (`,`): `ito-prefs` draws the nav and the cards, and
 //! the rows common to every uchmk app (the language, the size, the clock,
-//! the theme) write common.toml. minato's own (whose repositories, the
-//! inbox rules, the saved searches, the writing box's fields) are on the
-//! Views page.
+//! the theme) write common.toml. minato's own are on the Notifications
+//! page (how a watched run's end is told) and the Views page (whose
+//! repositories, the inbox rules, the saved searches, the writing box's
+//! fields).
 
 use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
 use ito_common::{themes_dir, CommonChange};
-use ito_prefs::{section, Words};
+use ito_prefs::{section, Look, Words};
+use minato_core::prefs::{Notify, SOUNDS};
 
-use crate::app::App;
+use crate::app::{App, Ring};
 
 const GENERAL: usize = 0;
 const THEME: usize = 1;
-const VIEWS: usize = 2;
+const NOTIFY: usize = 2;
+const VIEWS: usize = 3;
+
+/// The words of the Notifications page, for the search.
+const NOTIFY_WORDS: [&str; 9] = [
+    "settings.notify_when",
+    "settings.notify_system",
+    "settings.notify_sound",
+    "settings.sound_ok",
+    "settings.sound_bad",
+    "settings.sound_idle",
+    "settings.focus",
+    "settings.notify_test",
+    "settings.notify_reset",
+];
 
 /// The rows on each page, for the search.
-fn index(w: &'static Words) -> Vec<(usize, &'static str)> {
+fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
+    let notify = NOTIFY_WORDS.iter().map(|k| (NOTIFY, crate::i18n::tr(lang, k)));
     vec![
         (GENERAL, w.language),
         (GENERAL, w.scale),
@@ -35,6 +52,9 @@ fn index(w: &'static Words) -> Vec<(usize, &'static str)> {
         (THEME, "dark_theme"),
         (THEME, "light_theme"),
     ]
+    .into_iter()
+    .chain(notify)
+    .collect()
 }
 
 pub fn show(ui: &mut Ui, app: &mut App) {
@@ -43,9 +63,10 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let pages = [
         (app.tr("settings.general"), app.tr("settings.general_lead")),
         (app.tr("settings.theme"), app.tr("settings.theme_lead")),
+        (app.tr("settings.notify"), app.tr("settings.notify_lead")),
         (app.tr("settings.views"), app.tr("settings.views_lead")),
     ];
-    let index = index(w);
+    let index = index(w, &app.lang);
     let nav = ito_prefs::Nav { pages: &pages, index: &index, words: w, file: "common.toml" };
     let mut asked: Vec<CommonChange> = Vec::new();
     let lang = app.lang.clone();
@@ -57,6 +78,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let scope_text = &mut app.scope_text;
     let searches_text = &mut app.searches_text;
     let mut searches_changed = false;
+    let mut test = false;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
         GENERAL => {
@@ -79,6 +101,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 preview(ui, tr("settings.sample"), tabs, ["run.ok", "run.bad", "run.running"].map(tr))
             }));
         }
+        NOTIFY => test = notify_page(ui, l, &tr, &mut st.notify),
         VIEWS => {
             section(ui, l, tr("settings.scope"), |ui| {
                 let rows = [("settings.owner", "settings.owner_note", me.as_str()), ("settings.project", "settings.project_note", "")];
@@ -159,6 +182,12 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         }
         _ => {}
     });
+    if test {
+        let n = &app.settings.notify;
+        let (title, body) = (app.tr("notify.test_title").to_string(), app.tr("notify.test_body").to_string());
+        app.rings.push(Ring { title, body, system: true, sound: Some(n.sounds[0].clone()), focus: n.focus });
+        crate::net::ring(app);
+    }
     if searches_changed {
         app.sync_searches();
         app.save_searches();
@@ -175,6 +204,98 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     }
     let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
     app.prefs.common_change(asked, no_folder);
+}
+
+/// The Notifications page: a switch per way of telling and per end (passed,
+/// failed, cancelled), then the sounds. Whether the test was asked for.
+fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, n: &mut Notify) -> bool {
+    let c = l.c;
+    let mut test = false;
+    ui.horizontal(|ui| {
+        test = ito_prefs::button(ui, l, tr("settings.notify_test"));
+        if ito_prefs::button(ui, l, tr("settings.notify_reset")) {
+            *n = Notify::default();
+        }
+    });
+    ui.add_space(8.0);
+    section(ui, l, tr("settings.notify_when"), |ui| {
+        // tsumugi's table: the way to tell, then a column per end, the
+        // label's column 1.6 times as wide as each end's.
+        let ends = [("run.ok", c.done), ("run.bad", c.err), ("run.idle", c.dim)];
+        let gap = 16.0;
+        let width = ui.available_width();
+        let unit = (width - 3.0 * gap) / 4.6;
+        let columns = |row: egui::Rect| -> [egui::Rect; 4] {
+            let mut x = row.left();
+            let mut take = |w: f32| {
+                let r = egui::Rect::from_min_max(egui::pos2(x, row.top()), egui::pos2(x + w, row.bottom()));
+                x += w + gap;
+                r
+            };
+            [take(unit * 1.6), take(unit), take(unit), take(unit)]
+        };
+        let (head, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
+        for ((key, color), r) in ends.iter().zip(&columns(head)[1..]) {
+            let text = ui.fonts_mut(|f| f.layout_no_wrap(tr(key).to_string(), FontId::proportional(13.0), *color));
+            let left = r.center().x - (text.size().x + 14.0) / 2.0;
+            ui.painter().circle_filled(egui::pos2(left + 4.0, r.center().y), 4.0, *color);
+            ui.painter().galley(egui::pos2(left + 14.0, r.center().y - text.size().y / 2.0), text, *color);
+        }
+        let rows = [
+            ("settings.notify_system", "settings.notify_system_note", &mut n.system),
+            ("settings.notify_sound", "settings.notify_sound_note", &mut n.sound),
+        ];
+        for (label, note, list) in rows {
+            ito_prefs::sep(ui, l);
+            let (row, _) = ui.allocate_exact_size(vec2(width, 66.0), Sense::hover());
+            let cols = columns(row);
+            let words = egui::Rect::from_center_size(cols[0].center(), vec2(cols[0].width(), 40.0));
+            // Children of their own: a scope would move the card's cursor
+            // to their bottom and take back the row's room.
+            let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(words));
+            inner.spacing_mut().item_spacing.y = 2.0;
+            inner.label(egui::RichText::new(tr(label)).size(13.0).color(c.strong()));
+            inner.add(egui::Label::new(egui::RichText::new(tr(note)).size(12.0).color(c.dim)).truncate());
+            for (on, r) in list.iter_mut().zip(&cols[1..]) {
+                let at = egui::Rect::from_center_size(r.center(), vec2(40.0, 22.0));
+                if ito_prefs::switch(&mut ui.new_child(egui::UiBuilder::new().max_rect(at)), l, *on) {
+                    *on = !*on;
+                }
+            }
+        }
+    });
+    section(ui, l, tr("settings.notify_sounds"), |ui| {
+        let names: Vec<(&str, &str)> = SOUNDS.iter().map(|s| (*s, tr(sound_word(s)))).collect();
+        for (k, label) in ["settings.sound_ok", "settings.sound_bad", "settings.sound_idle"].into_iter().enumerate() {
+            if k > 0 {
+                ito_prefs::sep(ui, l);
+            }
+            let picked = ito_prefs::row(ui, l, tr(label), "", |ui| {
+                if ui.small_button("▶").on_hover_text(tr("settings.sound_play")).clicked() {
+                    ito_notify::sound::play(&n.sounds[k]);
+                }
+                ito_prefs::select(ui, label, n.sounds[k].as_str(), &names).map(str::to_string)
+            });
+            if let Some(s) = picked {
+                n.sounds[k] = s;
+            }
+        }
+        ito_prefs::sep(ui, l);
+        if ito_prefs::row(ui, l, tr("settings.focus"), tr("settings.focus_note"), |ui| ito_prefs::switch(ui, l, n.focus)) {
+            n.focus = !n.focus;
+        }
+    });
+    test
+}
+
+/// The key of a sound's name.
+fn sound_word(s: &str) -> &'static str {
+    match s {
+        "chime" => "settings.chime",
+        "low" => "settings.low",
+        "alert" => "settings.alert",
+        _ => "settings.default",
+    }
 }
 
 /// minato in the theme in force: the title bar's tabs and a row of the

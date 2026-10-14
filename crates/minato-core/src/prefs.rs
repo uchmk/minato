@@ -1,9 +1,10 @@
 //! minato's own settings: whose repositories are shown, which inbox rules
-//! are on and which fields the writing box offers. Kept as a small JSON
-//! file beside common.toml.
+//! are on, which fields the writing box offers and how a watched run's end
+//! is told. Kept as a small JSON file beside common.toml.
 
 use serde_json::{json, Value};
 
+use crate::actions::Status;
 use crate::inbox::Rules;
 
 /// The writing box's fields, in the order of the keys `Alt+L A S M P R`.
@@ -11,6 +12,69 @@ pub const FIELDS: usize = 6;
 
 /// How many owners shown before are kept for switching back.
 pub const OWNERS: usize = 8;
+
+/// The sounds that can be picked, by their words (`ito_notify::SOUNDS`).
+pub const SOUNDS: [&str; 4] = ["chime", "low", "alert", "default"];
+
+/// How a run watched with `w` tells that it has ended, by how it ended:
+/// passed, failed, cancelled (see [`Notify::slot`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Notify {
+    /// The system's notification.
+    pub system: [bool; 3],
+    /// A sound.
+    pub sound: [bool; 3],
+    /// Which sound (a word of [`SOUNDS`]).
+    pub sounds: [String; 3],
+    /// No sound in Windows' focus mode, a presentation or a full-screen game.
+    pub focus: bool,
+}
+
+impl Default for Notify {
+    fn default() -> Self {
+        Notify { system: [true; 3], sound: [true; 3], sounds: ["chime", "alert", "chime"].map(String::from), focus: true }
+    }
+}
+
+impl Notify {
+    /// The column a run's end is in: 0 passed, 1 failed, 2 cancelled
+    /// (skipped and the like too).
+    pub fn slot(s: Status) -> usize {
+        match s {
+            Status::Ok => 0,
+            Status::Bad => 1,
+            _ => 2,
+        }
+    }
+
+    fn to_json(&self) -> Value {
+        json!({ "system": self.system, "sound": self.sound, "sounds": self.sounds, "focus": self.focus })
+    }
+
+    fn parse(v: &Value) -> Notify {
+        let mut n = Notify::default();
+        for (key, out) in [("system", &mut n.system), ("sound", &mut n.sound)] {
+            if let Some(list) = v.get(key).and_then(Value::as_array) {
+                for (slot, x) in out.iter_mut().zip(list) {
+                    if let Some(b) = x.as_bool() {
+                        *slot = b;
+                    }
+                }
+            }
+        }
+        if let Some(list) = v.get("sounds").and_then(Value::as_array) {
+            for (slot, x) in n.sounds.iter_mut().zip(list) {
+                if let Some(s) = x.as_str().filter(|s| SOUNDS.contains(s)) {
+                    *slot = s.to_string();
+                }
+            }
+        }
+        if let Some(b) = v.get("focus").and_then(Value::as_bool) {
+            n.focus = b;
+        }
+        n
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -30,6 +94,7 @@ pub struct Settings {
     pub fields: [bool; FIELDS],
     /// The fields in the order the writing box lists them (indexes into `fields`).
     pub order: [usize; FIELDS],
+    pub notify: Notify,
 }
 
 impl Default for Settings {
@@ -42,13 +107,14 @@ impl Default for Settings {
             rules: Rules::default(),
             fields: [true, true, true, false, false, false],
             order: [0, 1, 2, 3, 4, 5],
+            notify: Notify::default(),
         }
     }
 }
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
+        json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order, "notify": self.notify.to_json() }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
@@ -98,6 +164,9 @@ impl Settings {
         };
         perm("order", &mut s.order);
         perm("rule_order", &mut s.rules.1);
+        if let Some(n) = v.get("notify") {
+            s.notify = Notify::parse(n);
+        }
         s
     }
 
@@ -229,6 +298,24 @@ mod tests {
         assert_eq!(Settings::parse(&s.to_json()).rules.1[0], 1);
         assert_eq!(Settings::parse(r#"{"order":[0,0,1,2,3,4]}"#).order, [0, 1, 2, 3, 4, 5]);
         assert_eq!(Settings::parse(r#"{"order":[0,1,2]}"#).order, [0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn the_notifications_round_trip_and_keep_known_sounds_only() {
+        let mut s = Settings::default();
+        assert_eq!(s.notify.sounds, ["chime", "alert", "chime"]);
+        s.notify.system[2] = false;
+        s.notify.sound = [false, true, false];
+        s.notify.sounds[1] = "low".into();
+        s.notify.focus = false;
+        assert_eq!(Settings::parse(&s.to_json()), s);
+        // Before there were any: on, as it was.
+        assert_eq!(Settings::parse(r#"{"fields":[true]}"#).notify, Notify::default());
+        let odd = Settings::parse(r#"{"notify":{"system":[false,"x"],"sounds":["boom","low"],"focus":1}}"#).notify;
+        assert_eq!(odd.system, [false, true, true]);
+        assert_eq!(odd.sounds, ["chime", "low", "chime"]);
+        assert!(odd.focus);
+        assert_eq!([Status::Ok, Status::Bad, Status::Idle, Status::Running].map(Notify::slot), [0, 1, 2, 2]);
     }
 
     #[test]

@@ -1477,13 +1477,15 @@ fn cache_writer(dir: PathBuf) -> mpsc::Sender<cache::Entry> {
     tx
 }
 
-/// Tell of the watched runs that finished: the system's notification and,
-/// out of the quiet hours, a sound (a failed run's lower).
-fn ring(app: &mut App) {
+/// Tell of the watched runs that finished as the settings say: the
+/// system's notification and a sound (none in focus mode, if so set).
+pub fn ring(app: &mut App) {
     for r in app.rings.drain(..) {
-        ito_notify::toast::show(ito_notify::toast::App { id: "uchmk.minato", name: "minato" }, &r.title, &r.body);
-        if !ito_notify::sound::quiet_time() {
-            ito_notify::sound::play(if r.bad { "alert" } else { "chime" });
+        if r.system {
+            ito_notify::toast::show(ito_notify::toast::App { id: "uchmk.minato", name: "minato" }, &r.title, &r.body);
+        }
+        if let Some(s) = r.sound.filter(|_| !(r.focus && ito_notify::sound::quiet_time())) {
+            ito_notify::sound::play(&s);
         }
     }
 }

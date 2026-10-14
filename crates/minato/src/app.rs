@@ -469,13 +469,17 @@ pub struct App {
     pub status_repos: Vec<String>,
 }
 
-/// A toast of the system: a watched run ended.
+/// A toast of the system: a watched run ended (or the settings' test).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ring {
     pub title: String,
     pub body: String,
-    /// It failed (the louder sound).
-    pub bad: bool,
+    /// Shown as the system's notification.
+    pub system: bool,
+    /// The sound to play, if any.
+    pub sound: Option<String>,
+    /// No sound in Windows' focus mode.
+    pub focus: bool,
 }
 
 /// What a confirmation box asks about.
@@ -1228,11 +1232,13 @@ impl App {
             false
         });
         for r in ended {
-            let bad = r.status == actions::Status::Bad;
-            let title = self.tr(if bad { "watch.failed" } else { "watch.finished" }).to_string();
+            let k = minato_core::prefs::Notify::slot(r.status);
+            let title = self.tr(["watch.finished", "watch.failed", "watch.cancelled"][k]).to_string();
             let body = format!("{} · {}: {}", r.repo, r.workflow, r.title);
             self.say(format!("{title}: {body}"));
-            self.rings.push(Ring { title, body, bad });
+            let n = &self.settings.notify;
+            let sound = n.sound[k].then(|| n.sounds[k].clone());
+            self.rings.push(Ring { title, body, system: n.system[k], sound, focus: n.focus });
         }
     }
 
@@ -3043,8 +3049,35 @@ mod tests {
         a.runs_came(&[]);
         assert!(a.watched.is_empty());
         assert_eq!(a.rings.len(), 1);
-        assert!(a.rings[0].bad && a.rings[0].title == a.tr("watch.failed"));
+        assert!(a.rings[0].sound.as_deref() == Some("alert") && a.rings[0].title == a.tr("watch.failed"));
+        assert!(a.rings[0].system && a.rings[0].focus);
         assert!(a.rings[0].body.contains("uchmk/kura") && a.rings[0].body.contains("check"));
+    }
+
+    #[test]
+    fn a_watched_run_rings_as_the_settings_say() {
+        assert_eq!(minato_core::prefs::SOUNDS, ito_notify::SOUNDS);
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Running, None), run(2, actions::Status::Running, None)];
+        a.feed('w');
+        a.feed('j');
+        a.feed('w');
+        let n = &mut a.settings.notify;
+        n.system[2] = false;
+        n.sound[0] = false;
+        n.sounds[2] = "low".into();
+        n.focus = false;
+        a.runs[0].status = actions::Status::Ok;
+        a.runs[1].status = actions::Status::Idle;
+        a.runs_came(&[]);
+        let r = &a.rings;
+        assert_eq!(r.len(), 2);
+        assert!(r[0].system && r[0].sound.is_none() && r[0].title == a.tr("watch.finished"));
+        assert!(!r[1].system && r[1].sound.as_deref() == Some("low") && r[1].title == a.tr("watch.cancelled"));
+        assert!(!r[1].focus);
+        // Said in the window either way.
+        assert!(a.toast.as_ref().is_some_and(|t| t.0.starts_with(a.tr("watch.cancelled"))));
     }
 
     #[test]
@@ -3062,7 +3095,7 @@ mod tests {
         // Asked apart, it has ended.
         a.runs_came(&[run(1, actions::Status::Ok, None)]);
         assert!(a.watched.is_empty());
-        assert!(a.rings.len() == 1 && !a.rings[0].bad && a.rings[0].title == a.tr("watch.finished"));
+        assert!(a.rings.len() == 1 && a.rings[0].sound.as_deref() == Some("chime") && a.rings[0].title == a.tr("watch.finished"));
     }
 
     #[test]
