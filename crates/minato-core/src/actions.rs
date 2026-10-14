@@ -118,6 +118,13 @@ pub struct Artifact {
     pub bytes: u64,
 }
 
+/// The release a run made: its tag and its files (the assets).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Release {
+    pub tag: String,
+    pub files: Vec<Artifact>,
+}
+
 /// "42s", "2m10s", "1h05m".
 pub fn duration(s: i64) -> String {
     match s {
@@ -234,6 +241,74 @@ pub fn jobs_path(run: &Run) -> String {
 
 pub fn artifacts_path(run: &Run) -> String {
     format!("/repos/{}/actions/runs/{}/artifacts?per_page=20", run.repo, run.id)
+}
+
+/// Whether a run may make a release: its workflow file is named for one
+/// (`release.yml`). Only such runs have their repository's releases read.
+pub fn makes_release(run: &Run) -> bool {
+    run.path.rsplit('/').next().is_some_and(|f| f.to_ascii_lowercase().contains("release"))
+}
+
+/// The repository's newest releases, among which a run's is looked for.
+pub fn releases_path(run: &Run) -> String {
+    format!("/repos/{}/releases?per_page=10", run.repo)
+}
+
+/// Whether `r` (one release of the answer) is the one `run` made: at the
+/// run's commit, and published while the run went (a minute's grace after).
+fn made_by(r: &Value, run: &Run) -> bool {
+    let at = r.get("published_at").and_then(Value::as_str).and_then(epoch);
+    let (from, to) = (epoch(&run.started_at), epoch(&run.updated_at));
+    !run.head_sha.is_empty()
+        && text(r, "target_commitish") == run.head_sha
+        && at.zip(from).is_some_and(|(at, from)| at >= from)
+        && (run.status.active() || at.zip(to).is_some_and(|(at, to)| at <= to + 60))
+}
+
+/// The release `run` made, out of the releases' answer (or out of what
+/// `narrow` kept of it); `None` when it made none.
+pub fn parse_release(body: &str, run: &Run) -> Result<Option<Release>, String> {
+    let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let Some(a) = v.as_array() else {
+        return Err(v.get("message").and_then(Value::as_str).map_or_else(|| "not a list".into(), str::to_string));
+    };
+    Ok(a.iter().find(|r| made_by(r, run)).map(|r| Release {
+        tag: text(r, "tag_name"),
+        files: r
+            .get("assets")
+            .and_then(Value::as_array)
+            .map(|f| f.iter().map(|f| Artifact { name: text(f, "name"), bytes: num(f, "size") }).collect())
+            .unwrap_or_default(),
+    }))
+}
+
+/// The releases' answer cut to the one `run` made, with only what
+/// `parse_release` reads (what is kept on disk for the run).
+pub fn narrow_releases(body: &str, run: &Run) -> Result<String, String> {
+    let v: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let mine: Vec<Value> = v
+        .as_array()
+        .ok_or("not a list")?
+        .iter()
+        .filter(|r| made_by(r, run))
+        .take(1)
+        .map(|r| {
+            let files: Vec<Value> = r
+                .get("assets")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|f| json!({"name": f.get("name"), "size": f.get("size")}))
+                .collect();
+            json!({
+                "tag_name": r.get("tag_name"),
+                "target_commitish": r.get("target_commitish"),
+                "published_at": r.get("published_at"),
+                "assets": files,
+            })
+        })
+        .collect();
+    Ok(Value::Array(mine).to_string())
 }
 
 fn post(path: String, body: Value) -> Call {
@@ -596,6 +671,38 @@ mod tests {
         assert_eq!(size(a[0].bytes), "9.8 MB");
         let r = parse_repos(r#"[{"full_name":"uchmk/a","archived":false},{"full_name":"uchmk/old","archived":true}]"#).unwrap();
         assert_eq!(r, ["uchmk/a"]);
+    }
+
+    #[test]
+    fn a_release_run_finds_the_release_it_made() {
+        let mut run = runs().remove(0);
+        run.path = ".github/workflows/release.yml".into();
+        (run.head_sha, run.started_at, run.updated_at) = ("abc".into(), "2026-10-14T02:19:18Z".into(), "2026-10-14T02:44:29Z".into());
+        run.status = Status::Ok;
+        assert!(makes_release(&run));
+        assert_eq!(releases_path(&run), "/repos/uchmk/kura/releases?per_page=10");
+        // Newest first: a later release at the same commit, the run's, one
+        // of another commit, and the run's commit released before it ran.
+        let body = r#"[
+            {"tag_name":"v2","target_commitish":"abc","published_at":"2026-10-14T05:00:00Z","assets":[]},
+            {"tag_name":"v1","target_commitish":"abc","published_at":"2026-10-14T02:38:59Z","body":"notes",
+             "assets":[{"name":"kura-v1-windows-x64.zip","size":10276044,"download_count":3}]},
+            {"tag_name":"v0","target_commitish":"def","published_at":"2026-10-14T02:30:00Z","assets":[]},
+            {"tag_name":"v-1","target_commitish":"abc","published_at":"2026-10-13T00:00:00Z","assets":[]}
+        ]"#;
+        let want = Release { tag: "v1".into(), files: vec![Artifact { name: "kura-v1-windows-x64.zip".into(), bytes: 10276044 }] };
+        assert_eq!(parse_release(body, &run).unwrap(), Some(want.clone()));
+        // What is kept reads back the same, and holds no more than that.
+        let kept = narrow_releases(body, &run).unwrap();
+        assert_eq!(parse_release(&kept, &run).unwrap(), Some(want));
+        assert!(!kept.contains("notes") && !kept.contains("v2"));
+        // A run of another workflow, or one whose release is not out.
+        run.path = ".github/workflows/ci.yml".into();
+        assert!(!makes_release(&run));
+        run.head_sha = "fed".into();
+        assert_eq!(parse_release(body, &run).unwrap(), None);
+        assert_eq!(narrow_releases(body, &run).unwrap(), "[]");
+        assert!(parse_release(r#"{"message":"Not Found"}"#, &run).is_err_and(|e| e == "Not Found"));
     }
 
     #[test]

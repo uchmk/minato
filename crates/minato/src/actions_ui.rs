@@ -1,7 +1,7 @@
 //! The Actions view (docs/design.md, 「3 Actions」): the filter column, the
 //! runs folded by `minato_core::fold`, and the detail of one run with its
-//! next step, jobs, the last ten results and artifacts. Painted on rects; no
-//! scrollbar anywhere.
+//! next step, jobs, the last ten results, artifacts and a release's files.
+//! Painted on rects; no scrollbar anywhere.
 
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
 use minato_core::actions::{self, Bucket, Col, Pick, Run, Status};
@@ -269,7 +269,7 @@ fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64) {
 
 /// The run as the mock's detail draws it: where and what state; the title
 /// and how it went; the next step and the other keys; the jobs, the last ten
-/// results and the artifacts.
+/// results, the artifacts and the release's files.
 fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
@@ -395,6 +395,18 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     if let Some(arts) = have.and_then(|d| d.artifacts.as_ref()).filter(|a| !a.is_empty()) {
         y = style::heading(&p, x, y, app.tr("run.artifacts"));
         for a in arts {
+            artifact(&p, x, y + 10.0, w, &a.name, a.bytes);
+            y += 22.0;
+        }
+    }
+    // The files of the release the run made, with its tag.
+    if let Some(rel) = have.and_then(|d| d.release.as_ref()) {
+        y = style::heading(&p, x, y, &format!("{} · {}", app.tr("run.release"), rel.tag));
+        if rel.files.is_empty() {
+            p.text(pos2(x + 10.0, y + 10.0), Align2::LEFT_CENTER, app.tr("run.release_none"), FontId::proportional(12.0), c.dim);
+            y += 22.0;
+        }
+        for a in &rel.files {
             artifact(&p, x, y + 10.0, w, &a.name, a.bytes);
             y += 22.0;
         }

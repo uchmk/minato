@@ -13,7 +13,7 @@
 //! them one by one or behind a search. They share one ETag cache, filled from disk at a start, so an
 //! answer that has not changed costs a 304.
 //!
-//! A run's jobs, artifacts and workflow are kept by run with its
+//! A run's jobs, artifacts, workflow and release are kept by run with its
 //! `updated_at`: a finished run's are shown from there (and from disk after
 //! a restart) and not asked again; a running or queued one's are asked with
 //! each refresh of the runs.
@@ -172,9 +172,9 @@ const SEARCH_PAGES: usize = 10;
 struct RunMemo {
     stamp: String,
     detail: RunDetail,
-    /// Whether the jobs, the artifacts and the workflow have come since
-    /// (the workflow is of the run's commit, so it stays).
-    got: [bool; 3],
+    /// Whether the jobs, the artifacts, the workflow and the release have
+    /// come since (the workflow is of the run's commit, so it stays).
+    got: [bool; 4],
 }
 
 impl Net {
@@ -650,7 +650,7 @@ impl Net {
         self.show_board(app, &all, true);
     }
 
-    /// A run's jobs, artifacts or workflow (by `key`), from GitHub (`kept`
+    /// A run's jobs, artifacts, workflow or release (by `key`), from GitHub (`kept`
     /// is `None`; the stamp is the run's `updated_at` now) or from the cache
     /// with its stamp. Kept by run; shown only while the run is selected. A
     /// finished run's answers go to disk.
@@ -664,19 +664,38 @@ impl Net {
             Some(s) => s.to_string(),
             None => run.map(|r| r.updated_at.clone()).unwrap_or_default(),
         };
+        // The releases are matched to the run, so it must be known; what is
+        // kept is only the release it made.
+        let narrowed;
+        let body = match (part, run) {
+            ("a-rels", None) => return,
+            ("a-rels", Some(r)) if kept.is_none() => match actions::narrow_releases(body, r) {
+                Ok(b) => {
+                    narrowed = b;
+                    &narrowed
+                }
+                Err(e) => return app.say(e),
+            },
+            _ => body,
+        };
+        let release = match (part, run) {
+            ("a-rels", Some(r)) => Some(actions::parse_release(body, r)),
+            _ => None,
+        };
         if kept.is_none() && done && !stamp.is_empty() {
             self.keep(key, &stamp, body);
         }
         let m = self.run_kept.entry(id).or_insert_with(|| RunMemo {
             stamp: stamp.clone(),
             detail: RunDetail { id, ..Default::default() },
-            got: [false; 3],
+            got: [false; 4],
         });
         // A newer state of the run: what is kept shows until the new comes.
         if m.stamp != stamp {
             m.stamp = stamp;
             m.got[0] = false;
             m.got[1] = false;
+            m.got[3] = false;
         }
         match part {
             "a-jobs" => match actions::parse_jobs(body) {
@@ -686,6 +705,11 @@ impl Net {
             "a-arts" => match actions::parse_artifacts(body) {
                 Ok(v) => (m.detail.artifacts, m.got[1]) = (Some(v), true),
                 Err(e) => app.say(e),
+            },
+            "a-rels" => match release {
+                Some(Ok(v)) => (m.detail.release, m.got[3]) = (v, true),
+                Some(Err(e)) => app.say(e),
+                None => {}
             },
             _ => {
                 // A workflow that cannot be read just has no graph.
@@ -715,7 +739,7 @@ impl Net {
         let m = self.run_kept.entry(r.id).or_insert_with(|| RunMemo {
             stamp: r.updated_at.clone(),
             detail: RunDetail { id: r.id, ..Default::default() },
-            got: [false; 3],
+            got: [false; 4],
         });
         m.detail.workflow = Some(w.clone());
         m.got[2] = true;
@@ -755,6 +779,9 @@ impl Net {
             }
             if !(same && memo.is_some_and(|m| m.got[1])) {
                 jobs.push(Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(&r)) });
+            }
+            if actions::makes_release(&r) && !(same && memo.is_some_and(|m| m.got[3])) {
+                jobs.push(Job { key: format!("a-rels:{}", r.id), call: Call::Get(actions::releases_path(&r)) });
             }
             if let Some(path) = workflow::contents_path(&r).filter(|_| !yaml) {
                 jobs.push(Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
@@ -880,7 +907,7 @@ impl Net {
                         let m = self.run_kept.entry(id).or_insert_with(|| RunMemo {
                             stamp,
                             detail: RunDetail { id, ..Default::default() },
-                            got: [false; 3],
+                            got: [false; 4],
                         });
                         m.detail.yaml_tried = true;
                         if let Some(d) = app.run_detail.as_mut().filter(|d| d.id == id) {
@@ -1096,6 +1123,9 @@ impl Net {
                     if !(same && got(1)) {
                         quick.send_in("run", &tag, Job { key: format!("a-arts:{}", r.id), call: Call::Get(actions::artifacts_path(r)) });
                     }
+                    if actions::makes_release(r) && !(same && got(3)) {
+                        quick.send_in("run", &tag, Job { key: format!("a-rels:{}", r.id), call: Call::Get(actions::releases_path(r)) });
+                    }
                     if let Some(path) = workflow::contents_path(r).filter(|_| !yaml) {
                         quick.send_in("run", &tag, Job { key: format!("a-yaml:{}", r.id), call: Call::Get(path) });
                     }
@@ -1175,9 +1205,9 @@ fn list_repo(key: &str) -> Option<&str> {
     ["labels:", "people:", "miles:"].iter().find_map(|p| key.strip_prefix(p))
 }
 
-/// Whether `key` is for a run's jobs, artifacts or workflow.
+/// Whether `key` is for a run's jobs, artifacts, workflow or release.
 fn run_part(key: &str) -> bool {
-    key.starts_with("a-jobs:") || key.starts_with("a-arts:") || key.starts_with("a-yaml:")
+    ["a-jobs:", "a-arts:", "a-yaml:", "a-rels:"].iter().any(|p| key.starts_with(p))
 }
 
 /// A thread that writes each answer it is sent to the cache in `dir`.

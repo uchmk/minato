@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use std::collections::HashMap;
 
-use minato_core::actions::{self, ActState, Artifact, Job, Run};
+use minato_core::actions::{self, ActState, Artifact, Job, Release, Run};
 use minato_core::board::{self, BoardState, Project};
 use minato_core::composer::{Picker, Tool};
 use minato_core::github::search;
@@ -440,6 +440,8 @@ pub struct RunDetail {
     pub yaml_tried: bool,
     pub jobs: Option<Vec<Job>>,
     pub artifacts: Option<Vec<Artifact>>,
+    /// The release the run made (a release workflow's run), once read.
+    pub release: Option<Release>,
 }
 
 /// One call for the worker, and the words to say when it has gone through.
