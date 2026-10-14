@@ -222,13 +222,15 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
 impl eframe::App for Minato {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        if let Some(to) = ctx.input_mut(scale_key) {
+        // While the Keys page takes a key, every key goes to it.
+        let taking = self.app.mode == Mode::Settings && self.app.prefs.keys_edit.busy();
+        if let Some(to) = (!taking).then(|| ctx.input_mut(scale_key)).flatten() {
             self.app.scale(to);
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
+        if !taking && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
             self.app.toggle_help();
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F5)) {
+        if !taking && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F5)) {
             self.app.sync_now();
         }
         if self.app.mode != Mode::Settings {

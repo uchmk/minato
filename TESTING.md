@@ -448,7 +448,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 35.1 | Open the settings (`,`) and pick "Notifications" | The pages are General, Theme, Notifications, Views. The page has "Send a test" and "Reset to defaults" buttons, a "When to tell" table (columns Passed in green, Failed in red, Cancelled in grey; rows "System notification" and "Sound", all switches on) and "Which sounds" (a sound per end with ▶, and "Keep quiet in Windows' focus mode" on), laid out as tsumugi's Notifications page |
+| 35.1 | Open the settings (`,`) and pick "Notifications" | The pages are General, Theme, Views, Keys, Notifications (v0.44.0). The page has "Send a test" and "Reset to defaults" buttons, a "When to tell" table (columns Passed in green, Failed in red, Cancelled in grey; rows "System notification" and "Sound", all switches on) and "Which sounds" (a sound per end with ▶, and "Keep quiet in Windows' focus mode" on), laid out as tsumugi's Notifications page |
 | 35.2 | Press "Send a test"; press ▶ beside each sound and pick another sound | A Windows toast "minato test notification" shows (and stays in the notification centre) with the success sound; each ▶ plays that row's sound |
 | 35.3 | Turn off "System notification" under Cancelled and "Sound" under Passed, pick "Low tone" for Failed, quit and start minato again | The switches and the sound stay as set (`minato-settings.json` has `notify`); a watched run that passes then rings no sound, one that is cancelled shows no toast (minato's own message shows either way) |
 | 35.4 | Press "Reset to defaults"; type 集中 (or "focus") into the settings' search | Every switch is on again and the sounds are chime, alert, chime; the search lists the Notifications page |
@@ -467,3 +467,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 36.5 | Add `{ on = "n", run = "none" }` and `{ on = "<C-n>", run = "notes" }` to `[main]`; open the palette | "Notifications" shows `Ctrl+N`; `n` does nothing and `Ctrl+N` opens the notifications |
 | 36.6 | Add `{ on = "<C-c>", run = "copy_link" }` and `{ on = "<Esc>", run = "top" }` to `[main]`; in the list press `Ctrl+C`; then press `g` and `Esc` with the `F1` list open | A toast says `<Esc>` is fixed; `Ctrl+C` copies the item's link like `y`; `Esc` after one `g` leaves the `F1` list open, a second `Esc` closes it |
 | 36.7 | Bind `{ on = "r", run = "none" }` in `[inbox]` and `{ on = "d", run = "none" }` too; open a card that suggests "done" in the detail | The reply strip under the detail shows no key chip; the "Next" button shows its words without an empty chip and still works when clicked |
+
+## 37. The Keys page of the settings
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 37.1 | With no `keymap.toml`, open the settings (`,`) and pick "Keys"; switch the language to 日本語 and back | One row per operation, laid out as kura's Keys page: the keys as chips, a ＋ per row, the layer (Everywhere, Inbox, List, Actions, Board, Status, Notifications) at the right. In 日本語 the descriptions and layers are Japanese (下へ, 受信箱 …) |
+| 37.2 | Type `merge` in the page's search; clear it; press "⌨ Find by key" and then `d` | The search leaves the Merge rows; finding by `d` leaves the rows with a key starting with `d` (Done in the inbox, Mark as read in the notifications) |
+| 37.3 | On "Notifications" in Everywhere press ＋, then `Ctrl+Shift+Enter`; look at `%APPDATA%\uchmk\minato\keymap.toml` (a test config folder); press `Enter` | Before `Enter` the chip reads `Ctrl+Shift+Enter` and no file is written; after it the file has only `[main] prepend_keymap` with `<C-S-Enter>` and `run = "notes"`, the chip has a • and "Default: n" under it, and `Ctrl+Shift+Enter` in the inbox opens the notifications |
+| 37.4 | Press ＋ on any row and press `F1`, then `Esc`; press ＋ again and `Esc` | `F1` does not open the key list while a key is taken; a line says minato reads `F1` itself; `Esc` gives the key up and the settings stay open; a second `Esc` with nothing taken closes them |
+| 37.5 | Press × on the `n` chip of "Notifications", then ↺ on the row | After × the file has `{ on = "n", run = "none" }` and `n` does nothing in the inbox; after ↺ the row is back to `n` alone and the file has no line about it left |

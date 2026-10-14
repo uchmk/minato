@@ -27,6 +27,9 @@ const LAYERS: [Layer; 7] = [
 
 pub const SPEC: Spec = Spec { layers: &LAYERS, ignored: &[], defaults: DEFAULTS };
 
+/// The command that does nothing: a built-in key taken away.
+pub const NOOP: &str = "none";
+
 /// Keys read before the keymap is (`main.rs`): bound in it, they never run.
 const FIXED: [&str; 8] = ["<Esc>", "<F1>", "<F5>", "<C-,>", "<C-S-p>", "<C-=>", "<C-->", "<C-0>"];
 
@@ -125,7 +128,7 @@ fn belongs(name: &str, layer: &str) -> bool {
 /// Read one `run` string.
 fn command(text: &str, warnings: &mut Vec<String>) -> Option<Cmd> {
     let name = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if name == "none" {
+    if name == NOOP {
         return Some(Cmd::None);
     }
     match ACTIONS.iter().find(|(n, _, _)| *n == name) {
@@ -151,6 +154,9 @@ pub struct Keys {
     main: Vec<Binding<Cmd>>,
     views: [Vec<Binding<Cmd>>; 5],
     notes: Vec<Binding<Cmd>>,
+    /// Each layer's own bindings, in [`SPEC`]'s order: what the settings
+    /// screen's Keys page lists.
+    layers: Vec<(String, Vec<Binding<Cmd>>)>,
 }
 
 impl Default for Keys {
@@ -169,7 +175,7 @@ impl Keys {
         let mut take = |layer: &str| {
             let mut b = km.take(layer);
             b.retain(|b| {
-                if let Some(k) = b.on.iter().find(|k| FIXED.iter().any(|f| Key::parse(f).as_ref() == Some(*k))) {
+                if let Some(k) = Self::fixed(&b.on) {
                     warnings.push(format!("{}: [{layer}] `{k}` is fixed and cannot be bound", b.from));
                     return false;
                 }
@@ -182,13 +188,15 @@ impl Keys {
             });
             b
         };
-        let main = take("main");
-        let own = |mut b: Vec<Binding<Cmd>>| {
+        let layers: Vec<(String, Vec<Binding<Cmd>>)> = LAYERS.iter().map(|l| (l.name.to_owned(), take(l.name))).collect();
+        let main = layers[0].1.clone();
+        let own = |k: usize| {
+            let mut b = layers[k].1.clone();
             b.extend(main.iter().cloned());
             b
         };
-        let views = [own(take("inbox")), own(take("list")), own(take("actions")), own(take("board")), own(take("status"))];
-        let notes = own(take("notes"));
+        let views = [own(1), own(2), own(3), own(4), own(5)];
+        let notes = own(6);
         // A key of a view's section in front of [main]'s chords that start
         // with it: there those chords can no longer be pressed.
         let sections = ["inbox", "list", "actions", "board", "status", "notes"];
@@ -202,7 +210,24 @@ impl Keys {
                 }
             }
         }
-        (Self { main, views, notes }, warnings)
+        (Self { main, views, notes, layers }, warnings)
+    }
+
+    /// Each layer's own bindings, by name in [`SPEC`]'s order.
+    pub fn layers(&self) -> &[(String, Vec<Binding<Cmd>>)] {
+        &self.layers
+    }
+
+    /// The built-in keys alone, layer by layer, read once.
+    pub fn built_in_layers() -> &'static [(String, Vec<Binding<Cmd>>)] {
+        static BUILT_IN: std::sync::OnceLock<Vec<(String, Vec<Binding<Cmd>>)>> = std::sync::OnceLock::new();
+        BUILT_IN.get_or_init(|| Self::load(None).0.layers)
+    }
+
+    /// Whether `keys` hold one that minato reads before the keymap (Esc, F1,
+    /// F5, the settings, the palette, the size): bound, it never runs.
+    pub fn fixed(keys: &[Key]) -> Option<&Key> {
+        keys.iter().find(|k| FIXED.iter().any(|f| Key::parse(f).as_ref() == Some(*k)))
     }
 
     /// The bindings read in `ctx`, the first that matches winning.
@@ -297,6 +322,19 @@ mod tests {
                 .any(|c| k.bindings(c).iter().any(|b| b.run == [Cmd::Run(name)]));
             assert!(bound, "{name}");
         }
+    }
+
+    #[test]
+    fn layers_follow_the_spec_and_the_defaults_stay_built_in() {
+        let (k, _) = keys(
+            r#"[main]
+prepend_keymap = [{ on = "<F2>", run = "notes" }]"#,
+        );
+        let names: Vec<&str> = k.layers().iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["main", "inbox", "list", "actions", "board", "status", "notes"]);
+        assert_eq!(k.layers()[0].1.len(), Keys::built_in_layers()[0].1.len() + 1);
+        assert_eq!(Keys::fixed(&[Key::parse("<F1>").unwrap()]), Key::parse("<F1>").as_ref());
+        assert_eq!(Keys::fixed(&[Key::parse("<F2>").unwrap()]), None);
     }
 
     #[test]

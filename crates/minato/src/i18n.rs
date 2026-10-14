@@ -363,6 +363,11 @@ const EN: &[(&str, &str)] = &[
     ("watch.finished", "Run finished"),
     ("watch.failed", "Run failed"),
     ("watch.cancelled", "Run cancelled"),
+    ("settings.keys", "Keys"),
+    ("settings.keys_lead", "Each operation's keys. Press a key to change one, ↺ to put the built-in ones back. Only what you change is written to keymap.toml."),
+    ("keys.main", "Everywhere"),
+    ("keys.notes", "Notifications"),
+    ("keys.fixed", "minato reads {} itself: bound here, it never runs."),
     ("settings.notify", "Notifications"),
     ("settings.notify_lead", "How minato tells you that a run watched with w has ended. minato's own window says it too, always."),
     ("settings.notify_when", "When to tell"),
@@ -780,6 +785,11 @@ const JA: &[(&str, &str)] = &[
     ("watch.finished", "実行が終わりました"),
     ("watch.failed", "実行が失敗しました"),
     ("watch.cancelled", "実行が取り消されました"),
+    ("settings.keys", "キー"),
+    ("settings.keys_lead", "操作ごとのキー。キーを押して変え、↺ で既定に戻します。keymap.toml には変えた分だけを書きます。"),
+    ("keys.main", "どこでも"),
+    ("keys.notes", "通知"),
+    ("keys.fixed", "{} は minato が先に読むので、ここに割り当てても動きません。"),
     ("settings.notify", "通知"),
     ("settings.notify_lead", "w で見張った実行が終わったときの知らせ方。minato の窓の中の知らせはいつも出ます。"),
     ("settings.notify_when", "知らせるとき"),
@@ -830,6 +840,68 @@ const JA: &[(&str, &str)] = &[
     ("owner.dropped", "{} のものの表示をやめました"),
 ];
 
+/// The built-in keymap's `desc`s in Japanese, for the Keys page.
+const DESC_JA: &[(&str, &str)] = &[
+    ("Inbox", "受信箱"),
+    ("List", "一覧"),
+    ("Actions", "Actions"),
+    ("Board", "ボード"),
+    ("Status", "状況"),
+    ("Next view", "次のビュー"),
+    ("Previous view", "前のビュー"),
+    ("Down", "下へ"),
+    ("Up", "上へ"),
+    ("Column to the left", "左の列へ"),
+    ("Column to the right", "右の列へ"),
+    ("First", "先頭へ"),
+    ("Last", "末尾へ"),
+    ("Open or choose", "開く・選ぶ"),
+    ("Open in the browser", "ブラウザで開く"),
+    ("Open in the system's browser", "OS のブラウザで開く"),
+    ("Copy the link", "リンクをコピー"),
+    ("Undo", "取り消す"),
+    ("Notifications", "通知"),
+    ("Switch the owner", "見る相手を切り替える"),
+    ("Settings", "設定"),
+    ("List of keys", "キーの一覧"),
+    ("Details", "詳しく"),
+    ("Reply", "返信"),
+    ("New issue", "新しい issue"),
+    ("Repository settings", "リポジトリの設定"),
+    ("Mark as answered", "答えた印を付ける"),
+    ("Done", "済み"),
+    ("Later", "あとで"),
+    ("Merge", "マージ"),
+    ("Close", "閉じる"),
+    ("Close or reopen", "閉じる・開き直す"),
+    ("Assign to me", "自分に振る"),
+    ("Copy a prompt for Claude", "Claude への頼みをコピー"),
+    ("Filter by status", "状態で絞る"),
+    ("Filter by repository", "リポジトリで絞る"),
+    ("Filter by tag", "タグで絞る"),
+    ("Find", "検索"),
+    ("Choose", "選ぶ"),
+    ("Show the closed ones", "閉じたものも出す"),
+    ("Watch the run", "実行を見張る"),
+    ("Re-run the failed jobs", "失敗したジョブを再実行"),
+    ("Stop the run", "実行を止める"),
+    ("Run the workflow", "workflow を実行"),
+    ("The failed job's page", "失敗したジョブのページ"),
+    ("The failed job's log", "失敗したジョブのログ"),
+    ("The pull request", "プルリクエスト"),
+    ("Move the card left", "カードを左へ"),
+    ("Move the card right", "カードを右へ"),
+    ("Mark as read", "既読にする"),
+    ("Mark all as read", "全部を既読にする"),
+];
+
+/// A keymap `desc` in `lang`: the built-in ones have Japanese; the rest
+/// (the user's own) come back as they are.
+pub fn desc(lang: &str, d: &str) -> String {
+    let ja = (lang == "ja").then(|| DESC_JA.iter().find(|(en, _)| *en == d)).flatten();
+    ja.map_or_else(|| d.to_owned(), |(_, j)| (*j).to_owned())
+}
+
 /// The language codes minato has words for.
 pub const AVAILABLE: [&str; 2] = ["en", "ja"];
 
@@ -850,6 +922,17 @@ mod tests {
             t.iter().map(|(k, _)| *k).collect()
         }
         assert_eq!(keys(EN), keys(JA));
+    }
+
+    #[test]
+    fn every_built_in_desc_has_japanese() {
+        for (layer, list) in crate::keymap::Keys::built_in_layers() {
+            for b in list {
+                assert!(!b.desc.is_empty(), "[{layer}] {}", b.raw);
+                assert!(DESC_JA.iter().any(|(en, _)| *en == b.desc), "[{layer}] {}", b.desc);
+                assert_eq!(desc("en", &b.desc), b.desc);
+            }
+        }
     }
 
     #[test]

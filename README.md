@@ -17,8 +17,9 @@ comes from `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token`. The screens were
 agreed on an HTML mock first: open [docs/mock/minato.html](docs/mock/minato.html)
 in a browser and press `?` for the keys. What the mock settles is written down
 in [docs/design.md](docs/design.md); what is left, in [TODO.md](TODO.md).
-The keys can be changed in `keymap.toml` in the `uchmk/minato` config folder,
-the same way as in kura, yagura and tsumugi.
+The keys can be changed on the Keys page of the settings (`,`), or in
+`keymap.toml` in the `uchmk/minato` config folder, the same way as in kura,
+yagura and tsumugi.
 
 ## What it looks like
 

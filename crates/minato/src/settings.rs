@@ -1,9 +1,9 @@
 //! The settings screen (`,`): `ito-prefs` draws the nav and the cards, and
 //! the rows common to every uchmk app (the language, the size, the clock,
-//! the theme) write common.toml. minato's own are on the Notifications
-//! page (how a watched run's end is told) and the Views page (whose
+//! the theme) write common.toml. minato's own are on the Views page (whose
 //! repositories, the inbox rules, the saved searches, the writing box's
-//! fields).
+//! fields), the Keys page (each operation's keys, written to keymap.toml) and
+//! the Notifications page (how a watched run's end is told).
 
 use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
 use ito_common::{themes_dir, CommonChange};
@@ -14,8 +14,20 @@ use crate::app::{App, Hook, Ring};
 
 const GENERAL: usize = 0;
 const THEME: usize = 1;
-const NOTIFY: usize = 2;
-const VIEWS: usize = 3;
+const VIEWS: usize = 2;
+const KEYS: usize = 3;
+const NOTIFY: usize = 4;
+
+/// The keymap's layers and the words that name them on the Keys page.
+const LAYERS: [(&str, &str); 7] = [
+    ("main", "keys.main"),
+    ("inbox", "view.inbox"),
+    ("list", "view.list"),
+    ("actions", "view.actions"),
+    ("board", "view.board"),
+    ("status", "view.status"),
+    ("notes", "keys.notes"),
+];
 
 /// The words of the Notifications page, for the search.
 const NOTIFY_WORDS: [&str; 12] = [
@@ -36,6 +48,8 @@ const NOTIFY_WORDS: [&str; 12] = [
 /// The rows on each page, for the search.
 fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
     let notify = NOTIFY_WORDS.iter().map(|k| (NOTIFY, crate::i18n::tr(lang, k)));
+    let keys = ito_prefs::keys_index(ito_prefs::KeyWords::of(lang)).into_iter().map(|t| (KEYS, t));
+    let layers = LAYERS.iter().map(|(_, k)| (KEYS, crate::i18n::tr(lang, k)));
     vec![
         (GENERAL, w.language),
         (GENERAL, w.scale),
@@ -54,20 +68,26 @@ fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
         (THEME, "theme"),
         (THEME, "dark_theme"),
         (THEME, "light_theme"),
+        (KEYS, "keymap.toml"),
+        (KEYS, "prepend_keymap"),
     ]
     .into_iter()
     .chain(notify)
+    .chain(keys)
+    .chain(layers)
     .collect()
 }
 
 pub fn show(ui: &mut Ui, app: &mut App) {
     let w = Words::of(&app.lang);
-    let keys = ito_prefs::Keys::standard(ui, false);
+    // While a key is being set the page takes every key, Esc included.
+    let keys = if app.prefs.keys_edit.busy() { ito_prefs::Keys::default() } else { ito_prefs::Keys::standard(ui, false) };
     let pages = [
         (app.tr("settings.general"), app.tr("settings.general_lead")),
         (app.tr("settings.theme"), app.tr("settings.theme_lead")),
-        (app.tr("settings.notify"), app.tr("settings.notify_lead")),
         (app.tr("settings.views"), app.tr("settings.views_lead")),
+        (app.tr("settings.keys"), app.tr("settings.keys_lead")),
+        (app.tr("settings.notify"), app.tr("settings.notify_lead")),
     ];
     let index = index(w, &app.lang);
     let nav = ito_prefs::Nav { pages: &pages, index: &index, words: w, file: "common.toml" };
@@ -75,7 +95,13 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let lang = app.lang.clone();
     let tr = |k: &'static str| crate::i18n::tr(&lang, k);
     let me = app.viewer.clone().unwrap_or_default();
+    let layers = app.keys.layers().to_vec();
+    let kw = ito_prefs::KeyWords::of(&lang);
+    let own =
+        app.prefs.base.as_deref().map_or_else(|| crate::keymap::FILE.to_owned(), |b| crate::prefs::keymap_path(b).display().to_string());
+    let mut key_edits = Vec::new();
     let prefs = &mut app.prefs;
+    let keys_edit = &mut prefs.keys_edit;
     let before = app.settings.clone();
     let st = &mut app.settings;
     let scope_text = &mut app.scope_text;
@@ -106,6 +132,26 @@ pub fn show(ui: &mut Ui, app: &mut App) {
             }));
         }
         NOTIFY => test = notify_page(ui, l, &tr, &mut st.notify, drafts),
+        KEYS => {
+            let layer_name = |n: &str| LAYERS.iter().find(|(id, _)| *id == n).map_or_else(|| n.to_owned(), |(_, k)| tr(k).to_owned());
+            let desc = |d: &str| crate::i18n::desc(&lang, d);
+            // Keys minato reads before the keymap: bound, they never run.
+            let extra = |_: &str, on: &[ito_keys::Key]| -> Vec<String> {
+                crate::keymap::Keys::fixed(on).map(|k| tr("keys.fixed").replace("{}", &k.human())).into_iter().collect()
+            };
+            let table = ito_prefs::KeyTable {
+                now: &layers,
+                built_in: crate::keymap::Keys::built_in_layers(),
+                noop: crate::keymap::NOOP,
+                own: &own,
+                layer_name: &layer_name,
+                tr: &desc,
+                extra: &extra,
+                unbound: &[],
+                sup: false,
+            };
+            key_edits.extend(ito_prefs::keys_page(ui, l, kw, &table, keys_edit).unwrap_or_default());
+        }
         VIEWS => {
             section(ui, l, tr("settings.scope"), |ui| {
                 let rows = [("settings.owner", "settings.owner_note", me.as_str()), ("settings.project", "settings.project_note", "")];
@@ -212,7 +258,13 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
         app.prefs.open_common(no_folder);
     }
+    // Gone to another page: the keys stop being taken for this one.
+    if app.prefs.state.page != KEYS {
+        app.prefs.keys_edit.capture = None;
+        app.prefs.keys_edit.listening = false;
+    }
     let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
+    app.prefs.keymap_edit(key_edits, no_folder);
     app.prefs.common_change(asked, no_folder);
 }
 
@@ -371,4 +423,85 @@ fn preview(ui: &mut Ui, sample: &str, tabs: [&str; 4], runs: [&str; 3]) {
         }
     }
     p.circle_filled(egui::pos2(inner.right() - 8.0, inner.top() + 8.0), 4.0, c.done);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{pos2, Rect};
+
+    /// The Keys page takes the keys pressed while a key is being set (Esc
+    /// and Enter included, which would close the screen), and writes only
+    /// the key set to keymap.toml once Enter sets it.
+    #[test]
+    fn the_keys_page_takes_a_key_and_writes_it_on_enter() {
+        let dir = std::env::temp_dir().join(format!("minato-settings-keys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut a = App::new(crate::prefs::Prefs::empty());
+        a.prefs.base = Some(dir.clone());
+        a.prefs.state.page = KEYS;
+        let ctx = egui::Context::default();
+        let mut time = 0.0;
+        let mut frame = |a: &mut App, events: Vec<egui::Event>| {
+            time += 0.1;
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(1200.0, 800.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| show(ui, a));
+            });
+            out.textures_delta.clear();
+        };
+        let key = |key, modifiers, pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+        let mut press = |a: &mut App, k, m| {
+            frame(a, vec![key(k, m, true)]);
+            frame(a, vec![key(k, m, false)]);
+        };
+        let start = |a: &mut App| {
+            a.prefs.keys_edit.capture =
+                Some(ito_prefs::Capture { layer: "main".into(), run: "notes".into(), keys: Vec::new(), replace: None });
+        };
+        let file = crate::prefs::keymap_path(&dir);
+        // Esc gives up the key, and the screen stays open.
+        start(&mut a);
+        press(&mut a, egui::Key::Escape, egui::Modifiers::NONE);
+        assert!(a.prefs.keys_edit.capture.is_none(), "Esc gave the key up");
+        // Ctrl+Shift+Enter is a key; nothing is written before Enter.
+        start(&mut a);
+        let cs = egui::Modifiers { ctrl: true, shift: true, command: true, ..Default::default() };
+        press(&mut a, egui::Key::Enter, cs);
+        assert!(!file.exists(), "a key pressed is not written yet");
+        assert_eq!(a.prefs.keys_edit.capture.as_ref().map(|c| c.keys.len()), Some(1), "{:?}", a.prefs.keys_edit.capture);
+        press(&mut a, egui::Key::Enter, egui::Modifiers::NONE);
+        let mut text = String::new();
+        for _ in 0..500 {
+            text = std::fs::read_to_string(&file).unwrap_or_default();
+            if text.contains("notes") {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(text.contains("<C-S-Enter>") && text.contains(r#"run = "notes""#) && text.contains("prepend_keymap"), "{text}");
+        assert!(!text.contains("none") && !text.contains("down"), "only the key set is written: {text}");
+        // Taking keys, then gone to another page: the keys stop being taken.
+        start(&mut a);
+        a.prefs.keys_edit.listening = true;
+        a.prefs.state.page = NOTIFY;
+        frame(&mut a, Vec::new());
+        assert!(!a.prefs.keys_edit.busy(), "another page takes no keys for the Keys page");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The Keys page's words are found by the search.
+    #[test]
+    fn the_search_finds_the_keys_page() {
+        let w = Words::of("en");
+        let idx = index(w, "en");
+        assert!(idx.iter().any(|(p, t)| *p == KEYS && *t == "keymap.toml"));
+        assert!(idx.iter().any(|(p, t)| *p == KEYS && *t == "Everywhere"));
+    }
 }

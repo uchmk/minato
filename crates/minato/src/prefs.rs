@@ -40,6 +40,21 @@ fn read_keymap(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
+/// Make `edits` in the keymap.toml at `path` (none yet is an empty one),
+/// written only when that changes it. Call it off the UI thread.
+pub fn write_keymap(path: &Path, edits: &[ito_keymap::Edit]) -> Result<(), String> {
+    // Two pages' worth of keys set fast: the second reads what the first wrote.
+    static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+    let at = |e: String| format!("{}: {e}", path.display());
+    let text = read_keymap(path)?.unwrap_or_default();
+    let new = ito_keymap::edit(&text, &crate::keymap::SPEC, edits, crate::keymap::NOOP).map_err(at)?;
+    if new != text {
+        write_atomic(path, &new).map_err(at)?;
+    }
+    Ok(())
+}
+
 pub struct Prefs {
     /// The `uchmk` folder; `None` when the OS has no config directory.
     pub base: Option<PathBuf>,
@@ -60,6 +75,8 @@ pub struct Prefs {
     /// made again from [`Prefs::keymap`]), `Some(Some(why))` when it could
     /// not be (to be said; the keys stay).
     pub keymap_new: Option<Option<String>>,
+    /// The Keys page's search and the keys it is taking.
+    pub keys_edit: ito_prefs::KeysEdit,
     tx: Sender<Reload>,
     rx: Receiver<Reload>,
     wake: Option<egui::Context>,
@@ -87,6 +104,7 @@ impl Prefs {
             failed: None,
             keymap: None,
             keymap_new: None,
+            keys_edit: ito_prefs::KeysEdit::default(),
             tx,
             rx,
             wake: None,
@@ -235,6 +253,27 @@ impl Prefs {
         let _ = tx.send(s);
     }
 
+    /// Make the Keys page's `edits` in keymap.toml on a thread (only what
+    /// differs from the built-in keys is written), then read it again.
+    pub fn keymap_edit(&self, edits: Vec<ito_keymap::Edit>, no_folder: &str) {
+        if edits.is_empty() {
+            return;
+        }
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        let Some(base) = self.base.clone() else {
+            Self::send_back(&tx, &wake, Reload::Failed(no_folder.into()));
+            return;
+        };
+        std::thread::spawn(move || {
+            let path = keymap_path(&base);
+            let r = match write_keymap(&path, &edits) {
+                Ok(()) => Reload::Keymap(read_keymap(&path)),
+                Err(e) => Reload::Failed(e),
+            };
+            Self::send_back(&tx, &wake, r);
+        });
+    }
+
     /// Open common.toml (made empty first when there is none) with what the
     /// OS opens it with, on a thread.
     pub fn open_common(&self, no_folder: &str) {
@@ -293,4 +332,44 @@ fn open_path(path: &Path) -> Result<(), String> {
     // explorer answers 1 even when it opened the file, so only a failure to
     // start it is said.
     opener().arg(path).status().map(drop).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ito_keymap::Edit;
+    use ito_keys::Key;
+
+    fn on(t: &str) -> Vec<Key> {
+        t.split_whitespace().map(|k| Key::parse(k).unwrap()).collect()
+    }
+
+    /// Only what is changed is written; put back, nothing of it stays.
+    #[test]
+    fn the_keymap_gets_only_the_changes() {
+        let dir = std::env::temp_dir().join(format!("minato-keymap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = keymap_path(&dir);
+        let add = Edit::Add { layer: "main".into(), on: on("<C-S-Enter>"), run: "notes".into(), desc: "Notifications".into() };
+        let reset = Edit::Reset { layer: "main".into(), run: "notes".into() };
+        // Added then put back in one go: no file is made.
+        write_keymap(&path, &[add.clone(), reset.clone()]).unwrap();
+        assert!(!path.exists());
+        write_keymap(&path, &[add]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("<C-S-Enter>") && text.contains("prepend_keymap") && !text.contains("down"), "{text}");
+        // A built-in key taken away is a `none` in front of it.
+        write_keymap(&path, &[Edit::Remove { layer: "main".into(), on: on("n"), run: "notes".into() }]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#"run = "none""#), "{text}");
+        let (k, warnings) = crate::keymap::Keys::load(Some(("keymap.toml", &text)));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let notes: Vec<_> = k.layers()[0].1.iter().filter(|b| b.raw == "notes").map(|b| b.on.clone()).collect();
+        assert!(notes.contains(&on("<C-S-Enter>")), "{notes:?}");
+        write_keymap(&path, &[reset]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("notes") && !text.contains("none"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
