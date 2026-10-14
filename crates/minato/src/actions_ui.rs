@@ -195,7 +195,8 @@ fn runs_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         if resp.clicked() {
             out.click = Some(Click::ActRun(k));
         }
-        run_row(&p, run, row, k == sel, resp.hovered(), now);
+        let watched = app.watched.contains(&run.id).then(|| app.tr("run.watched"));
+        run_row(&p, run, row, k == sel, resp.hovered(), now, watched);
         y += ROW_FULL;
     }
     if f.below > 0 {
@@ -216,7 +217,7 @@ fn query(app: &App) -> String {
         q.push(format!("workflow:\"{w}\""));
     }
     if q.is_empty() {
-        q.push(format!("user:{}", app.owner().unwrap_or("")));
+        q.push(minato_core::list::users(&app.owners_shown()));
     }
     q.join(" ")
 }
@@ -230,8 +231,9 @@ fn ago(iso: &str, now: i64) -> String {
 }
 
 /// One run: its state's mark; the title; the workflow, the event and the
-/// branch; where, who and when; the duration at the right.
-fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64) {
+/// branch; where, who and when; the duration at the right, and the `w` mark
+/// under it while the run is watched.
+fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64, watched: Option<&str>) {
     let c = ito_theme::colors();
     if on {
         p.rect_filled(row, 0.0, style::sel());
@@ -257,6 +259,10 @@ fn run_row(p: &Painter, run: &Run, row: Rect, on: bool, hover: bool, now: i64) {
     let g = style::truncated(&p, format!("{}  · {}", run.event, run.branch), FontId::monospace(11.0), c.dim, rx - wx);
     p.galley(pos2(wx, y2 - g.size().y / 2.0), g, c.dim);
     let y3 = y2 + 9.0 + 3.0 + 8.0;
+    let right = match watched {
+        Some(w) => p.text(pos2(right, y3), Align2::RIGHT_CENTER, format!("◉ {w}"), FontId::proportional(11.5), ACCENT).left() - 8.0,
+        None => right,
+    };
     let g = style::truncated(
         &p,
         format!("{} · #{} · {} · {}", run.repo, run.number, run.actor, ago(&run.started_at, now)),

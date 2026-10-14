@@ -97,7 +97,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                     });
                     if done && k == 0 {
                         st.set_owner(&scope_text[0]);
-                        scope_text[0] = st.owner.clone();
+                        scope_text[0] = st.owners_line();
                     } else if done {
                         st.project = scope_text[1].trim().to_string();
                     }

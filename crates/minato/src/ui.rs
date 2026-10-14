@@ -172,6 +172,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         _ if app.view == View::List => crate::list_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
+        _ if app.view == View::Status => crate::status_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
     }
     if let Some(page) = page {
@@ -264,7 +265,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
             "{hover}
 {}: {}",
             app.tr("account.showing"),
-            app.settings.owner
+            app.settings.owners_line()
         );
     }
     resp.on_hover_text(hover);
@@ -302,6 +303,9 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         x += 4.0;
     }
     let labels = x + full <= room || x + short > room;
+    // A lane in trouble lights a dot on the status tab, seen from any view.
+    let now = crate::app::now_epoch();
+    let lane_bad = minato_core::overview::lanes(&app.items).iter().any(|l| l.health(now) == minato_core::overview::Health::Bad);
     for (v, digit, text) in tabs {
         let on = app.is_on(v);
         let text = (labels || on).then_some(text);
@@ -317,6 +321,9 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         p.galley(pos2(tab.left() + 10.0, mid - digit.size().y / 2.0), digit.clone(), dc);
         if let Some(text) = text {
             p.galley(pos2(tab.left() + 10.0 + digit.size().x + 6.0, mid - text.size().y / 2.0), text, tc);
+        }
+        if v == View::Status && lane_bad {
+            crate::style::dot(&p, pos2(tab.right() - 5.0, tab.top() + 6.0), 3.0, crate::style::BAD);
         }
         if resp.clicked() {
             out.view = Some(v);

@@ -11,7 +11,7 @@
 
 ## 1. Window and title bar
 
-- [x] **1.1** Start `minato` → A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board`, a palette field in the middle, the bell, the account mark and three window buttons on the right
+- [ ] **1.1** Start `minato` → A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board` `5 Status`, a palette field in the middle, the bell, the account mark and three window buttons on the right
 - [x] **1.2** Drag the empty part of the title bar → The window moves; double-click maximises and restores
 - [x] **1.3** Click minimise, maximise, close → Each does what it says; close shows a red button under the pointer
 - [x] **1.4** Drag each edge and corner → The window resizes with the matching pointer; nothing resizes while maximised
@@ -20,7 +20,7 @@
 
 ## 2. Views and keys
 
-- [x] **2.1** Press `1`, `2`, `3`, `4` → The matching tab lights with an underline and the empty view's name and text change
+- [ ] **2.1** Press `1`, `2`, `3`, `4`, `5` → The matching tab lights with an underline and the empty view's name and text change
 - [x] **2.2** Click each tab → Same as the digit
 - [x] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open
 - [x] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
@@ -94,7 +94,7 @@
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [x] **8.11** Press `a` on an issue → You are assigned; a toast says so
 - [x] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
-- [x] **8.12** While the box is open, press `1`..`4` and letters → They are typed into the field; the views do not change
+- [ ] **8.12** While the box is open, press `1`..`5` and letters → They are typed into the field; the views do not change
 - [x] **8.13** Press `r`, then click the Labels chip above the box; click two labels, then click outside the panel → The chip's border lights under the pointer; the click opens the labels picker as `Alt+L` does; each click ticks a row; the outside click closes it and a toast says the labels were updated
 - [x] **8.14** Click the Assignees chip, then without pressing `r` first click the Status chip of an item in the Project and click a Status → Assignees opens its picker (the box opens with it); the Status picker writes the choice at once on the click and closes; a toast says so
 - [x] **8.15** With a picker open, click Comment or Close in the box's footer → The picker's change is written first, then the comment is sent (or the item closed)
@@ -148,7 +148,7 @@
 - [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the pointer is a hand over the button; the button marks every row read
 - [x] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
 - [x] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
-- [x] **11.8** Type `board` → No line opens a view: the views are on `1`–`4` and the tabs (see 27.6)
+- [ ] **11.8** Type `board` → No line opens a view: the views are on `1`–`5` and the tabs (see 27.6)
 - [x] **11.9** Press `Esc`, and `Ctrl+Shift+P` twice → The palette closes; the second press closes it again
 
 ## 12. Dispatch form, job log and needs graph
@@ -368,3 +368,13 @@
 - [ ] **33.2** Press `@` → The palette opens with `@` typed and the cursor after it (typing `rust-lang` gives `@rust-lang`, not `@@`); a line `@rust-lang` "show this owner's repositories" is offered
 - [ ] **33.3** Pick `@rust-lang` with `Enter` → A toast says rust-lang's repositories are shown; within a minute the list, Actions and the board follow rust-lang; the settings' owner field says `rust-lang`
 - [ ] **33.4** Press `@` again, pick the line with your login ("you: your own repositories"); press `@` once more → Your own repositories come back and the settings' owner field is empty; the last palette offers `@rust-lang` (kept, up to 8 owners, the latest first, also after a restart)
+
+## 34. Status view, watching runs, copying links, several owners and PR files
+
+- [ ] **34.1** Press `5` → The Status view shows three sections with the owner on the right of the heading: Lanes (one line per `Lane status:` issue, a green, yellow or red dot, the time since its last firing, "N failed in a row" or "stalled" when so), Releases (per repository of the runs: the tag, the number of files, "⚠ no SHA-256 table" when it has files and the notes lack it (not for ito, which has none), the age and "N commits since" lit when 1 or more) and Waiting on you (`needs-pc`, `question`, `lane-review` items). When it does not fit, it folds; no scrollbar shows
+- [ ] **34.2** In Status press `j` `k`, `Enter` on a lane and on a waiting item, `o`, `O`, `y`; click a line, double-click one → `j` `k` move the light and stop at the ends; `Enter` on a lane or a release opens it in the browser, on an item shows it in the list; `o` opens the built-in browser, `O` the system one; `y` copies the link with a toast; a click picks a line, a double click opens it
+- [ ] **34.3** Have a lane stalled or failing (or wait for one), look at the tabs from another view → The tab `5 Status` has a red dot; it goes when every lane is well
+- [ ] **34.4** In Actions select a running run and press `w`; wait until it ends; then `w` on an ended run, and `w` twice on a running one → The run's third line shows "◉ watching" on the right; when it ends a system toast says "Run finished" or "Run failed" with the repository, workflow and title, and a sound plays (none in the quiet time); on an ended run a toast says it has already ended; the second `w` stops watching. The keybar shows `w` only on a running or watched run
+- [ ] **34.5** Press `y` in the inbox, the list, Actions, the board and Status → Each copies the link of what is selected (item, run, card, line) to the clipboard with a toast "Link copied"; pasting it gives the GitHub page
+- [ ] **34.6** Open the palette and type `+@rust-lang`, `Enter`; then `-@rust-lang`, `Enter`; then type `uchmk, rust-lang` into the settings' owner field → After the first, a toast says rust-lang's are shown too; within a minute the list, the inbox and Actions show rust-lang's items and runs beside yours (your own items all stay, and the status view keeps your lanes), the board stays yours, the account mark's hover and the settings' owner field say `uchmk, rust-lang`. The second takes them away again. The settings field does the same as the first
+- [ ] **34.7** Select a PR in the list and wait for its detail → A section "Files changed (N)" lists up to 15 paths with `+added` in green and `−removed` in red, then "and N more" when there are more

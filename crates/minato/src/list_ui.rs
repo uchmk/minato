@@ -204,7 +204,8 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let q = Rect::from_min_max(pos2(head.left() + 12.0, head.center().y - 11.0), pos2(n.left() - 8.0, head.center().y + 11.0));
     p.rect_filled(q, CornerRadius::same(6), c.bg);
     p.rect_stroke(q, CornerRadius::same(6), Stroke::new(1.0, c.border), StrokeKind::Inside);
-    let owner = app.owner().unwrap_or("");
+    let owners = app.owners_shown();
+    let owner = owners.as_str();
     let filter = || {
         let q = app.list.filter.query(owner);
         if app.show_closed {

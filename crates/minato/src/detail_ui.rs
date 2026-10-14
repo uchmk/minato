@@ -249,6 +249,9 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
             y = style::check_row(p, x, y, w, mark, color, &ch.name, "") + 2.0;
         }
     }
+    if !d.files.is_empty() {
+        y = files(p, app, d, x, y, w);
+    }
     if !d.body.trim().is_empty() {
         y = style::heading(p, x, y, app.tr("detail.body"));
         let md = crate::md_ui::layout_lit(p, &d.body, w, BODY, app.lit());
@@ -288,6 +291,33 @@ fn sections(p: &Painter, app: &App, item: &Item, x: f32, y: f32, w: f32) -> f32 
         y += 12.0;
     }
     p.set(line, egui::Shape::rect_filled(Rect::from_min_max(pos2(x + 5.0, top + 8.0), pos2(x + 7.0, last)), 0.0, c.border));
+    y
+}
+
+/// The most changed files a pull request's detail lists.
+const FILES_SHOWN: usize = 15;
+
+/// A pull request's changed files: the path, and the lines added and taken
+/// out at the right; how many more past the first ones.
+fn files(p: &Painter, app: &App, d: &minato_core::list::Detail, x: f32, y: f32, w: f32) -> f32 {
+    let c = ito_theme::colors();
+    let total = (d.files_total as usize).max(d.files.len());
+    let mut y = style::heading(p, x, y, &app.tr("detail.files").replace("{}", &total.to_string()));
+    for f in d.files.iter().take(FILES_SHOWN) {
+        let mid = y + 11.0;
+        let del = p.text(pos2(x + w - 6.0, mid), Align2::RIGHT_CENTER, format!("−{}", f.deletions), FontId::monospace(12.0), style::BAD);
+        let add =
+            p.text(pos2(del.left() - 8.0, mid), Align2::RIGHT_CENTER, format!("+{}", f.additions), FontId::monospace(12.0), style::OK);
+        let g = style::truncated(p, f.path.clone(), FontId::monospace(12.5), c.fg, add.left() - 12.0 - (x + 10.0));
+        p.galley(pos2(x + 10.0, mid - g.size().y / 2.0), g, c.fg);
+        y += 22.0;
+    }
+    let more = total.saturating_sub(d.files.len().min(FILES_SHOWN));
+    if more > 0 {
+        let words = app.tr("detail.files_more").replace("{}", &more.to_string());
+        p.text(pos2(x + 10.0, y + 10.0), Align2::LEFT_CENTER, words, FontId::proportional(12.5), c.dim);
+        y += 22.0;
+    }
     y
 }
 

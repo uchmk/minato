@@ -22,6 +22,7 @@ mod overlay;
 mod overlay_ui;
 mod prefs;
 mod settings;
+mod status_ui;
 mod style;
 mod ui;
 

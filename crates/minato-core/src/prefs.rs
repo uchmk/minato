@@ -20,6 +20,9 @@ pub struct Settings {
     /// The owners shown before (logins, the latest first), for switching
     /// back from the palette; the viewer is not among them.
     pub owners: Vec<String>,
+    /// Other owners shown alongside `owner` (logins; none when `owner` is
+    /// empty): their repositories, items and runs join the owner's.
+    pub also: Vec<String>,
     /// The title of the Project the board shows (the first when none has it).
     pub project: String,
     pub rules: Rules,
@@ -34,6 +37,7 @@ impl Default for Settings {
         Settings {
             owner: String::new(),
             owners: Vec::new(),
+            also: Vec::new(),
             project: crate::board::TITLE.into(),
             rules: Rules::default(),
             fields: [true, true, true, false, false, false],
@@ -44,7 +48,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "owner": self.owner, "owners": self.owners, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
+        json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
@@ -64,6 +68,11 @@ impl Settings {
         if !s.owner.is_empty() && !s.owners.iter().any(|x| x.eq_ignore_ascii_case(&s.owner)) {
             s.owners.insert(0, s.owner.clone());
             s.owners.truncate(OWNERS);
+        }
+        if let Some(list) = v.get("also").and_then(Value::as_array).filter(|_| !s.owner.is_empty()) {
+            for o in list.iter().filter_map(Value::as_str) {
+                s.add_also(o);
+            }
         }
         if let Some(p) = v.get("project").and_then(Value::as_str) {
             s.project = p.trim().to_string();
@@ -92,15 +101,37 @@ impl Settings {
         s
     }
 
-    /// Show `text`'s owner (empty for the viewer); a named one goes to the
-    /// front of the owners shown before.
+    /// Show `text`'s owners (empty for the viewer): logins apart by commas
+    /// or spaces, the first the owner (to the front of the owners shown
+    /// before), the others shown alongside it.
     pub fn set_owner(&mut self, text: &str) {
-        self.owner = login(text);
+        let mut names = text.split([',', ' ', '\t']).map(login).filter(|o| !o.is_empty());
+        self.owner = names.next().unwrap_or_default();
+        self.also.clear();
         if !self.owner.is_empty() {
             self.owners.retain(|x| !x.eq_ignore_ascii_case(&self.owner));
             self.owners.insert(0, self.owner.clone());
             self.owners.truncate(OWNERS);
         }
+        for o in names {
+            self.add_also(&o);
+        }
+    }
+
+    /// Show `text`'s owner alongside the owner (not the owner itself, not
+    /// twice). Whether it was added.
+    pub fn add_also(&mut self, text: &str) -> bool {
+        let o = login(text);
+        if o.is_empty() || o.eq_ignore_ascii_case(&self.owner) || self.also.iter().any(|x| x.eq_ignore_ascii_case(&o)) {
+            return false;
+        }
+        self.also.push(o);
+        true
+    }
+
+    /// The owners as the settings' box shows them: "uchmk, rust-lang".
+    pub fn owners_line(&self) -> String {
+        std::iter::once(&self.owner).chain(&self.also).filter(|o| !o.is_empty()).cloned().collect::<Vec<_>>().join(", ")
     }
 
     /// Move the field at place `at` of the order one place (`-1` up, `1` down).
@@ -165,6 +196,24 @@ mod tests {
         // An owner set before the list existed joins it; doubles and blanks do not.
         let old = Settings::parse(r#"{"owner":"foo","owners":["bar","BAR"," ",""]}"#);
         assert_eq!(old.owners, ["foo", "bar"]);
+    }
+
+    #[test]
+    fn other_owners_are_shown_alongside_the_first() {
+        let mut s = Settings::default();
+        s.set_owner("uchmk, @rust-lang  https://github.com/tokio-rs/ UCHMK,rust-lang");
+        assert_eq!(s.owner, "uchmk");
+        assert_eq!(s.also, ["rust-lang", "tokio-rs"]);
+        assert_eq!(s.owners, ["uchmk"]);
+        assert_eq!(s.owners_line(), "uchmk, rust-lang, tokio-rs");
+        assert_eq!(Settings::parse(&s.to_json()), s);
+        assert!(!s.add_also("Tokio-RS") && !s.add_also("uchmk") && s.add_also("serde-rs"));
+        s.set_owner("rust-lang");
+        assert!(s.also.is_empty());
+        s.set_owner("");
+        assert_eq!(s.owners_line(), "");
+        // No owner, none alongside.
+        assert!(Settings::parse(r#"{"also":["x"]}"#).also.is_empty());
     }
 
     #[test]

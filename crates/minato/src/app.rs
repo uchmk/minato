@@ -15,6 +15,7 @@ use minato_core::inbox::{Card, Group, InboxState, Mark, Rule, Status};
 use minato_core::list::{Detail, Item, Kind, ListState};
 use minato_core::mainci;
 use minato_core::notes::{self, Note, NotesState};
+use minato_core::overview;
 use minato_core::prefs::Settings;
 
 use minato_core::workflow::{self, Workflow};
@@ -24,17 +25,18 @@ use ito_layout::{Dir, Node};
 use crate::overlay::{Form, LogView, Out, Overlay, K};
 use crate::prefs::Prefs;
 
-/// The four views, opened by `1` to `4` (docs/design.md).
+/// The five views, opened by `1` to `5` (docs/design.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum View {
     Inbox,
     List,
     Actions,
     Board,
+    Status,
 }
 
 impl View {
-    pub const ALL: [View; 4] = [View::Inbox, View::List, View::Actions, View::Board];
+    pub const ALL: [View; 5] = [View::Inbox, View::List, View::Actions, View::Board, View::Status];
 
     /// The digit that opens it.
     pub fn digit(self) -> char {
@@ -43,6 +45,7 @@ impl View {
             View::List => '2',
             View::Actions => '3',
             View::Board => '4',
+            View::Status => '5',
         }
     }
 
@@ -65,6 +68,7 @@ impl View {
             View::List => "view.list",
             View::Actions => "view.actions",
             View::Board => "view.board",
+            View::Status => "view.status",
         }
     }
 
@@ -75,6 +79,7 @@ impl View {
             View::List => "empty.list",
             View::Actions => "empty.actions",
             View::Board => "empty.board",
+            View::Status => "empty.status",
         }
     }
 
@@ -97,6 +102,7 @@ impl View {
                 ("a", "key.assign"),
                 ("o", "key.browser"),
                 ("O", "key.outside"),
+                ("y", "key.copy_link"),
                 ("c", "key.prompt"),
                 ("f F t", "key.filter"),
                 ("/", "key.find"),
@@ -115,10 +121,12 @@ impl View {
                 ("i", "key.inbox_add"),
                 ("o", "key.browser"),
                 ("O", "key.outside"),
+                ("y", "key.copy_link"),
                 ("/", "key.find"),
             ],
             View::Actions => &[
                 ("j k", "key.next"),
+                ("w", "key.watch"),
                 ("R", "key.rerun"),
                 ("X", "key.cancel"),
                 ("D", "key.dispatch"),
@@ -127,6 +135,7 @@ impl View {
                 ("p", "run.open_pr"),
                 ("o", "key.browser"),
                 ("O", "key.outside"),
+                ("y", "key.copy_link"),
             ],
             View::Board => &[
                 ("h l", "key.columns"),
@@ -136,14 +145,18 @@ impl View {
                 ("u", "key.undo"),
                 ("o", "key.browser"),
                 ("O", "key.outside"),
+                ("y", "key.copy_link"),
             ],
+            View::Status => {
+                &[("j k", "key.next"), ("Enter", "key.open"), ("o", "key.browser"), ("O", "key.outside"), ("y", "key.copy_link")]
+            }
         }
     }
 }
 
 /// The keys that work in every view.
 pub const GLOBAL_KEYS: [(&str, &str); 11] = [
-    ("1 2 3 4", "key.views"),
+    ("1 2 3 4 5", "key.views"),
     ("Tab S-Tab", "key.cycle"),
     ("gg G", "key.ends"),
     ("Ctrl+,", "key.settings"),
@@ -239,6 +252,9 @@ pub enum Click {
     ActFilter(usize),
     ActRun(usize),
     ActCol(actions::Col),
+    /// A line of the status view (a row of `status_rows`); opened on a
+    /// double click, as `Enter` does.
+    StatusRow(usize, bool),
     /// The writing box's strip under the detail.
     Write,
     /// A button of the box's toolbar.
@@ -274,6 +290,8 @@ pub enum Wheel {
     /// A column of the board.
     Board(usize),
     Notes,
+    /// The status view's lines.
+    Status,
 }
 
 /// What the mouse did in the notifications.
@@ -295,6 +313,10 @@ pub enum Cmd {
     Sync,
     /// Show this owner's repositories (a login; empty for the viewer).
     Owner(String),
+    /// Show this owner's alongside the owner's (a login).
+    AddOwner(String),
+    /// Stop showing this owner's alongside the owner's (a login).
+    DropOwner(String),
     /// The common scale (Ctrl+= Ctrl+- Ctrl+0).
     Scale(ito_common::ScaleTo),
     /// An issue, PR or discussion (its node id).
@@ -431,6 +453,28 @@ pub struct App {
     pub inbox_split: Node<Pane>,
     pub list_split: Node<Pane>,
     pub acts_split: Node<Pane>,
+    /// The runs watched with `w` (ids): a toast and a sound when one ends.
+    pub watched: Vec<u64>,
+    /// The toasts of the system that wait to be shown (the network takes them).
+    pub rings: Vec<Ring>,
+    /// The status view's selection (a row of `status_rows`).
+    pub status_sel: usize,
+    /// The latest release of each repository (`None`: it has none), as GitHub last said.
+    pub shipped: HashMap<String, Option<overview::Shipped>>,
+    /// The commits on the default branch since a repository's latest
+    /// release: the tag they were counted from and how many.
+    pub ahead: HashMap<String, (String, u32)>,
+    /// The repositories whose releases the status view shows (the owners').
+    pub status_repos: Vec<String>,
+}
+
+/// A toast of the system: a watched run ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ring {
+    pub title: String,
+    pub body: String,
+    /// It failed (the louder sound).
+    pub bad: bool,
 }
 
 /// What a confirmation box asks about.
@@ -610,6 +654,12 @@ impl App {
             inbox_split: two(0.31),
             list_split: three(0.165, 0.44),
             acts_split: three(0.165, 0.44),
+            watched: Vec::new(),
+            rings: Vec::new(),
+            status_sel: 0,
+            shipped: HashMap::new(),
+            ahead: HashMap::new(),
+            status_repos: Vec::new(),
         };
         app.set_language();
         app
@@ -694,6 +744,9 @@ impl App {
                 Wheel::Notes => {
                     self.ns.key(key, self.notes.len());
                 }
+                Wheel::Status => {
+                    self.status_key(key);
+                }
                 Wheel::Detail => {}
             }
         }
@@ -707,7 +760,7 @@ impl App {
             View::Inbox => &mut self.inbox.scroll,
             View::List => &mut self.list.scroll,
             View::Actions => &mut self.acts.scroll,
-            View::Board => return,
+            View::Board | View::Status => return,
         };
         *s = s.min(max);
     }
@@ -739,6 +792,7 @@ impl App {
                     self.bs.jump(end, p);
                 }
             }
+            (_, View::Status) => self.status_sel = if end { self.status_rows().len().saturating_sub(1) } else { 0 },
         }
     }
 
@@ -816,6 +870,7 @@ impl App {
                 None if self.view == View::Inbox => return self.inbox_key(c),
                 None if self.view == View::Actions => return self.actions_key(c),
                 None if self.view == View::Board => return self.board_key(c),
+                None if self.view == View::Status => return self.status_key(c),
                 None => return false,
             },
         }
@@ -853,9 +908,13 @@ impl App {
             }
             _ => {}
         }
-        if c == 'o' {
-            if let Some(i) = self.list.selected(&self.items, &me) {
-                self.open_url = Some(i.url.clone());
+        if c == 'o' || c == 'y' {
+            if let Some(url) = self.list.selected(&self.items, &me).map(|i| i.url.clone()) {
+                if c == 'o' {
+                    self.open_url = Some(url);
+                } else {
+                    self.copy_link(url);
+                }
             }
             return true;
         }
@@ -889,6 +948,7 @@ impl App {
                 View::List => self.list_key(' '),
                 View::Actions => self.actions_key(' '),
                 View::Board => self.board_key('\n'),
+                View::Status => self.status_key('\n'),
                 _ => false,
             }
     }
@@ -911,6 +971,7 @@ impl App {
                 "key.rerun" => run.is_some_and(|r| r.status == actions::Status::Bad),
                 "key.cancel" => run.is_some_and(|r| r.status.active()),
                 "run.open_pr" => run.is_some_and(actions::has_pr),
+                "key.watch" => run.is_some_and(|r| r.status.active() || self.watched.contains(&r.id)),
                 _ => true,
             })
             .collect()
@@ -985,10 +1046,12 @@ impl App {
     /// the pull request, `o` the run; the rest moves the cursor.
     fn actions_key(&mut self, c: char) -> bool {
         let Some(run) = self.run().cloned() else { return self.acts.key(c, &self.runs) };
-        if self.acts.col == actions::Col::Filters && c != 'e' && c != 'o' && c != 'p' {
+        if self.acts.col == actions::Col::Filters && !matches!(c, 'e' | 'o' | 'p' | 'w' | 'y') {
             return self.acts.key(c, &self.runs);
         }
         match c {
+            'w' => self.watch(&run),
+            'y' => self.copy_link(run.url.clone()),
             'R' if run.status == actions::Status::Bad => {
                 self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran"))
             }
@@ -1103,7 +1166,93 @@ impl App {
                     }
                 }
             }
+            'y' => {
+                if let Some(url) = self.bs.selected(p).map(|i| p.cards[i].url.clone()) {
+                    self.copy_link(url);
+                }
+            }
             _ => return self.bs.key(c, p),
+        }
+        true
+    }
+
+    /// `y`: the page's link on the clipboard.
+    fn copy_link(&mut self, url: String) {
+        if url.is_empty() {
+            return;
+        }
+        self.copy = Some(url);
+        self.say_key("copied.link");
+    }
+
+    /// `w`: watch the run (a toast of the system and a sound when it ends),
+    /// or stop watching it.
+    fn watch(&mut self, run: &Run) {
+        if let Some(at) = self.watched.iter().position(|&id| id == run.id) {
+            self.watched.remove(at);
+            self.say_key("watch.off");
+        } else if run.status.active() {
+            self.watched.push(run.id);
+            self.say_key("watch.on");
+        } else {
+            self.say_key("watch.done");
+        }
+    }
+
+    /// The runs came again: the watched ones that have ended ring.
+    pub fn runs_came(&mut self) {
+        let mut ended = Vec::new();
+        self.watched.retain(|id| match self.runs.iter().find(|r| r.id == *id) {
+            Some(r) if !r.status.active() => {
+                ended.push(r.clone());
+                false
+            }
+            _ => true,
+        });
+        for r in ended {
+            let bad = r.status == actions::Status::Bad;
+            let title = self.tr(if bad { "watch.failed" } else { "watch.finished" }).to_string();
+            let body = format!("{} · {}: {}", r.repo, r.workflow, r.title);
+            self.say(format!("{title}: {body}"));
+            self.rings.push(Ring { title, body, bad });
+        }
+    }
+
+    /// The lines of the status view: the lanes, the repositories' last
+    /// releases, then the items that wait on the owner.
+    pub fn status_rows(&self) -> Vec<overview::Row> {
+        let mut rows: Vec<overview::Row> = overview::lanes(&self.items).into_iter().map(overview::Row::Lane).collect();
+        for repo in &self.status_repos {
+            if let Some(Some(s)) = self.shipped.get(repo) {
+                let ahead = self.ahead.get(repo).filter(|(tag, _)| *tag == s.tag).map(|(_, n)| *n);
+                rows.push(overview::Row::Release { repo: repo.clone(), shipped: Some(s.clone()), ahead });
+            }
+        }
+        rows.extend(overview::attention(&self.items).into_iter().map(|(k, label)| overview::Row::Item(k, label)));
+        rows
+    }
+
+    /// A key in the status view: `j k` move, `o` opens the line's page, `y`
+    /// copies it, `Enter` opens an item in the list (other lines in the browser).
+    fn status_key(&mut self, c: char) -> bool {
+        let rows = self.status_rows();
+        let last = rows.len().saturating_sub(1);
+        self.status_sel = self.status_sel.min(last);
+        match c {
+            'j' => self.status_sel = (self.status_sel + 1).min(last),
+            'k' => self.status_sel = self.status_sel.saturating_sub(1),
+            'o' | 'y' | '\n' => {
+                let Some(row) = rows.get(self.status_sel) else { return true };
+                match (c, row) {
+                    ('\n', overview::Row::Item(k, _)) => {
+                        let id = self.items[*k].id.clone();
+                        self.show_in_list(&id);
+                    }
+                    ('y', _) => self.copy_link(row.url(&self.items)),
+                    _ => self.open_url = Some(row.url(&self.items)).filter(|u| !u.is_empty()),
+                }
+            }
+            _ => return false,
         }
         true
     }
@@ -1364,6 +1513,12 @@ impl App {
                 }
             }
             Click::ActCol(col) => self.acts.col = col,
+            Click::StatusRow(k, open) => {
+                self.status_sel = k;
+                if open {
+                    self.status_key('\n');
+                }
+            }
             Click::Write => self.open_compose(),
             Click::Field(k) => {
                 self.open_compose();
@@ -1408,7 +1563,7 @@ impl App {
             View::Inbox => self.inbox_split = n,
             View::List => self.list_split = n,
             View::Actions => self.acts_split = n,
-            View::Board => {}
+            View::Board | View::Status => {}
         }
         if let Some(tx) = &self.state_tx {
             let _ = tx.send(minato_core::state::format(&self.columns()));
@@ -1469,6 +1624,21 @@ impl App {
         for o in self.settings.owners.iter().filter(|o| !o.eq_ignore_ascii_case(now)) {
             owner(o, self.tr("cmd.owner"));
         }
+        // `+@name` shows another owner's alongside; `-@name` stops it.
+        let added = minato_core::prefs::login(query.trim().strip_prefix("+@").unwrap_or(""));
+        let shown = |o: &str| {
+            self.owner().is_some_and(|w| w.eq_ignore_ascii_case(o)) || self.settings.also.iter().any(|x| x.eq_ignore_ascii_case(o))
+        };
+        if !added.is_empty() && !shown(&added) {
+            let mut x = Entry::new(format!("+@{added}"), "", Cmd::AddOwner(added.clone()));
+            x.detail = self.tr("cmd.owner_add").to_string();
+            e.push(x);
+        }
+        for o in &self.settings.also {
+            let mut x = Entry::new(format!("-@{o}"), "", Cmd::DropOwner(o.clone()));
+            x.detail = self.tr("cmd.owner_drop").to_string();
+            e.push(x);
+        }
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
             x.detail = i.repo.clone();
@@ -1486,6 +1656,8 @@ impl App {
             Cmd::MarkAll => self.mark_all_read(),
             Cmd::Sync => self.sync_now(),
             Cmd::Owner(o) => self.show_owner(&o),
+            Cmd::AddOwner(o) => self.add_owner(&o),
+            Cmd::DropOwner(o) => self.drop_owner(&o),
             Cmd::Scale(to) => self.scale(to),
             Cmd::Item(id) => {
                 self.mode = Mode::Main;
@@ -1505,7 +1677,7 @@ impl App {
         let me = self.viewer.as_deref().is_some_and(|v| v.eq_ignore_ascii_case(login));
         let was = self.settings.clone();
         self.settings.set_owner(if me { "" } else { login });
-        self.scope_text[0] = self.settings.owner.clone();
+        self.scope_text[0] = self.settings.owners_line();
         if self.settings != was {
             self.save_settings();
         }
@@ -1513,6 +1685,44 @@ impl App {
         let who = self.owner().unwrap_or(login).to_string();
         let words = self.tr("owner.switched").replace("{}", &who);
         self.say(words);
+    }
+
+    /// `+@name`: show `login`'s repositories, items and runs alongside the
+    /// owner's (the viewer becomes the owner named, as only a named owner
+    /// has others beside it).
+    pub fn add_owner(&mut self, login: &str) {
+        self.mode = Mode::Main;
+        if self.settings.owner.is_empty() {
+            let Some(me) = self.viewer.clone() else { return self.say_key("owner.not_added") };
+            self.settings.set_owner(&me);
+        }
+        if !self.settings.add_also(login) {
+            return self.say_key("owner.not_added");
+        }
+        self.scope_text[0] = self.settings.owners_line();
+        self.save_settings();
+        let words = self.tr("owner.added").replace("{}", &minato_core::prefs::login(login));
+        self.say(words);
+    }
+
+    /// `-@name`: stop showing `login`'s alongside the owner's.
+    pub fn drop_owner(&mut self, login: &str) {
+        self.mode = Mode::Main;
+        let before = self.settings.also.len();
+        self.settings.also.retain(|o| !o.eq_ignore_ascii_case(login));
+        if self.settings.also.len() == before {
+            return;
+        }
+        self.scope_text[0] = self.settings.owners_line();
+        self.save_settings();
+        let words = self.tr("owner.dropped").replace("{}", login);
+        self.say(words);
+    }
+
+    /// Every owner shown, space-separated: the owner (else the viewer) and
+    /// the others beside it; empty before GitHub has said who the viewer is.
+    pub fn owners_shown(&self) -> String {
+        self.owner().into_iter().chain(self.settings.also.iter().map(String::as_str)).collect::<Vec<_>>().join(" ")
     }
 
     /// A card dropped on a column (the mouse): the same write as `H` `L`.
@@ -1601,6 +1811,11 @@ impl App {
             'o' => {
                 if let Some(card) = card {
                     self.open_url = Some(self.items[card.at].url.clone());
+                }
+            }
+            'y' => {
+                if let Some(card) = card {
+                    self.copy_link(self.items[card.at].url.clone());
                 }
             }
             'd' | 's' => {
@@ -1698,7 +1913,7 @@ impl App {
     pub fn keep_settings(&mut self, path: std::path::PathBuf) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             self.settings = Settings::parse(&text);
-            self.scope_text = [self.settings.owner.clone(), self.settings.project.clone()];
+            self.scope_text = [self.settings.owners_line(), self.settings.project.clone()];
         }
         self.settings_tx = Some(writer(path));
     }
@@ -2760,28 +2975,170 @@ mod tests {
     fn digits_open_the_views() {
         let mut a = app();
         assert_eq!(a.view, View::Inbox);
-        for (c, v) in [('2', View::List), ('3', View::Actions), ('4', View::Board), ('1', View::Inbox)] {
+        for (c, v) in [('2', View::List), ('3', View::Actions), ('4', View::Board), ('5', View::Status), ('1', View::Inbox)] {
             assert!(a.feed(c));
             assert_eq!(a.view, v);
         }
-        assert!(!a.feed('5'));
+        assert!(!a.feed('6'));
         assert!(!a.feed('z'));
     }
 
     #[test]
     fn tab_cycles_the_views_round() {
         let mut a = app();
-        for v in [View::List, View::Actions, View::Board, View::Inbox] {
+        for v in [View::List, View::Actions, View::Board, View::Status, View::Inbox] {
             assert!(a.cycle_view(false));
             assert_eq!(a.view, v);
         }
         assert!(a.cycle_view(true));
-        assert_eq!(a.view, View::Board);
+        assert_eq!(a.view, View::Status);
         assert!(a.cycle_view(true));
-        assert_eq!(a.view, View::Actions);
+        assert_eq!(a.view, View::Board);
         a.mode = Mode::Notes;
         assert!(!a.cycle_view(false));
-        assert_eq!(a.view, View::Actions);
+        assert_eq!(a.view, View::Board);
+    }
+
+    #[test]
+    fn w_watches_a_run_and_it_rings_when_it_ends() {
+        let mut a = app();
+        a.feed('3');
+        a.runs = vec![run(1, actions::Status::Running, None), run(2, actions::Status::Ok, None)];
+        let words = |a: &App| a.keys_now().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
+        assert!(words(&a).contains(&"key.watch"));
+        assert!(a.feed('w'));
+        assert_eq!(a.watched, [1]);
+        // Watching again stops it; a run that has ended is not watched.
+        a.feed('w');
+        assert!(a.watched.is_empty());
+        a.feed('j');
+        assert!(!words(&a).contains(&"key.watch"));
+        a.feed('w');
+        assert!(a.watched.is_empty());
+        a.feed('k');
+        a.feed('w');
+        assert_eq!(a.watched, [1]);
+        // Still going: nothing rings.
+        a.runs_came();
+        assert!(a.rings.is_empty() && a.watched == [1]);
+        a.runs[0].status = actions::Status::Bad;
+        a.runs_came();
+        assert!(a.watched.is_empty());
+        assert_eq!(a.rings.len(), 1);
+        assert!(a.rings[0].bad && a.rings[0].title == a.tr("watch.failed"));
+        assert!(a.rings[0].body.contains("uchmk/kura") && a.rings[0].body.contains("check"));
+    }
+
+    #[test]
+    fn y_copies_the_link_in_every_view() {
+        let mut a = with_pr();
+        a.items[0].url = "https://github.com/uchmk/kura/pull/3".into();
+        assert!(a.feed('y'));
+        assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/pull/3"));
+        assert!(a.toast.is_some());
+        a.view = View::Inbox;
+        a.feed('y');
+        assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/pull/3"));
+        a.feed('3');
+        a.runs = vec![run(7, actions::Status::Ok, None)];
+        a.feed('y');
+        assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/actions/runs/7"));
+        // No link, nothing copied.
+        a.copy_link(String::new());
+        assert!(a.copy.is_none());
+    }
+
+    fn labelled(id: &str, title: &str, labels: &[&str]) -> Item {
+        let mut i = pr(id);
+        i.kind = Kind::Issue;
+        i.title = title.into();
+        i.url = format!("https://github.com/uchmk/kura/issues/{id}");
+        i.labels = labels.iter().map(|l| minato_core::list::Label { name: (*l).into(), color: "ededed".into() }).collect();
+        i
+    }
+
+    #[test]
+    fn the_status_view_lists_lanes_releases_and_what_waits() {
+        let mut a = app();
+        a.viewer = Some("uchmk".into());
+        a.items = vec![
+            labelled("1", "Lane status: win", &["lane-status"]),
+            labelled("2", "Which way?", &["question"]),
+            labelled("3", "Run on the PC", &["needs-pc"]),
+        ];
+        a.status_repos = vec!["uchmk/kura".into(), "uchmk/ito".into()];
+        let shipped = overview::Shipped {
+            tag: "v1".into(),
+            published_at: "2026-10-14T00:00:00Z".into(),
+            files: 6,
+            sums: true,
+            url: "https://github.com/uchmk/kura/releases/tag/v1".into(),
+        };
+        a.shipped.insert("uchmk/kura".into(), Some(shipped));
+        a.shipped.insert("uchmk/ito".into(), None);
+        a.ahead.insert("uchmk/kura".into(), ("v1".into(), 4));
+        let rows = a.status_rows();
+        assert_eq!(rows.len(), 4, "a lane, one release (ito has none), two items");
+        assert!(matches!(&rows[0], overview::Row::Lane(l) if l.name == "win"));
+        assert!(matches!(&rows[1], overview::Row::Release { ahead: Some(4), .. }));
+        assert_eq!(rows[2], overview::Row::Item(2, "needs-pc"));
+        assert_eq!(rows[3], overview::Row::Item(1, "question"));
+        // Counted from an older tag: not shown.
+        a.ahead.insert("uchmk/kura".into(), ("v0".into(), 9));
+        assert!(matches!(&a.status_rows()[1], overview::Row::Release { ahead: None, .. }));
+
+        assert!(a.feed('5'));
+        assert!(a.feed('k'), "k at the top stays");
+        assert_eq!(a.status_sel, 0);
+        a.feed('o');
+        assert_eq!(a.open_url.take().as_deref(), Some("https://github.com/uchmk/kura/issues/1"));
+        a.feed('j');
+        a.feed('y');
+        assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/releases/tag/v1"));
+        a.enter();
+        assert_eq!(a.open_url.take().as_deref(), Some("https://github.com/uchmk/kura/releases/tag/v1"));
+        for _ in 0..9 {
+            a.feed('j');
+        }
+        assert_eq!(a.status_sel, 3, "j stops at the last line");
+        assert!(!a.feed('z'));
+        // Enter on an item shows it in the list.
+        a.enter();
+        assert_eq!(a.view, View::List);
+        assert!(a.open_url.is_none());
+        // A click picks a line; a double click opens it.
+        a.feed('5');
+        a.click(Click::StatusRow(0, false));
+        assert_eq!(a.status_sel, 0);
+        assert!(a.open_url.is_none());
+        a.click(Click::StatusRow(1, true));
+        assert_eq!((a.status_sel, a.open_url.take().is_some()), (1, true));
+    }
+
+    #[test]
+    fn other_owners_come_alongside_and_go() {
+        let mut a = app();
+        let entries = |a: &App, q: &str| a.palette_entries(q).into_iter().map(|x| x.pick).collect::<Vec<_>>();
+        // Before GitHub says who the viewer is, there is nobody to stand beside.
+        a.run_cmd(Cmd::AddOwner("rust-lang".into()));
+        assert!(a.settings.also.is_empty());
+        a.viewer = Some("me".into());
+        assert_eq!(a.owners_shown(), "me");
+        assert!(entries(&a, "+@rust-lang").contains(&Cmd::AddOwner("rust-lang".into())));
+        a.run_cmd(Cmd::AddOwner("rust-lang".into()));
+        assert_eq!((a.settings.owner.as_str(), a.settings.also.as_slice()), ("me", &["rust-lang".to_string()][..]));
+        assert_eq!(a.owners_shown(), "me rust-lang");
+        assert_eq!(a.scope_text[0], a.settings.owners_line());
+        // Shown already: not offered again; the way back is.
+        let e = entries(&a, "+@Rust-Lang");
+        assert!(!e.iter().any(|c| matches!(c, Cmd::AddOwner(_))));
+        assert!(e.contains(&Cmd::DropOwner("rust-lang".into())));
+        a.run_cmd(Cmd::AddOwner("me".into()));
+        assert_eq!(a.settings.also.len(), 1, "the owner is not beside itself");
+        a.run_cmd(Cmd::DropOwner("RUST-LANG".into()));
+        assert!(a.settings.also.is_empty());
+        assert_eq!(a.owners_shown(), "me");
+        assert!(!entries(&a, "").iter().any(|c| matches!(c, Cmd::DropOwner(_))));
     }
 
     #[test]

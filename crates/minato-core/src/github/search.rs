@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use crate::list::{peek_of, Check, Ci, Detail, Entry, Item, Kind, Label};
+use crate::list::{peek_of, Check, Ci, Detail, Entry, FileChange, Item, Kind, Label};
 
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
 labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
@@ -87,12 +87,13 @@ pub fn merge(pages: &[String]) -> Result<String, String> {
     Ok(v.to_string())
 }
 
-/// One item's body, comments and checks. Variables: `id`.
+/// One item's body, comments and checks; a PR's changed files. Variables: `id`.
 pub fn detail_query() -> &'static str {
     "query($id: ID!) { node(id: $id) { __typename \
 ... on Issue { body comments(last: 20) { nodes { author { login } createdAt body } } } \
 ... on Discussion { body comments(last: 20) { nodes { id isAnswer author { login } createdAt body } } } \
 ... on PullRequest { body comments(last: 20) { nodes { author { login } createdAt body } } \
+files(first: 100) { totalCount nodes { path additions deletions } } \
 commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 30) { nodes { __typename \
 ... on CheckRun { name conclusion status } ... on StatusContext { context state } } } } } } } } } }"
 }
@@ -319,10 +320,28 @@ struct RawCommitInner {
 }
 
 #[derive(Deserialize)]
+struct RawFile {
+    path: String,
+    #[serde(default)]
+    additions: u32,
+    #[serde(default)]
+    deletions: u32,
+}
+
+#[derive(Deserialize)]
+struct RawFiles {
+    #[serde(rename = "totalCount", default)]
+    total_count: u32,
+    #[serde(default = "Vec::new")]
+    nodes: Vec<RawFile>,
+}
+
+#[derive(Deserialize)]
 struct RawDetail {
     body: Option<String>,
     comments: Option<Nodes<RawComment>>,
     commits: Option<Nodes<RawCommit>>,
+    files: Option<RawFiles>,
 }
 
 #[derive(Deserialize)]
@@ -371,7 +390,13 @@ pub fn parse_detail(body: &str) -> Result<Detail, String> {
                 .collect()
         })
         .unwrap_or_default();
-    Ok(Detail { body: raw.body.unwrap_or_default(), checks, timeline })
+    let (files, files_total) = raw.files.map_or((Vec::new(), 0), |f| {
+        let v: Vec<FileChange> =
+            f.nodes.into_iter().map(|n| FileChange { path: n.path, additions: n.additions, deletions: n.deletions }).collect();
+        let total = f.total_count.max(v.len() as u32);
+        (v, total)
+    });
+    Ok(Detail { body: raw.body.unwrap_or_default(), checks, timeline, files, files_total })
 }
 
 #[cfg(test)]
@@ -423,6 +448,19 @@ mod tests {
         let d = parse_detail(body).unwrap();
         assert_eq!((d.timeline[0].id.as_str(), d.timeline[0].answer), ("DC_1", true));
         assert_eq!((d.timeline[1].id.as_str(), d.timeline[1].answer), ("", false));
+    }
+
+    #[test]
+    fn a_prs_changed_files_are_read() {
+        let body = r#"{"data":{"node":{"body":"b","comments":{"nodes":[]},"files":{"totalCount":120,"nodes":[{"path":"src/a.rs","additions":12,"deletions":3},{"path":"README.md","additions":0,"deletions":7}]}}}}"#;
+        let d = parse_detail(body).unwrap();
+        assert_eq!(d.files_total, 120);
+        assert_eq!(d.files[0], FileChange { path: "src/a.rs".into(), additions: 12, deletions: 3 });
+        assert_eq!((d.files[1].additions, d.files[1].deletions), (0, 7));
+        // An issue has none; a detail kept from before the files had none.
+        let d = parse_detail(r#"{"data":{"node":{"body":"b"}}}"#).unwrap();
+        assert!(d.files.is_empty() && d.files_total == 0);
+        assert!(detail_query().contains("files(first: 100) { totalCount nodes { path additions deletions } }"));
     }
 
     #[test]

@@ -800,7 +800,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 2.0.119",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -864,7 +864,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1167,7 +1167,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1831,6 +1831,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ito-notify"
+version = "0.28.2"
+source = "git+https://github.com/uchmk/ito?rev=75f06712801082bd7350ef0a450f923180b75480#75f06712801082bd7350ef0a450f923180b75480"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "ito-palette"
 version = "0.28.2"
 source = "git+https://github.com/uchmk/ito?rev=75f06712801082bd7350ef0a450f923180b75480#75f06712801082bd7350ef0a450f923180b75480"
@@ -2112,7 +2120,7 @@ dependencies = [
 
 [[package]]
 name = "minato"
-version = "0.39.21"
+version = "0.40.0"
 dependencies = [
  "chrono",
  "eframe",
@@ -2122,6 +2130,7 @@ dependencies = [
  "ito-i18n",
  "ito-keys",
  "ito-layout",
+ "ito-notify",
  "ito-palette",
  "ito-prefs",
  "ito-theme",
@@ -2132,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "minato-core"
-version = "0.39.21"
+version = "0.40.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3085,7 +3094,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3098,7 +3107,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3555,7 +3564,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3811,7 +3820,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4443,7 +4452,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4561,15 +4570,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]

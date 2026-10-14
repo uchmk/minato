@@ -103,12 +103,23 @@ pub struct Entry {
     pub body: String,
 }
 
-/// The selected item's body, checks and conversation.
+/// One file a PR changes, with its lines added and deleted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileChange {
+    pub path: String,
+    pub additions: u32,
+    pub deletions: u32,
+}
+
+/// The selected item's body, checks and conversation; a PR's files too.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Detail {
     pub body: String,
     pub checks: Vec<Check>,
     pub timeline: Vec<Entry>,
+    /// A PR's changed files (the first 100) and how many it changes in all.
+    pub files: Vec<FileChange>,
+    pub files_total: u32,
 }
 
 /// The saved filters of the filter column.
@@ -159,12 +170,13 @@ impl Filter {
             }
     }
 
-    /// The GitHub search this filter stands for, as shown over the list.
-    pub fn query(&self, owner: &str) -> String {
+    /// The GitHub search this filter stands for, as shown over the list
+    /// (`owners`: logins apart by spaces).
+    pub fn query(&self, owners: &str) -> String {
         let mut q = vec!["is:open".to_string()];
         match &self.repo {
             Some(r) => q.push(format!("repo:{r}")),
-            None => q.push(format!("user:{owner}")),
+            None => q.push(users(owners)),
         }
         if let Some(k) = self.kind.map(Kind::qualifier).filter(|s| !s.is_empty()) {
             q.push(k.into());
@@ -197,14 +209,38 @@ pub enum Pick {
     Search(usize),
 }
 
-/// The options in the column's order, grouped; `None`/"all" first in each.
-/// The GitHub search for a saved search `text`: scoped to the owner when it
+/// The search qualifiers for `owners` (logins apart by spaces): one
+/// `user:` each, which GitHub joins with OR.
+pub fn users(owners: &str) -> String {
+    owners.split_whitespace().map(|o| format!("user:{o}")).collect::<Vec<_>>().join(" ")
+}
+
+/// One owner's plain search (`state`: `is:open` or `is:closed`). Each owner
+/// is searched apart: GitHub gives at most 1000 items a search, and a busy
+/// owner shown alongside would crowd the first owner's out of one search.
+pub fn owner_search(login: &str, state: &str) -> String {
+    format!("user:{login} {state} sort:updated-desc")
+}
+
+/// The first owner's items, then those the searches of the owners shown
+/// alongside found that are not among them yet.
+pub fn join_found<'a>(mut all: Vec<Item>, more: impl IntoIterator<Item = &'a Item>) -> Vec<Item> {
+    let mut ids: std::collections::HashSet<String> = all.iter().map(|i| i.id.clone()).collect();
+    for i in more {
+        if ids.insert(i.id.clone()) {
+            all.push(i.clone());
+        }
+    }
+    all
+}
+
+/// The GitHub search for a saved search `text`: scoped to the owners when it
 /// names no `user:`, `org:` or `repo:`, newest first when it names no sort.
-pub fn search_query(text: &str, owner: &str) -> String {
+pub fn search_query(text: &str, owners: &str) -> String {
     let has = |p: &str| text.split_whitespace().any(|w| w.trim_start_matches('-').starts_with(p));
     let mut q = text.trim().to_string();
     if !(has("user:") || has("org:") || has("repo:")) {
-        q = format!("user:{owner} {q}");
+        q = format!("{} {q}", users(owners));
     }
     if !has("sort:") {
         q.push_str(" sort:updated-desc");
@@ -212,6 +248,7 @@ pub fn search_query(text: &str, owner: &str) -> String {
     q
 }
 
+/// The options in the column's order, grouped; `None`/"all" first in each.
 pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pick>)> {
     // A main-branch stub is not a row of the list, so it brings no option.
     let distinct = |f: &dyn Fn(&Item) -> String| {
@@ -485,6 +522,9 @@ mod tests {
         assert_eq!(search_query("is:open label:bug", "me"), "user:me is:open label:bug sort:updated-desc");
         assert_eq!(search_query("repo:u/k is:pr sort:created-asc", "me"), "repo:u/k is:pr sort:created-asc");
         assert_eq!(search_query("-org:x is:open", "me"), "-org:x is:open sort:updated-desc");
+        assert_eq!(search_query("is:pr", "a b"), "user:a user:b is:pr sort:updated-desc");
+        assert_eq!(users(" a  b "), "user:a user:b");
+        assert_eq!(owner_search("rust-lang", "is:closed"), "user:rust-lang is:closed sort:updated-desc");
         let mut s = ListState { searches: vec!["is:open label:bug".into()], ..Default::default() };
         assert_eq!(s.active_search(), None);
         s.apply(Pick::Search(0));
@@ -495,10 +535,20 @@ mod tests {
     }
 
     #[test]
+    fn the_owners_alongside_add_what_the_first_has_not() {
+        let first = vec![item("uchmk/kura", Kind::Issue, "a"), item("uchmk/kura", Kind::Pr, "b")];
+        let other = [item("rust-lang/rust", Kind::Issue, "c"), item("uchmk/kura", Kind::Issue, "a")];
+        let all = join_found(first, &other);
+        let ids: Vec<&str> = all.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, ["uchmk/kuraa", "uchmk/kurab", "rust-lang/rustc"], "the first owner's stay, none twice");
+    }
+
+    #[test]
     fn the_filter_matches_and_writes_its_query() {
         let it = items();
         let mut f = Filter::default();
         assert_eq!(f.query("uchmk"), "is:open user:uchmk");
+        assert_eq!(f.query("uchmk rust-lang"), "is:open user:uchmk user:rust-lang");
         assert!(it.iter().all(|i| f.matches(i, "me")));
         f.saved = Saved::Red;
         assert_eq!(it.iter().filter(|i| f.matches(i, "me")).count(), 1);

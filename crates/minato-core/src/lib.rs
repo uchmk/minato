@@ -12,6 +12,7 @@ pub mod inbox;
 pub mod list;
 pub mod mainci;
 pub mod notes;
+pub mod overview;
 pub mod prefs;
 pub mod reposettings;
 pub mod state;

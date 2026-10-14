@@ -37,6 +37,7 @@ use minato_core::github::worker::{self, Call, Job, Worker};
 use minato_core::github::write::{self, parse_names};
 use minato_core::github::{client, Bucket, Client, Etags, Rate, Token, UreqTransport};
 use minato_core::notes;
+use minato_core::overview;
 use minato_core::workflow;
 
 use minato_core::list::Item;
@@ -78,6 +79,11 @@ pub struct Net {
     searched_closed: bool,
     /// The last answers of the two searches, merged into `app.items`.
     found: [Vec<Item>; 2],
+    /// The same searches of each owner shown alongside (searched apart, so
+    /// the first owner's items are never crowded out), by login; and the
+    /// logins they were last asked for.
+    extra: HashMap<String, [Vec<Item>; 2]>,
+    extra_for: Vec<String>,
     /// The saved search the items were last searched with (the list view's).
     searched_custom: Option<String>,
     /// The open items' answers (`found`, `mentioned`, `stubs`) while the
@@ -92,8 +98,12 @@ pub struct Net {
     refetch: bool,
     /// What to say when a write (by its job key) has gone through.
     pending: std::collections::HashMap<String, &'static str>,
-    /// The repositories whose runs are asked for (none until GitHub says).
+    /// The repositories whose runs are asked for (none until GitHub says):
+    /// those of each owner shown, the first owner's first.
     repos: Vec<String>,
+    /// Each owner's repositories as GitHub said, by login ("" for the
+    /// first owner, the viewer when the settings name none).
+    repo_sets: HashMap<String, Vec<String>>,
     /// The last runs of each repository.
     run_found: std::collections::HashMap<String, Vec<Run>>,
     /// When the runs and the board were last asked for (`None`: ask now).
@@ -141,6 +151,10 @@ pub struct Net {
     scope: Option<(String, String)>,
     /// The sync F5 asked for, while its answers come.
     round: Option<Round>,
+    /// When the status view last asked for the releases, and the tag each
+    /// repository's commits since were last asked against.
+    status_asked: Option<Instant>,
+    cmp_asked: HashMap<String, String>,
 }
 
 /// A sync asked for by hand: the keys asked in it and not answered yet,
@@ -180,8 +194,11 @@ const BACK_FLOOR: u32 = 1000;
 /// How often the notifications are asked again.
 const NOTES: Duration = Duration::from_secs(90);
 
-/// How many repositories' runs are shown.
+/// How many repositories' runs are shown, of each owner.
 const REPOS: usize = 8;
+
+/// How often the status view asks for the releases again while it is open.
+const STATUS: Duration = Duration::from_secs(300);
 
 /// How often the lists are searched again.
 const SEARCH: Duration = Duration::from_secs(120);
@@ -210,7 +227,7 @@ impl Net {
     /// items fetched for notifications added (until a search lists them),
     /// stubs for red main branches added (not over closed items).
     fn rebuild(&self, app: &mut App) {
-        let mut all: Vec<Item> = self.found.concat();
+        let mut all = minato_core::list::join_found(self.found.concat(), self.extra.values().flatten().flatten());
         app.fetched.retain(|f| !all.iter().any(|i| i.id == f.id));
         all.extend(app.fetched.iter().cloned());
         for i in &mut all {
@@ -271,12 +288,15 @@ impl Net {
             searched_custom: None,
             stash: None,
             found: [Vec::new(), Vec::new()],
+            extra: HashMap::new(),
+            extra_for: Vec::new(),
             mentioned: Default::default(),
             stubs: Vec::new(),
             asked: None,
             refetch: false,
             pending: Default::default(),
             repos: Vec::new(),
+            repo_sets: HashMap::new(),
             run_found: Default::default(),
             runs_asked: None,
             board_asked: None,
@@ -301,6 +321,8 @@ impl Net {
             live: Default::default(),
             scope: None,
             round: None,
+            status_asked: None,
+            cmp_asked: HashMap::new(),
         }
     }
 
@@ -356,7 +378,35 @@ impl Net {
 
     /// The owner the settings name, when it is not the viewer.
     fn other(&self) -> Option<&str> {
-        self.scope.as_ref().map(|s| s.0.as_str()).filter(|o| !o.is_empty())
+        self.scope.as_ref().and_then(|s| s.0.split_whitespace().next())
+    }
+
+    /// The owners the settings show alongside the first.
+    fn also(&self) -> Vec<String> {
+        self.scope.as_ref().map(|s| s.0.split_whitespace().skip(1).map(str::to_string).collect()).unwrap_or_default()
+    }
+
+    /// One owner's repositories have come (`owner`: "" for the first): the
+    /// runs are of all those known, the first owner's first, and a run of a
+    /// repository no longer among them goes once every owner's have come.
+    fn set_repos(&mut self, app: &mut App, owner: String, v: Vec<String>) {
+        self.repo_sets.insert(owner, v.into_iter().take(REPOS).collect());
+        let keys: Vec<String> = std::iter::once(String::new()).chain(self.also()).collect();
+        let mut repos: Vec<String> = Vec::new();
+        for r in keys.iter().filter_map(|k| self.repo_sets.get(k)).flatten() {
+            if !repos.contains(r) {
+                repos.push(r.clone());
+            }
+        }
+        self.repos = repos;
+        if keys.iter().all(|k| self.repo_sets.contains_key(k)) {
+            let repos = &self.repos;
+            self.run_found.retain(|r, _| repos.contains(r));
+        }
+        app.status_repos = self.repos.clone();
+        self.status_asked = None;
+        self.show_runs(app);
+        self.runs_asked = None;
     }
 
     /// F5: ask for everything shown now. The polls come due at once, the
@@ -367,6 +417,8 @@ impl Net {
         (self.next_poll, self.next_search, self.next_notes, self.run_retry) = (now, now, now, now);
         (self.board_asked, self.runs_asked) = (None, None);
         self.repos.clear();
+        self.repo_sets.clear();
+        (self.status_asked, self.cmp_asked) = (None, HashMap::new());
         (self.asked, self.refetch) = (None, true);
         (self.asked_run, self.run_refetch) = (None, true);
         self.round = Some(Round { want: HashSet::new(), asked: 0, since: now });
@@ -389,7 +441,9 @@ impl Net {
     /// Follow the settings' owner and board Project: when one changes, what
     /// was found for the old is forgotten and asked for again at once.
     fn rescope(&mut self, app: &mut App) {
-        let want = (app.settings.owner.clone(), app.settings.project.clone());
+        // The first owner, then those shown alongside, apart by spaces.
+        let owners = std::iter::once(&app.settings.owner).chain(&app.settings.also).filter(|o| !o.is_empty());
+        let want = (owners.cloned().collect::<Vec<_>>().join(" "), app.settings.project.clone());
         let Some(old) = self.scope.replace(want.clone()) else { return };
         if old == want {
             return;
@@ -397,6 +451,7 @@ impl Net {
         self.keep("scope", "", &scope_line(Some(&want)));
         if old.0 != want.0 {
             self.found = Default::default();
+            self.extra.clear();
             self.search_pages.clear();
             self.stash = None;
             self.mentioned.clear();
@@ -404,6 +459,9 @@ impl Net {
             self.rebuild(app);
             self.next_search = Instant::now();
             self.repos.clear();
+            self.repo_sets.clear();
+            app.status_repos.clear();
+            self.status_asked = None;
             self.run_found.clear();
             self.show_runs(app);
             self.runs_asked = None;
@@ -428,6 +486,9 @@ impl Net {
         } else {
             app.acts.stay(&before, &app.runs);
         }
+        // A run watched (`w`) that has finished says so.
+        app.runs_came();
+        ring(app);
     }
 
     /// Write an answer to the cache (on the writer's thread).
@@ -460,6 +521,17 @@ impl Net {
                         self.rebuild(app);
                     }
                     Err(e) => app.say(e),
+                }
+            }
+            k if k.starts_with("x-items:") || k.starts_with("x-disc:") => {
+                let Some((part, login)) = k.split_once(':') else { return };
+                // Asked before the owners or the search changed.
+                if !self.extra_for.iter().any(|o| o == login) {
+                    return;
+                }
+                if let Ok(v) = parse_items(body) {
+                    self.extra.entry(login.to_string()).or_default()[usize::from(part == "x-disc")] = v;
+                    self.rebuild(app);
                 }
             }
             "mentions" => {
@@ -553,16 +625,31 @@ impl Net {
                 self.board_asked = None;
             }
             "a-repos" => match actions::parse_repos(body) {
-                Ok(v) => {
-                    self.repos = v.into_iter().take(REPOS).collect();
-                    // The runs of a repository no longer among them go.
-                    let repos = &self.repos;
-                    self.run_found.retain(|r, _| repos.contains(r));
-                    self.show_runs(app);
-                    self.runs_asked = None;
-                }
+                Ok(v) => self.set_repos(app, String::new(), v),
                 Err(e) => app.say(e),
             },
+            k if k.starts_with("a-repos:") => {
+                let login = &k["a-repos:".len()..];
+                // Kept from before, or asked before the owners changed.
+                if !self.also().iter().any(|o| o == login) {
+                    return;
+                }
+                match actions::parse_repos(body) {
+                    Ok(v) => self.set_repos(app, login.to_string(), v),
+                    Err(e) => app.say(e),
+                }
+            }
+            k if k.starts_with("s-rel:") => {
+                if let Ok(s) = overview::parse_latest(body) {
+                    app.shipped.insert(k["s-rel:".len()..].to_string(), s);
+                }
+            }
+            k if k.starts_with("s-cmp:") => {
+                // "s-cmp:owner/name tag": the commits since that tag.
+                if let (Some((repo, tag)), Ok(n)) = (k["s-cmp:".len()..].split_once(' '), overview::parse_ahead(body)) {
+                    app.ahead.insert(repo.to_string(), (tag.to_string(), n));
+                }
+            }
             k if k.starts_with("a-runs:") => {
                 let repo = &k["a-runs:".len()..];
                 // Kept from before, or asked before the owner changed.
@@ -929,6 +1016,15 @@ impl Net {
                 Err(_) if ahead => {}
                 Err(e) => {
                     self.pending.remove(&reply.key);
+                    // A repository with no release to read, or none to
+                    // compare with: the status view just shows none.
+                    if reply.key.starts_with("s-rel:") || reply.key.starts_with("s-cmp:") {
+                        continue;
+                    }
+                    // An owner not found is not asked again until F5.
+                    if let Some(login) = reply.key.strip_prefix("a-repos:") {
+                        self.repo_sets.insert(login.to_string(), Vec::new());
+                    }
                     if let Some(repo) = list_repo(&reply.key) {
                         self.list_failed(app, repo, e);
                         continue;
@@ -1047,9 +1143,10 @@ impl Net {
         if let Some(me) = app.viewer.clone() {
             // The searches are of the owner's repositories; the mentions
             // and the authors stay the viewer's.
-            let owner = app.owner().unwrap_or(&me).to_string();
+            let owners = Some(app.owners_shown()).filter(|o| !o.is_empty()).unwrap_or_else(|| me.clone());
+            let users = minato_core::list::users(&owners);
             let custom = if app.view == crate::app::View::List {
-                app.list.active_search().map(|t| minato_core::list::search_query(t, &owner))
+                app.list.active_search().map(|t| minato_core::list::search_query(t, &owners))
             } else {
                 None
             };
@@ -1068,6 +1165,9 @@ impl Net {
                 self.searched_closed = closed;
                 self.searched_custom = custom.clone();
                 self.search_pages.clear();
+                // The owners alongside are asked again with the rest.
+                self.extra.clear();
+                self.extra_for.clear();
                 self.next_search = now;
                 if plain(closed, &custom) {
                     self.rebuild(app);
@@ -1075,7 +1175,9 @@ impl Net {
             }
             if now >= self.next_search {
                 let state = if closed { "is:closed" } else { "is:open" };
-                let plain = format!("user:{owner} {state} sort:updated-desc");
+                let mut logins = owners.split_whitespace();
+                let plain = minato_core::list::owner_search(logins.next().unwrap_or(&me), state);
+                let others: Vec<String> = logins.map(str::to_string).collect();
                 let q = custom.clone().unwrap_or_else(|| plain.clone());
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) } });
                 track(&mut self.round, "items");
@@ -1087,7 +1189,7 @@ impl Net {
                 } else if closed {
                     self.found[1].clear();
                 } else {
-                    let q = format!("user:{owner} is:open mentions:{me} -author:{me} sort:updated-desc");
+                    let q = format!("{users} is:open mentions:{me} -author:{me} sort:updated-desc");
                     worker.send(Job {
                         key: "mentions".into(),
                         call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) },
@@ -1102,6 +1204,22 @@ impl Net {
                         track(&mut self.round, k);
                     }
                     self.searched_q.insert("discussions", plain);
+                }
+                // Each owner shown alongside: its first page, apart. A saved
+                // search names them all in its own query.
+                self.extra.retain(|k, _| others.contains(k));
+                self.extra_for = if custom.is_some() { Vec::new() } else { others };
+                for o in &self.extra_for {
+                    let vars = search_vars(&minato_core::list::owner_search(o, state), None);
+                    let mut jobs =
+                        vec![Job { key: format!("x-items:{o}"), call: Call::Graphql { query: items_query(), variables: vars.clone() } }];
+                    if !closed {
+                        jobs.push(Job { key: format!("x-disc:{o}"), call: Call::Graphql { query: discussions_query(), variables: vars } });
+                    }
+                    for job in jobs {
+                        track(&mut self.round, &job.key);
+                        worker.send(job);
+                    }
                 }
                 self.next_search = now + SEARCH;
             }
@@ -1146,17 +1264,27 @@ impl Net {
         if open && self.runs_away && self.run_found.is_empty() {
             self.runs_asked = None;
         }
-        if app.viewer.is_some() && due(self.runs_asked, if open { RUNS } else { RUNS_AWAY }, now) <= now {
-            if self.repos.is_empty() {
-                // On a runs lane: not behind a slow search of a new owner.
-                let job = get("a-repos", &actions::repos_path(self.other()));
-                track(&mut self.round, "a-repos");
+        // A run watched (`w`) is looked at as often as the open view's.
+        let often = open || !app.watched.is_empty();
+        if app.viewer.is_some() && due(self.runs_asked, if often { RUNS } else { RUNS_AWAY }, now) <= now {
+            // Each owner's repositories not known yet, on a runs lane: not
+            // behind a slow search of a new owner.
+            let missing: Vec<String> =
+                std::iter::once(String::new()).chain(self.also()).filter(|k| !self.repo_sets.contains_key(k)).collect();
+            for k in &missing {
+                let job = if k.is_empty() {
+                    get("a-repos", &actions::repos_path(self.other()))
+                } else {
+                    get(&format!("a-repos:{k}"), &actions::repos_path(Some(k)))
+                };
+                track(&mut self.round, &job.key);
                 match self.runs.first() {
                     Some(w) if open => w.send_first(job),
                     Some(w) => w.send(job),
                     None => send(job, open),
                 }
-            } else {
+            }
+            if !self.repos.is_empty() {
                 for (k, r) in self.repos.iter().enumerate() {
                     let job = Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) };
                     track(&mut self.round, &job.key);
@@ -1208,6 +1336,33 @@ impl Net {
                 self.run_refetch = false;
             }
         }
+        // The status view: each repository's last release, then the commits
+        // since it, asked while the view is open.
+        if app.viewer.is_some() && app.view == View::Status && !self.repos.is_empty() {
+            if due(self.status_asked, STATUS, now) <= now {
+                for (k, r) in self.repos.iter().enumerate() {
+                    let job = get(&format!("s-rel:{r}"), &overview::releases_path(r));
+                    track(&mut self.round, &job.key);
+                    if let Some(w) = self.runs.get(k % RUN_LANES).or(self.worker.as_ref()) {
+                        w.send_first(job);
+                    }
+                }
+                self.status_asked = Some(now);
+                self.cmp_asked.clear();
+            }
+            for (repo, s) in &app.shipped {
+                let Some(s) = s.as_ref().filter(|s| !s.tag.is_empty() && self.repos.contains(repo)) else { continue };
+                if self.cmp_asked.get(repo) == Some(&s.tag) {
+                    continue;
+                }
+                let job = get(&format!("s-cmp:{repo} {}", s.tag), &overview::compare_path(repo, &s.tag));
+                track(&mut self.round, &job.key);
+                if let Some(q) = &self.quick {
+                    q.send(job);
+                }
+                self.cmp_asked.insert(repo.clone(), s.tag.clone());
+            }
+        }
         if app.viewer.is_some() {
             self.read_ahead(app);
         }
@@ -1220,6 +1375,11 @@ impl Net {
             (Some(_), _) => wake.min(due(self.runs_asked, RUNS_AWAY, now)).min(due(self.board_asked, BOARD_AWAY, now)),
         };
         let wake = if self.run_retry > now { wake.min(self.run_retry) } else { wake };
+        let wake = match &app.viewer {
+            Some(_) if app.view == View::Status => wake.min(due(self.status_asked, STATUS, now)),
+            Some(_) if !app.watched.is_empty() => wake.min(due(self.runs_asked, RUNS, now)),
+            _ => wake,
+        };
         ctx.request_repaint_after(wake.saturating_duration_since(now));
     }
 }
@@ -1237,14 +1397,16 @@ fn cached(key: &str, narrowed: bool) -> bool {
     match key {
         "items" => !narrowed,
         "me" | "discussions" | "mentions" | "mainci" | "board-pick" | "a-repos" => true,
-        k => k.starts_with("a-runs:") || list_repo(k).is_some(),
+        k => ["a-runs:", "a-repos:", "s-rel:"].iter().any(|p| k.starts_with(p)) || list_repo(k).is_some(),
     }
 }
 
 /// Whether `key`'s answer is of the owner or the Project the settings name
 /// (not shown from the cache once they have changed).
 fn scoped(key: &str) -> bool {
-    matches!(key, "items" | "discussions" | "mentions" | "mainci" | "board-pick" | "board" | "a-repos") || key.starts_with("a-runs:")
+    matches!(key, "items" | "discussions" | "mentions" | "mainci" | "board-pick" | "board" | "a-repos")
+        || key.starts_with("a-runs:")
+        || key.starts_with("a-repos:")
 }
 
 /// The owner and the Project as kept in the cache (`None`: the viewer and
@@ -1268,6 +1430,8 @@ fn rest_path(key: &str, other: Option<&str>) -> Option<String> {
     match key {
         "me" => Some("/user".into()),
         "a-repos" => Some(actions::repos_path(other)),
+        k if k.starts_with("a-repos:") => Some(actions::repos_path(Some(&k["a-repos:".len()..]))),
+        k if k.starts_with("s-rel:") => Some(overview::releases_path(&k["s-rel:".len()..])),
         k if k.starts_with("labels:") => list_repo(k).map(write::labels_path),
         k if k.starts_with("people:") => list_repo(k).map(write::assignees_path),
         k if k.starts_with("miles:") => list_repo(k).map(write::milestones_path),
@@ -1295,6 +1459,17 @@ fn cache_writer(dir: PathBuf) -> mpsc::Sender<cache::Entry> {
         }
     });
     tx
+}
+
+/// Tell of the watched runs that finished: the system's notification and,
+/// out of the quiet hours, a sound (a failed run's lower).
+fn ring(app: &mut App) {
+    for r in app.rings.drain(..) {
+        ito_notify::toast::show(ito_notify::toast::App { id: "uchmk.minato", name: "minato" }, &r.title, &r.body);
+        if !ito_notify::sound::quiet_time() {
+            ito_notify::sound::play(if r.bad { "alert" } else { "chime" });
+        }
+    }
 }
 
 fn get(key: &str, path: &str) -> Job {
@@ -1334,6 +1509,10 @@ mod tests {
         assert_ne!(scope_line(None), scope_line(Some(&("rust-lang".into(), "uchmk".into()))));
         assert!(scoped("a-runs:o/r") && scoped("board") && !scoped("detail:x") && !scoped("notes"));
         assert_eq!(rest_path("a-repos", Some("o")).as_deref(), Some("/users/o/repos?type=owner&sort=pushed&per_page=12"));
+        // Another owner's repositories, and a repository's releases.
+        assert!(scoped("a-repos:p") && cached("a-repos:p", false) && cached("s-rel:o/r", false) && !scoped("s-rel:o/r"));
+        assert_eq!(rest_path("a-repos:p", Some("o")).as_deref(), Some("/users/p/repos?type=owner&sort=pushed&per_page=12"));
+        assert_eq!(rest_path("s-rel:o/r", None).as_deref(), Some("/repos/o/r/releases?per_page=5"));
     }
 
     #[test]

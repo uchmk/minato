@@ -26,6 +26,7 @@ ito-keys = { git = "https://github.com/uchmk/ito", rev = "75f06712801082bd7350ef
 ito-palette = { git = "https://github.com/uchmk/ito", rev = "75f06712801082bd7350ef0a450f923180b75480" }
 ito-layout = { git = "https://github.com/uchmk/ito", rev = "75f06712801082bd7350ef0a450f923180b75480", features = ["egui"] }
 ito-browser = { git = "https://github.com/uchmk/ito", rev = "75f06712801082bd7350ef0a450f923180b75480" }
+ito-notify = { git = "https://github.com/uchmk/ito", rev = "75f06712801082bd7350ef0a450f923180b75480" }
 # eframe's own defaults, but for `winit/default` (see tsumugi): the Wayland
 # frame is drawn without the title's text, which brings an unmaintained crate.
 eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "links", "wayland", "web_screen_reader", "wgpu", "x11"] }
