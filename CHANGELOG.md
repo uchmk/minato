@@ -2,6 +2,17 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.13] - 2026-10-14
+
+### Added
+
+- README に「What it looks like」の節を足した。受信箱とボードの実際のキャプチャーと、受信箱 → 一覧 → ボード → キーの一覧と回る GIF（押したキーを字幕で出す）を載せる。画像は `docs/images/`、撮り方は `docs/images/README.md`。
+- 紹介画像（GitHub の Social preview）を `docs/social-preview.png` に、元の HTML を `docs/banner.html` に置いた。ほかの uchmk のアプリと同じ形で、左に港・名前・一言、右に受信箱の実画面。色はロゴのシアンと金。GitHub に API が無いので、Settings > General > Social preview から手で上げる。
+
+### Changed
+
+- README の「Status」が v0.1.0 の骨組みのままだったので、今つながっている画面と書き込みに直した。
+
 ## [0.39.12] - 2026-10-14
 
 ### Fixed
