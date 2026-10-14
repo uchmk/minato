@@ -206,7 +206,8 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
         selected_text: c.fg,
     };
     let words = ito_palette::Words { hint: app.tr("palette.hint"), none: app.tr("palette.none") };
-    match ito_palette::show(ctx, &mut view, &app.palette_entries(), &style, &words) {
+    let entries = app.palette_entries(&view.query);
+    match ito_palette::show(ctx, &mut view, &entries, &style, &words) {
         None => app.palette = Some(view),
         Some(ito_palette::Answer::Close) => {}
         Some(ito_palette::Answer::Pick(cmd)) => app.run_cmd(cmd),
@@ -221,6 +222,9 @@ impl eframe::App for Minato {
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
             self.app.toggle_help();
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F5)) {
+            self.app.sync_now();
         }
         if self.app.mode != Mode::Settings {
             self.keys(&ctx);

@@ -13,6 +13,10 @@
 //! them one by one or behind a search. They share one ETag cache, filled from disk at a start, so an
 //! answer that has not changed costs a 304.
 //!
+//! F5 starts a round: everything shown is asked at once (with the ETags,
+//! so what has not changed is a free 304), and the keybar counts the
+//! answers of the round as they come.
+//!
 //! A run's jobs, artifacts, workflow and release are kept by run with its
 //! `updated_at`: a finished run's are shown from there (and from disk after
 //! a restart) and not asked again; a running or queued one's are asked with
@@ -135,7 +139,31 @@ pub struct Net {
     /// The settings' owner (empty: the viewer) and board Project the polls
     /// follow; `None` until the first frame.
     scope: Option<(String, String)>,
+    /// The sync F5 asked for, while its answers come.
+    round: Option<Round>,
 }
+
+/// A sync asked for by hand: the keys asked in it and not answered yet,
+/// how many were asked, and when it started.
+struct Round {
+    want: HashSet<String>,
+    asked: usize,
+    since: Instant,
+}
+
+/// Count `key` in the round, if one runs (a free function: the workers
+/// are borrowed from the same `Net` while jobs are sent).
+fn track(round: &mut Option<Round>, key: &str) {
+    if let Some(r) = round {
+        if r.want.insert(key.to_string()) {
+            r.asked += 1;
+        }
+    }
+}
+
+/// A round that has not ended by then ends anyway (an answer lost to a
+/// newer question with the same key never comes).
+const ROUND_MAX: Duration = Duration::from_secs(90);
 
 /// How often the runs are asked again, while the Actions view is open, and
 /// while it is not (so it opens on fresh runs).
@@ -272,6 +300,7 @@ impl Net {
             kept: Default::default(),
             live: Default::default(),
             scope: None,
+            round: None,
         }
     }
 
@@ -328,6 +357,33 @@ impl Net {
     /// The owner the settings name, when it is not the viewer.
     fn other(&self) -> Option<&str> {
         self.scope.as_ref().map(|s| s.0.as_str()).filter(|o| !o.is_empty())
+    }
+
+    /// F5: ask for everything shown now. The polls come due at once, the
+    /// repositories are asked again, and the open item and run are read
+    /// again past what is kept; a round counts their answers.
+    fn start_round(&mut self, app: &mut App) {
+        let now = Instant::now();
+        (self.next_poll, self.next_search, self.next_notes, self.run_retry) = (now, now, now, now);
+        (self.board_asked, self.runs_asked) = (None, None);
+        self.repos.clear();
+        (self.asked, self.refetch) = (None, true);
+        (self.asked_run, self.run_refetch) = (None, true);
+        self.round = Some(Round { want: HashSet::new(), asked: 0, since: now });
+        app.syncing = Some((0, 0));
+    }
+
+    /// The round's count for the keybar, and its end once all is answered
+    /// (or it has run too long).
+    fn end_round(&mut self, app: &mut App, now: Instant) {
+        let Some(r) = &self.round else { return };
+        app.syncing = Some((r.asked - r.want.len(), r.asked));
+        if r.want.is_empty() || now.duration_since(r.since) >= ROUND_MAX {
+            self.round = None;
+            app.syncing = None;
+            let words = app.tr("net.synced");
+            app.say(words);
+        }
     }
 
     /// Follow the settings' owner and board Project: when one changes, what
@@ -595,6 +651,7 @@ impl Net {
         if let (Some(after), Some(q), Some(w)) = (next, self.searched_q.get(base), &self.worker) {
             let query = if base == "items" { items_query() } else { discussions_query() };
             let job = Job { key: format!("{base}-more:{round}"), call: Call::Graphql { query, variables: search_vars(q, Some(&after)) } };
+            track(&mut self.round, &job.key);
             if matches!(app.view, View::Inbox | View::List) {
                 w.send_first(job);
             } else {
@@ -633,6 +690,7 @@ impl Net {
                 key: "board-more".into(),
                 call: Call::Graphql { query: board::query(self.other()), variables: board::vars(n, Some(&after)) },
             };
+            track(&mut self.round, &job.key);
             if app.view == View::Board {
                 w.send_first(job);
             } else {
@@ -842,6 +900,9 @@ impl Net {
             replies.extend(std::iter::from_fn(|| back.try_recv()).map(|r| (r, true)));
         }
         for (reply, ahead) in replies {
+            if let Some(r) = &mut self.round {
+                r.want.remove(&reply.key);
+            }
             if ahead {
                 self.back_busy = self.back_busy.saturating_sub(1);
             }
@@ -924,6 +985,9 @@ impl Net {
                 }
             }
         }
+        if std::mem::take(&mut app.sync_wanted) {
+            self.start_round(app);
+        }
         let (Some(worker), Some(quick)) = (&self.worker, &self.quick) else { return };
         for o in app.outbox.drain(..) {
             if let Some(done) = o.done {
@@ -958,6 +1022,7 @@ impl Net {
                 }
                 if !fresh {
                     let vars = format!("{{\"id\":{}}}", json_str(id));
+                    track(&mut self.round, &format!("detail:{id}"));
                     quick.send(Job { key: format!("detail:{id}"), call: Call::Graphql { query: detail_query().into(), variables: vars } });
                 }
                 // The writing box's lists are read ahead, after the detail:
@@ -974,6 +1039,7 @@ impl Net {
         let now = Instant::now();
         if now >= self.next_poll {
             worker.send(get("rate", "/rate_limit"));
+            track(&mut self.round, "rate");
             let unix = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
             let wait = Rate::tighter(&self.rates).map_or(POLL, |r| r.interval(POLL, unix));
             self.next_poll = now + wait;
@@ -1012,6 +1078,7 @@ impl Net {
                 let plain = format!("user:{owner} {state} sort:updated-desc");
                 let q = custom.clone().unwrap_or_else(|| plain.clone());
                 worker.send(Job { key: "items".into(), call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) } });
+                track(&mut self.round, "items");
                 self.searched_q.insert("items", q);
                 if custom.is_some() {
                     self.found[1].clear();
@@ -1031,6 +1098,9 @@ impl Net {
                     });
                     let vars = search_vars(&plain, None);
                     worker.send(Job { key: "discussions".into(), call: Call::Graphql { query: discussions_query(), variables: vars } });
+                    for k in ["mentions", "mainci", "discussions"] {
+                        track(&mut self.round, k);
+                    }
                     self.searched_q.insert("discussions", plain);
                 }
                 self.next_search = now + SEARCH;
@@ -1041,6 +1111,7 @@ impl Net {
             // new, even after some were marked read.
             self.etags.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&client::url(notes::PATH));
             worker.send(get("notes", notes::PATH));
+            track(&mut self.round, "notes");
             self.next_notes = now + NOTES;
         }
         // The board and the runs: those of the open view first and often,
@@ -1054,6 +1125,7 @@ impl Net {
             self.board_asked = None;
         }
         if app.viewer.is_some() && due(self.board_asked, if open { BOARD } else { BOARD_AWAY }, now) <= now {
+            track(&mut self.round, if self.board_no.is_some() { "board" } else { "board-pick" });
             match self.board_no {
                 None => send(
                     Job {
@@ -1078,6 +1150,7 @@ impl Net {
             if self.repos.is_empty() {
                 // On a runs lane: not behind a slow search of a new owner.
                 let job = get("a-repos", &actions::repos_path(self.other()));
+                track(&mut self.round, "a-repos");
                 match self.runs.first() {
                     Some(w) if open => w.send_first(job),
                     Some(w) => w.send(job),
@@ -1086,6 +1159,7 @@ impl Net {
             } else {
                 for (k, r) in self.repos.iter().enumerate() {
                     let job = Job { key: format!("a-runs:{r}"), call: Call::Get(actions::runs_path(r)) };
+                    track(&mut self.round, &job.key);
                     match self.runs.get(k % RUN_LANES) {
                         Some(w) if open => w.send_first(job),
                         Some(w) => w.send(job),
@@ -1137,6 +1211,7 @@ impl Net {
         if app.viewer.is_some() {
             self.read_ahead(app);
         }
+        self.end_round(app, now);
         let wake = self.next_poll.min(self.next_search).min(self.next_notes);
         let wake = match (&app.viewer, app.view) {
             (None, _) => wake,

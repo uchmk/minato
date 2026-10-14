@@ -79,7 +79,7 @@ impl View {
     }
 
     /// The keys that work in this view: `(keys, word-table key)`, the one to
-    /// recommend first. The keybar shows the first few; `?` shows them all.
+    /// recommend first. The keybar shows as many as fit; `?` shows them all.
     pub fn keys(self) -> &'static [(&'static str, &'static str)] {
         match self {
             View::Inbox => &[
@@ -142,7 +142,7 @@ impl View {
 }
 
 /// The keys that work in every view.
-pub const GLOBAL_KEYS: [(&str, &str); 9] = [
+pub const GLOBAL_KEYS: [(&str, &str); 11] = [
     ("1 2 3 4", "key.views"),
     ("Tab S-Tab", "key.cycle"),
     ("gg G", "key.ends"),
@@ -151,8 +151,17 @@ pub const GLOBAL_KEYS: [(&str, &str); 9] = [
     ("Ctrl+Shift+P", "key.palette"),
     ("n", "key.notes"),
     ("u", "key.undo"),
+    ("F5", "key.sync"),
+    ("@", "key.owner"),
     ("F1 ?", "key.help"),
 ];
+
+/// The palette opened with `@`, to switch whose repositories are shown.
+fn owner_palette() -> ito_palette::View {
+    let mut v = ito_palette::View::new();
+    v.query = "@".into();
+    v
+}
 
 /// What the window shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -282,6 +291,10 @@ pub enum Cmd {
     Help,
     Notes,
     MarkAll,
+    /// Ask GitHub for everything shown now (F5).
+    Sync,
+    /// Show this owner's repositories (a login; empty for the viewer).
+    Owner(String),
     /// The common scale (Ctrl+= Ctrl+- Ctrl+0).
     Scale(ito_common::ScaleTo),
     /// An issue, PR or discussion (its node id).
@@ -305,6 +318,12 @@ pub struct App {
     pub unread: u32,
     /// When GitHub was last asked; `None` until the first sync.
     pub synced: Option<Instant>,
+    /// F5 asked for everything shown to be fetched again; the network
+    /// takes it.
+    pub sync_wanted: bool,
+    /// The answers of that sync that came back and the ones asked, while
+    /// it runs (the keybar shows them).
+    pub syncing: Option<(usize, usize)>,
     /// The rate limit's remaining and total, from the last answer.
     pub api: Option<(u32, u32)>,
     /// A message at the top right, until the time with it.
@@ -413,9 +432,6 @@ pub struct App {
     pub list_split: Node<Pane>,
     pub acts_split: Node<Pane>,
 }
-
-/// How many of a view's keys the keybar shows before "F1 all keys".
-const KEYBAR_KEYS: usize = 5;
 
 /// What a confirmation box asks about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -542,6 +558,8 @@ impl App {
             notes_read: notes::Read::default(),
             palette: None,
             synced: None,
+            sync_wanted: false,
+            syncing: None,
             api: None,
             toast: None,
             wheel_acc: 0.0,
@@ -787,6 +805,7 @@ impl App {
             (Mode::Main, '?') => (self.mode, self.help_top) = (Mode::Help, 0),
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
+            (Mode::Main, '@') => self.palette = Some(owner_palette()),
             (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
             (Mode::Main, 'M') if matches!(self.view, View::Inbox | View::List) => self.mark_answer(),
             (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
@@ -957,7 +976,7 @@ impl App {
             Mode::Help => vec![("F1 Esc", "key.back")],
             Mode::Notes => vec![("j k", "notes.pick"), ("Enter", "key.open"), ("Shift+A", "notes.read_all"), ("Esc", "notes.close")],
             Mode::Main if self.find_on() => Vec::new(),
-            Mode::Main => self.keys_now().into_iter().take(KEYBAR_KEYS).chain([("F1", "key.help")]).collect(),
+            Mode::Main => self.keys_now().into_iter().chain([("F5", "key.sync"), ("@", "key.owner"), ("F1", "key.help")]).collect(),
         }
     }
 
@@ -1413,12 +1432,15 @@ impl App {
         self.queue("note:all", notes::mark_all(), Some("notes.all_read"));
     }
 
-    /// The lines of the palette: the commands, then the items (`#12 title`).
-    pub fn palette_entries(&self) -> Vec<ito_palette::Entry<Cmd>> {
+    /// The lines of the palette: the commands, the owners to switch to
+    /// (`@login`; what `query` names after `@` too), then the items
+    /// (`#12 title`).
+    pub fn palette_entries(&self, query: &str) -> Vec<ito_palette::Entry<Cmd>> {
         use ito_palette::Entry;
         // tsumugi's words for the same commands; the views are not here, as
         // the bar shows them with their keys.
         let mut e = vec![
+            Entry::new(self.tr("cmd.sync"), "F5", Cmd::Sync),
             Entry::new(self.tr("cmd.notes"), "n", Cmd::Notes),
             Entry::new(self.tr("cmd.mark_all"), "A", Cmd::MarkAll),
             Entry::new(self.tr("cmd.settings"), "Ctrl+,", Cmd::Settings),
@@ -1427,6 +1449,26 @@ impl App {
             Entry::new(self.tr("cmd.zoom_reset"), "Ctrl+0", Cmd::Scale(ito_common::ScaleTo::Reset)),
             Entry::new(self.tr("cmd.help"), "F1", Cmd::Help),
         ];
+        let now = self.settings.owner.as_str();
+        let mut owner = |login: &str, detail: &str| {
+            if !login.is_empty() && !e.iter().any(|x| matches!(&x.pick, Cmd::Owner(o) if o.eq_ignore_ascii_case(login))) {
+                let mut x = Entry::new(format!("@{login}"), "", Cmd::Owner(login.to_string()));
+                x.detail = detail.to_string();
+                e.push(x);
+            }
+        };
+        let typed = minato_core::prefs::login(query.trim().strip_prefix('@').unwrap_or(""));
+        if !typed.eq_ignore_ascii_case(now) {
+            owner(&typed, self.tr("cmd.owner"));
+        }
+        if !now.is_empty() {
+            if let Some(me) = self.viewer.as_deref() {
+                owner(me, self.tr("cmd.owner_me"));
+            }
+        }
+        for o in self.settings.owners.iter().filter(|o| !o.eq_ignore_ascii_case(now)) {
+            owner(o, self.tr("cmd.owner"));
+        }
         for i in self.items.iter().take(200) {
             let mut x = Entry::new(format!("#{} {}", i.number, i.title), "", Cmd::Item(i.id.clone()));
             x.detail = i.repo.clone();
@@ -1442,12 +1484,35 @@ impl App {
             Cmd::Help => (self.mode, self.help_top) = (Mode::Help, 0),
             Cmd::Notes => self.mode = Mode::Notes,
             Cmd::MarkAll => self.mark_all_read(),
+            Cmd::Sync => self.sync_now(),
+            Cmd::Owner(o) => self.show_owner(&o),
             Cmd::Scale(to) => self.scale(to),
             Cmd::Item(id) => {
                 self.mode = Mode::Main;
                 self.show_in_list(&id);
             }
         }
+    }
+
+    /// F5: fetch everything shown again now, not at the next turn.
+    pub fn sync_now(&mut self) {
+        self.sync_wanted = true;
+    }
+
+    /// Show `login`'s repositories, searches and Project (the viewer's when
+    /// it is the viewer); the settings keep it, as the settings screen does.
+    pub fn show_owner(&mut self, login: &str) {
+        let me = self.viewer.as_deref().is_some_and(|v| v.eq_ignore_ascii_case(login));
+        let was = self.settings.clone();
+        self.settings.set_owner(if me { "" } else { login });
+        self.scope_text[0] = self.settings.owner.clone();
+        if self.settings != was {
+            self.save_settings();
+        }
+        self.mode = Mode::Main;
+        let who = self.owner().unwrap_or(login).to_string();
+        let words = self.tr("owner.switched").replace("{}", &who);
+        self.say(words);
     }
 
     /// A card dropped on a column (the mouse): the same write as `H` `L`.
@@ -2162,6 +2227,40 @@ mod tests {
     }
 
     #[test]
+    fn f5_asks_for_a_sync_and_the_keybar_offers_it() {
+        let mut a = app();
+        let words = a.bar_keys().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
+        assert!(words.ends_with(&["key.sync", "key.owner", "key.help"]));
+        a.run_cmd(Cmd::Sync);
+        assert!(a.sync_wanted);
+        assert!(a.palette_entries("").iter().any(|x| x.pick == Cmd::Sync && x.key == "F5"));
+    }
+
+    #[test]
+    fn at_switches_the_owner_and_back() {
+        let mut a = app();
+        a.viewer = Some("me".into());
+        assert!(a.feed('@'));
+        assert_eq!(a.palette.as_ref().map(|v| v.query.as_str()), Some("@"));
+        let owners = |a: &App, q: &str| {
+            a.palette_entries(q).into_iter().filter_map(|x| if let Cmd::Owner(o) = x.pick { Some(o) } else { None }).collect::<Vec<_>>()
+        };
+        assert!(owners(&a, "@").is_empty(), "nobody to switch to yet");
+        assert_eq!(owners(&a, "@rust-lang"), ["rust-lang"]);
+        a.palette = None;
+        a.run_cmd(Cmd::Owner("rust-lang".into()));
+        assert_eq!((a.settings.owner.as_str(), a.scope_text[0].as_str()), ("rust-lang", "rust-lang"));
+        assert_eq!(a.owner(), Some("rust-lang"));
+        // Back to the viewer, who is offered first; the other owner is kept.
+        assert_eq!(owners(&a, "@"), ["me"]);
+        a.show_owner("me");
+        assert_eq!(a.settings.owner, "");
+        assert_eq!(a.owner(), Some("me"));
+        assert_eq!(owners(&a, "@"), ["rust-lang"]);
+        assert_eq!(owners(&a, "@tokio-rs"), ["tokio-rs", "rust-lang"]);
+    }
+
+    #[test]
     fn actions_keys_rerun_cancel_and_open() {
         let mut a = app();
         a.feed('3');
@@ -2465,7 +2564,7 @@ mod tests {
     #[test]
     fn the_palette_lists_commands_and_runs_one() {
         let mut a = app();
-        let e = a.palette_entries();
+        let e = a.palette_entries("");
         assert!(!e.iter().any(|x| x.key == "1"), "no lines for the views");
         // The names of the commands tsumugi has too are tsumugi's.
         let name = |c: Cmd| e.iter().find(|x| x.pick == c).map(|x| x.title.clone());

@@ -96,7 +96,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                         ui.add(edit).lost_focus()
                     });
                     if done && k == 0 {
-                        st.owner = minato_core::prefs::login(&scope_text[0]);
+                        st.set_owner(&scope_text[0]);
                         scope_text[0] = st.owner.clone();
                     } else if done {
                         st.project = scope_text[1].trim().to_string();

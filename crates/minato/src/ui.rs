@@ -461,17 +461,23 @@ fn key_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let api = minato_core::status::api(app.api);
     let t = p.text(pos2(right, mid), Align2::RIGHT_CENTER, api, FontId::monospace(11.5), c.dim);
     right = t.left() - 16.0;
-    let ago = minato_core::status::ago(app.since_sync(), app.ja());
-    let t = p.text(pos2(right, mid), Align2::RIGHT_CENTER, format!("⟳ {ago}"), FontId::monospace(11.5), c.dim);
+    // While F5's sync runs, how many of its answers have come (lit).
+    let (sync, ink, widest) = match app.syncing {
+        Some((done, total)) => {
+            let ja = app.ja();
+            (minato_core::status::fetching(done, total, ja), ACCENT, minato_core::status::fetching(total, total, ja))
+        }
+        None => (minato_core::status::ago(app.since_sync(), app.ja()), c.dim, minato_core::status::ago(Some(59), app.ja())),
+    };
+    let t = p.text(pos2(right, mid), Align2::RIGHT_CENTER, format!("⟳ {sync}"), FontId::monospace(11.5), ink);
     if app.synced.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
     }
-    // The keys stop short of it, kept as wide as two digits so they do not
-    // come and go as the seconds tick: the last ones go first, then the word
-    // of the way out (Esc, or F1), back when it is the only one; its key stays.
-    let widest = ui.fonts_mut(|f| {
-        f.layout_no_wrap(format!("⟳ {}", minato_core::status::ago(Some(59), app.ja())), FontId::monospace(11.5), c.dim).size().x
-    });
+    // The keys stop short of it, kept as wide as two digits (or the sync's
+    // total) so they do not come and go as the seconds tick: the last ones
+    // go first, then the word of the way out (Esc, or F1), back when it is
+    // the only one; its key stays.
+    let widest = ui.fonts_mut(|f| f.layout_no_wrap(format!("⟳ {widest}"), FontId::monospace(11.5), c.dim).size().x);
     let stop = right - t.width().max(widest) - 16.0;
     if app.find_on() {
         x = find_bar(ui, app, r, stop, out);

@@ -18,6 +18,12 @@ pub fn ago(secs: Option<u64>, ja: bool) -> String {
     }
 }
 
+/// "取得中 3 / 12" / "Fetching 3 / 12": the answers of a sync asked for by
+/// hand (F5) that have come, of those asked.
+pub fn fetching(done: usize, total: usize, ja: bool) -> String {
+    format!("{} {done} / {total}", if ja { "取得中" } else { "Fetching" })
+}
+
 /// "API 4,812/5,000": the rate limit's remaining and total, or "API —".
 pub fn api(limit: Option<(u32, u32)>) -> String {
     match limit {
@@ -52,6 +58,12 @@ mod tests {
         assert_eq!(ago(Some(7200), false), "2h ago");
         assert_eq!(ago(Some(200_000), false), "2d ago");
         assert_eq!(ago(None, true), "—");
+    }
+
+    #[test]
+    fn fetching_counts_the_answers() {
+        assert_eq!(fetching(3, 12, true), "取得中 3 / 12");
+        assert_eq!(fetching(0, 0, false), "Fetching 0 / 0");
     }
 
     #[test]

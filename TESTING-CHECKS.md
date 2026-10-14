@@ -26,7 +26,7 @@
 - [x] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
 - [x] **2.4** Press `Ctrl+,` → The settings screen opens; `Esc` closes it
 - [x] **2.5** Press `Ctrl+Shift+P` → The command palette opens over the view (see 11.6)
-- [x] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, ending with `F1`; when they do not fit, the view's last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock
+- [ ] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, then `F5`, `@` and `F1`, as many as the width holds; when they do not fit, the last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock
 
 ## 3. Keybar status and clock
 
@@ -361,3 +361,10 @@
 - [x] **32.5** In the list press `h`, go to a saved search, `Space` on one that finds fewer repositories or authors; then `k` and `Space` → The cursor stays on the chosen search (lit) when the options above it shrink; `k` moves from there
 - [x] **32.6** Press `r` on an item of a repository with no open milestone and `Alt+M`; then on one with a milestone set → The picker says there is nothing to choose (not loading); on the second the item's milestone is ticked `(o)`
 - [ ] **32.7** On a PR with a review asked press `r`, `Alt+R`, untick the person, `Esc` → The person is ticked at first; after `Esc` a toast says the request was taken off and GitHub no longer lists them
+
+## 33. Sync now and switching the owner
+
+- [ ] **33.1** Press `F5` in each view → The keybar's `⟳` turns lit and counts `Fetching 3 / 12` (Japanese: `取得中 3 / 12`) as the answers come, the keys at its left do not move as it counts; it ends within a few seconds with a toast "Synced" and goes back to `⟳ 0s ago`. The palette (`Ctrl+Shift+P`) has "Sync now" with `F5`
+- [ ] **33.2** Press `@` → The palette opens with `@` typed and the cursor after it (typing `rust-lang` gives `@rust-lang`, not `@@`); a line `@rust-lang` "show this owner's repositories" is offered
+- [ ] **33.3** Pick `@rust-lang` with `Enter` → A toast says rust-lang's repositories are shown; within a minute the list, Actions and the board follow rust-lang; the settings' owner field says `rust-lang`
+- [ ] **33.4** Press `@` again, pick the line with your login ("you: your own repositories"); press `@` once more → Your own repositories come back and the settings' owner field is empty; the last palette offers `@rust-lang` (kept, up to 8 owners, the latest first, also after a restart)
