@@ -401,15 +401,27 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     if let Some(arts) = have.and_then(|d| d.artifacts.as_ref()).filter(|a| !a.is_empty()) {
         y = style::heading(&p, x, y, app.tr("run.artifacts"));
         for a in arts {
-            let cy = y + 10.0;
-            let m = p.text(pos2(x + 10.0, cy), Align2::LEFT_CENTER, "▤", FontId::monospace(13.0), c.fg);
-            p.text(pos2(m.right() + 10.0, cy), Align2::LEFT_CENTER, &a.name, FontId::monospace(13.0), c.fg);
-            p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(a.bytes), FontId::monospace(13.0), c.dim);
+            artifact(&p, x, y + 10.0, w, &a.name, a.bytes);
             y += 22.0;
         }
     }
     // The keys stop when the end is a little above the foot.
     out.detail_max = Some(((y - top + 36.0 - r.height()) / LINE).ceil().max(0.0));
+}
+
+/// One artifact on the line at `cy`: its mark and name at the left, its size
+/// at the right. A name too long for the room between is cut short with `…`
+/// so it never runs under the size. Returns where the name and the size went.
+fn artifact(p: &Painter, x: f32, cy: f32, w: f32, name: &str, bytes: u64) -> (Rect, Rect) {
+    let c = ito_theme::colors();
+    let font = FontId::monospace(13.0);
+    let size = p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(bytes), font.clone(), c.dim);
+    let m = p.text(pos2(x + 10.0, cy), Align2::LEFT_CENTER, "▤", font.clone(), c.fg);
+    let at = m.right() + 10.0;
+    let g = style::truncated(p, name.to_owned(), font, c.fg, size.left() - 12.0 - at);
+    let r = Rect::from_min_size(pos2(at, cy - g.size().y / 2.0), g.size());
+    p.galley(r.min, g, c.fg);
+    (r, size)
 }
 
 /// Most columns the `needs:` graph is drawn with; deeper workflows are listed.
@@ -487,6 +499,30 @@ fn edge(a: egui::Pos2, b: egui::Pos2, top: f32, rows: usize) -> Vec<egui::Pos2> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_artifact_name_stops_before_its_size() {
+        let long = "windows-arm64-smoke-168aaf65ab120a3dd4a1bf3a9badf8b19c6390f5";
+        let ctx = egui::Context::default();
+        let (mut got, mut full) = (Vec::new(), 0.0);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let p = ui.ctx().layer_painter(egui::LayerId::background());
+            for (name, w) in [(long, 500.0), ("a.zip", 500.0), (long, 2000.0)] {
+                got.push(artifact(&p, 0.0, 10.0, w, name, 25_600));
+            }
+            full = p.layout_no_wrap(long.into(), FontId::monospace(13.0), Color32::WHITE).size().x;
+        });
+        // No renderer takes the font texture here.
+        out.textures_delta.clear();
+        let [(cut, size), (short, short_size), (whole, whole_size)] = got[..] else { panic!("three rows") };
+        // The long name is cut with room to spare before the size.
+        assert!(cut.right() <= size.left() - 10.0, "{cut:?} runs into {size:?}");
+        assert!(cut.width() < full - 50.0, "{cut:?} is not cut ({full})");
+        // A name that fits, or a row wide enough, keeps every letter.
+        assert!(short.width() > 30.0 && short.right() < short_size.left());
+        assert_eq!(whole.width(), full);
+        assert!(whole.right() < whole_size.left());
+    }
 
     #[test]
     fn a_line_past_a_column_keeps_out_of_its_boxes() {
