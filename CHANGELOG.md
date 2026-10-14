@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.39.18] - 2026-10-14
+
+### Fixed
+
+- Actions の run の詳しいところの `needs:` のグラフで、箱より長いジョブの名前（`arm64 / windows-arm64-smoke` など）が箱の端で字の途中から消えていた。成果物の名前と同じく、箱の中で `…` で切るようにした。
+
 ## [0.39.17] - 2026-10-14
 
 ### Fixed

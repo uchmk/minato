@@ -172,7 +172,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 12.1 | In Actions, open a run of a workflow whose YAML has `needs:` | The jobs are drawn as boxes in columns by depth, joined by lines, coloured by result with the time under the name. The jobs of a matrix named by an expression (`name: ${{ matrix.name }}`, the `unix` job of a Release run) stand in their job's column, and a line that skips a column (`windows` to `sums`) runs between two boxes, never across one |
+| 12.1 | In Actions, open a run of a workflow whose YAML has `needs:` | The jobs are drawn as boxes in columns by depth, joined by lines, coloured by result with the time under the name. The jobs of a matrix named by an expression (`name: ${{ matrix.name }}`, the `unix` job of a Release run) stand in their job's column, and a line that skips a column (`windows` to `sums`) runs between two boxes, never across one. A name too long for its box (`arm64 / windows-arm64-smoke`) ends in `…` inside it |
 | 12.2 | Open a run of a workflow with no `needs:` or five or more levels | The jobs are listed instead, with `← needs` where it applies |
 | 12.3 | Press `D` on a run whose workflow has `workflow_dispatch` inputs | A form lists the inputs with their descriptions, defaults and `*` for required |
 | 12.4 | `Up`/`Down` to move, type into a text input, `Enter`/`Space` on a boolean or choice | Text is typed; booleans and choices change; `Tab` moves down |

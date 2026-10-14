@@ -464,18 +464,23 @@ fn graph(p: &Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::work
         let t = tone(job.status);
         p.rect_filled(*r, CornerRadius::same(5), t.gamma_multiply(0.16));
         p.rect_stroke(*r, CornerRadius::same(5), Stroke::new(1.0, t), egui::StrokeKind::Inside);
+        job_label(p, *r, &format!("{} {}", job.status.mark(), job.name));
         let clip = p.with_clip_rect(r.shrink(3.0));
-        clip.text(
-            pos2(r.left() + 7.0, r.top() + 12.0),
-            Align2::LEFT_CENTER,
-            format!("{} {}", job.status.mark(), job.name),
-            FontId::proportional(11.5),
-            c.fg,
-        );
         let d = job.seconds(now).map(actions::duration).unwrap_or_default();
         clip.text(pos2(r.left() + 7.0, r.top() + 27.0), Align2::LEFT_CENTER, d, FontId::monospace(10.5), c.dim);
     }
     deepest as f32 * (BOX_H + BOX_GAP)
+}
+
+/// A job's mark and name on the top line of its box `r`, cut short with `…`
+/// when it is wider than the box. Returns where the text went.
+fn job_label(p: &Painter, r: Rect, text: &str) -> Rect {
+    let c = ito_theme::colors();
+    let g = style::truncated(p, text.to_owned(), FontId::proportional(11.5), c.fg, r.width() - 14.0);
+    let at = pos2(r.left() + 7.0, r.top() + 12.0 - g.size().y / 2.0);
+    let used = Rect::from_min_size(at, g.size());
+    p.galley(at, g, c.fg);
+    used
 }
 
 /// The line from the right of one box to the left of a box further right.
@@ -522,6 +527,29 @@ mod tests {
         assert!(short.width() > 30.0 && short.right() < short_size.left());
         assert_eq!(whole.width(), full);
         assert!(whole.right() < whole_size.left());
+    }
+
+    #[test]
+    fn a_long_job_name_ends_inside_its_box() {
+        let long = "✓ arm64 / windows-arm64-smoke";
+        let boxed = |w: f32| Rect::from_min_size(pos2(0.0, 0.0), vec2(w, BOX_H));
+        let ctx = egui::Context::default();
+        let (mut got, mut full) = (Vec::new(), 0.0);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let p = ui.ctx().layer_painter(egui::LayerId::background());
+            for (text, w) in [(long, 120.0), ("✓ sums", 120.0), (long, 600.0)] {
+                got.push(job_label(&p, boxed(w), text));
+            }
+            full = p.layout_no_wrap(long.into(), FontId::proportional(11.5), Color32::WHITE).size().x;
+        });
+        out.textures_delta.clear();
+        let [cut, short, whole] = got[..] else { panic!("three boxes") };
+        // The long name is cut and stays off the box's right edge.
+        assert!(cut.right() <= boxed(120.0).right() - 7.0, "{cut:?} runs out of its box");
+        assert!(cut.width() < full - 30.0, "{cut:?} is not cut ({full})");
+        // A short name, or a box wide enough, keeps every letter.
+        assert!(short.width() > 20.0 && short.right() < boxed(120.0).right());
+        assert_eq!(whole.width(), full);
     }
 
     #[test]

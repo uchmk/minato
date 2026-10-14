@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "minato"
-version = "0.39.17"
+version = "0.39.18"
 dependencies = [
  "chrono",
  "eframe",
@@ -2132,7 +2132,7 @@ dependencies = [
 
 [[package]]
 name = "minato-core"
-version = "0.39.17"
+version = "0.39.18"
 dependencies = [
  "serde",
  "serde_json",
