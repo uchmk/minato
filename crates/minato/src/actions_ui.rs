@@ -435,15 +435,15 @@ fn graph(p: &Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::work
         rows[col] += 1;
         rect.push(r);
     }
+    let deepest = rows.iter().copied().max().unwrap_or(0);
     for (k, s) in src.iter().enumerate() {
         let Some(s) = s else { continue };
         for need in &wf.jobs[*s].needs {
             let Some(from) = wf.jobs.iter().position(|j| &j.key == need) else { continue };
             for (m, r) in rect.iter().enumerate() {
                 if src[m] == Some(from) {
-                    let (a, b) = (r.right_center(), rect[k].left_center());
-                    let mid = a.x + (b.x - a.x) / 2.0;
-                    p.add(egui::Shape::line(vec![a, pos2(mid, a.y), pos2(mid, b.y), b], Stroke::new(1.0, c.dim)));
+                    let line = edge(r.right_center(), rect[k].left_center(), at.y, deepest);
+                    p.add(egui::Shape::line(line, Stroke::new(1.0, c.dim)));
                 }
             }
         }
@@ -463,6 +463,48 @@ fn graph(p: &Painter, jobs: &[minato_core::actions::Job], wf: &minato_core::work
         let d = job.seconds(now).map(actions::duration).unwrap_or_default();
         clip.text(pos2(r.left() + 7.0, r.top() + 27.0), Align2::LEFT_CENTER, d, FontId::monospace(10.5), c.dim);
     }
-    let deepest = rows.iter().copied().max().unwrap_or(0);
     deepest as f32 * (BOX_H + BOX_GAP)
+}
+
+/// The line from the right of one box to the left of a box further right.
+/// Into the next column it turns in the gap between the two; past a column
+/// it runs along the gap under one of the `rows` rows (the one nearest the
+/// two ends), so it crosses no box in the columns between.
+fn edge(a: egui::Pos2, b: egui::Pos2, top: f32, rows: usize) -> Vec<egui::Pos2> {
+    if b.x - a.x <= COL_GAP + 1.0 {
+        let mid = a.x + (b.x - a.x) / 2.0;
+        return vec![a, pos2(mid, a.y), pos2(mid, b.y), b];
+    }
+    let half = (a.y + b.y) / 2.0;
+    let y = (1..=rows.max(1))
+        .map(|n| top + n as f32 * (BOX_H + BOX_GAP) - BOX_GAP / 2.0)
+        .min_by(|p, q| (p - half).abs().total_cmp(&(q - half).abs()))
+        .unwrap_or(top);
+    let (x1, x2) = (a.x + COL_GAP / 2.0, b.x - COL_GAP / 2.0);
+    vec![a, pos2(x1, a.y), pos2(x1, y), pos2(x2, y), pos2(x2, b.y), b]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_line_past_a_column_keeps_out_of_its_boxes() {
+        // Three columns 100 wide: a box in each of the first row, and the
+        // middle one has a second row.
+        let col = |i: f32| i * (100.0 + COL_GAP);
+        let mid_boxes = [0.0, 1.0].map(|n| Rect::from_min_size(pos2(col(1.0), n * (BOX_H + BOX_GAP)), vec2(100.0, BOX_H)));
+        let line = edge(pos2(col(0.0) + 100.0, BOX_H / 2.0), pos2(col(2.0), BOX_H / 2.0), 0.0, 2);
+        for seg in line.windows(2) {
+            for r in &mid_boxes {
+                // Each piece is level or upright, so its box of bounds is the piece.
+                let s = Rect::from_two_pos(seg[0], seg[1]);
+                assert!(!s.intersects(r.shrink(0.5)), "{seg:?} crosses {r:?}");
+            }
+        }
+        assert_eq!(line.first(), Some(&pos2(100.0, BOX_H / 2.0)));
+        assert_eq!(line.last(), Some(&pos2(col(2.0), BOX_H / 2.0)));
+        // The next column: one turn in the gap, as before.
+        assert_eq!(edge(pos2(100.0, 10.0), pos2(col(1.0), 50.0), 0.0, 2).len(), 4);
+    }
 }

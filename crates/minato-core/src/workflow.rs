@@ -112,6 +112,14 @@ impl WJob {
     pub fn is(&self, api_name: &str) -> bool {
         api_name == self.name || api_name.strip_prefix(&self.name).is_some_and(|r| r.starts_with(" (") || r.starts_with(" / "))
     }
+
+    /// The text around an expression in `name:` (`Build ${{ matrix.os }}`
+    /// gives `Build ` and the empty end), whose API names are only known
+    /// when the job runs.
+    fn template(&self) -> Option<(&str, &str)> {
+        let (head, rest) = self.name.split_once("${{")?;
+        Some((head, rest.rsplit_once("}}").map_or("", |(_, tail)| tail)))
+    }
 }
 
 /// One input of `workflow_dispatch`.
@@ -197,7 +205,20 @@ impl Workflow {
     /// The workflow job an API job comes from.
     pub fn source_of(&self, job: &Job) -> Option<usize> {
         // The longest name wins, so `test` does not claim `test-long`.
-        self.jobs.iter().enumerate().filter(|(_, w)| w.is(&job.name)).max_by_key(|(_, w)| w.name.len()).map(|(i, _)| i)
+        let named = self.jobs.iter().enumerate().filter(|(_, w)| w.template().is_none() && w.is(&job.name));
+        if let Some((i, _)) = named.max_by_key(|(_, w)| w.name.len()) {
+            return Some(i);
+        }
+        // Else a job named by an expression (`name: ${{ matrix.name }}`)
+        // whose text around it fits; the most of that text wins.
+        let n = job.name.as_str();
+        self.jobs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, w)| w.template().map(|(h, t)| (i, h, t)))
+            .filter(|(_, h, t)| n.len() >= h.len() + t.len() && n.starts_with(h) && n.ends_with(t))
+            .max_by_key(|(_, h, t)| h.len() + t.len())
+            .map(|(i, _, _)| i)
     }
 }
 
@@ -361,6 +382,40 @@ jobs:
         assert_eq!(w.source_of(&job("Test (ubuntu)")), Some(1));
         assert_eq!(w.source_of(&job("lint")), Some(0));
         assert_eq!(w.source_of(&job("other")), None);
+    }
+
+    #[test]
+    fn a_job_named_by_an_expression_takes_the_names_nobody_else_has() {
+        let w = parse(
+            r#"
+jobs:
+  arm64:
+    uses: ./a.yml
+  windows:
+    needs: arm64
+  unix:
+    name: ${{ matrix.name }}
+    needs: windows
+  build:
+    name: Build ${{ matrix.os }} "x"
+  sums:
+    needs: [windows, unix]
+"#,
+        );
+        let job = |n: &str| Job {
+            id: 1,
+            name: n.into(),
+            status: crate::actions::Status::Ok,
+            started_at: String::new(),
+            completed_at: String::new(),
+            url: String::new(),
+        };
+        assert_eq!(w.source_of(&job("arm64 / linux-arm64")), Some(0));
+        assert_eq!(w.source_of(&job("windows")), Some(1));
+        assert_eq!(w.source_of(&job("macos-x64")), Some(2));
+        assert_eq!(w.source_of(&job("Build ubuntu \"x\"")), Some(3));
+        assert_eq!(w.source_of(&job("sums / sums")), Some(4));
+        assert_eq!(w.layers(), [0, 1, 2, 0, 3]);
     }
 
     #[test]
