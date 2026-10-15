@@ -60,7 +60,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
         y = sections(&p, app, item, x, y, w);
-        select_text(ui, &p, &grab, body);
+        select_text(ui, &p, &grab, body, out);
         let at = Rect::from_min_max(pos2(r.left(), body.bottom()), r.max);
         if open || r.height() >= SHORT {
             strip(ui, app, item, at, out)
@@ -335,20 +335,16 @@ fn files(p: &Painter, app: &App, d: &minato_core::list::Detail, x: f32, y: f32, 
 /// The size of the body's and the comments' words.
 const BODY: f32 = 14.5;
 
-/// A drag over the texts of the detail picks them up (Ctrl+C copies them);
-/// a click anywhere else lets them go.
-fn select_text(ui: &Ui, p: &Painter, grab: &egui::Response, body: Rect) {
+/// A drag over the texts of the detail picks them up (Ctrl+C copies them), a
+/// double click takes a word and a triple click a line; Ctrl+click on a web
+/// address opens it. A click anywhere else lets them go.
+fn select_text(ui: &Ui, p: &Painter, grab: &egui::Response, body: Rect, out: &mut Out) {
     use crate::select;
-    if grab.drag_started() {
-        let at = ui.input(|i| i.pointer.press_origin()).and_then(|o| select::place(o, body));
-        select::set(at.map(|a| (a, a)));
-    } else if grab.dragged() {
-        let head = grab.interact_pointer_pos().and_then(|o| select::place(o, body));
-        if let (Some((a, _)), Some(h)) = (select::get(), head) {
-            select::set(Some((a, h)));
-        }
-    } else if grab.clicked() {
-        select::set(None);
+    if let Some(url) = select::drive(grab, body) {
+        out.open_url = Some(url);
+    }
+    if ui.input(|i| i.modifiers.command) && grab.hover_pos().is_some_and(|at| select::url_at(at, body)) {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     select::paint(p);
 }

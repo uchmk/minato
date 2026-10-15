@@ -310,6 +310,9 @@ impl eframe::App for Minato {
             if let Some(c) = out.click.filter(|_| was == Mode::Main) {
                 self.app.click(c);
             }
+            if let Some(u) = out.open_url.filter(|_| was == Mode::Main) {
+                self.app.open_url = Some(u);
+            }
             if let Some(n) = out.split {
                 self.app.set_split(self.app.view, n);
             }

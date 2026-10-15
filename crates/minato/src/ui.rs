@@ -32,6 +32,8 @@ pub struct Out {
     pub peek: Option<String>,
     /// A row, a chip or a column clicked in the view.
     pub click: Option<Click>,
+    /// A web address in the detail was Ctrl+clicked.
+    pub open_url: Option<String>,
     /// The view's columns as a divider was dragged to.
     pub split: Option<Node<Pane>>,
     /// What the mouse did in the notifications.
