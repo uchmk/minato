@@ -163,9 +163,10 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
   - 「知らせるとき」の表: 列は 成功・失敗・取り消し（skipped なども）、行は「システムの通知」「音」「Webhook」のスイッチ。既定は全部入り。
   - 「鳴らす音」: 終わり方ごとの音（やわらかいチャイム・低い音・警告音・システムの既定、`ito_notify::SOUNDS`、▶ で鳴らす。
     既定は成功と取り消しがチャイム、失敗が警告音）と「Windows の集中モードに従う」（既定は入り。切ると集中モードでも鳴る）。
-  - 「Webhook」（v0.42.0 から、tsumugi の `[notify] webhook` と同じ）: アドレス（ntfy のトピック・Slack の webhook・JSON を受ける
+  - 「Webhook」（v0.42.0 から、tsumugi の `[notify] webhook` と同じ）: アドレス（ntfy のトピック・Slack や Discord の webhook・JSON を受ける
     任意のアドレス。Enter か欄を離れたときに書く。空なら送らない。http(s) で始まらなければ赤い注意を出して送らない）と形式
-    （ntfy・Slack・JSON、`ito_notify::FORMATS`）。送るのは `ito_notify::webhook::send`（`curl`、別のスレッド、失敗は 30 秒後にもう 1 回）。
+    （ntfy・Slack・Discord・JSON、`ito_notify::FORMATS`。Discord は v0.47.0 から）。送るのは `ito_notify::webhook::send`
+    （`curl -f`、別のスレッド。届かなかったときと、相手が HTTP のエラーで断ったときは 30 秒後にもう 1 回）。
     状態は失敗が `error`（ntfy は ❌・優先度 high）、成功と取り消しが `done`。JSON の `folder` はリポジトリ。
   - `minato-settings.json` の `notify`（`system`・`sound`・`sounds`・`focus`・`webhook`・`webhook_url`・`webhook_format`）に残る。
     知らない音・形式の名前は既定に戻す。

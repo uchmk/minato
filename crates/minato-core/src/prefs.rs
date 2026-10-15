@@ -17,7 +17,7 @@ pub const OWNERS: usize = 8;
 pub const SOUNDS: [&str; 4] = ["chime", "low", "alert", "default"];
 
 /// The forms a webhook's address takes, by their words (`ito_notify::FORMATS`).
-pub const FORMATS: [&str; 3] = ["ntfy", "slack", "json"];
+pub const FORMATS: [&str; 4] = ["ntfy", "slack", "discord", "json"];
 
 /// Whether `url` is an address a webhook may be sent to (`ito_notify::is_http`).
 pub fn is_http(url: &str) -> bool {
@@ -39,7 +39,7 @@ pub struct Notify {
     pub focus: bool,
     /// A message to `webhook_url`.
     pub webhook: [bool; 3],
-    /// An ntfy topic, a Slack webhook or any address that takes JSON;
+    /// An ntfy topic, a Slack or Discord webhook, or any address that takes JSON;
     /// nothing is sent while it is not an http(s) address.
     pub webhook_url: String,
     /// The form the address takes (a word of [`FORMATS`]).

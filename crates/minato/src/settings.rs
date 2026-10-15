@@ -381,6 +381,7 @@ fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, 
 fn format_word(f: &str) -> &'static str {
     match f {
         "slack" => "Slack",
+        "discord" => "Discord",
         "json" => "JSON",
         _ => "ntfy",
     }
