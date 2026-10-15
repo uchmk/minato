@@ -25,6 +25,12 @@
 - [x] 17. Search box (v0.25.0: `/` in the inbox and the list, AND of words, smart case, marks in the rows and the detail)
 - [x] 18. Built-in browser beside the panes (v0.26.0: ito-browser for `o`, `O` for the system's, sign-in kept in the state folder)
 - [ ] 19. Search in saved searches: a saved search could keep `/` words too (wait until the box has been used a while)
+- [ ] 20. Move the detail pane's text selection (`crates/minato/src/select.rs`, v0.45.0) to ito-select from ito 0.35.2
+  (rev `5d413895d2f9eb2dd2a490c54615ebf3f96c5681`; every ito crate on that rev). It adds a double-click for a word, a triple-click for a line
+  and Ctrl (Cmd) + click to open a URL. `Select::drive(&resp, view)` returns the Ctrl+clicked URL (open it the way `o` does, through
+  `open_url`), `url_at(pos, view)` gives the pointing-hand cursor while Ctrl is held, `word_at` and `line_at` are public, `note_inline` is for
+  spans painted along one line, and the `paint` fill must stay semi-transparent (kura's was opaque and hid the text). Worked example:
+  kura v0.112.1 `src/ui/preview.rs` (`draw` / `copy_selection`). Add the rows to TESTING.md. (From the yagura session, 2026-10-15.)
 
 ## Owner
 
