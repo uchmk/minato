@@ -60,7 +60,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
         y = sections(&p, app, item, x, y, w);
-        select_text(ui, &p, &grab, body, out);
+        select_text(ui, &grab, body, out);
         let at = Rect::from_min_max(pos2(r.left(), body.bottom()), r.max);
         if open || r.height() >= SHORT {
             strip(ui, app, item, at, out)
@@ -335,18 +335,23 @@ fn files(p: &Painter, app: &App, d: &minato_core::list::Detail, x: f32, y: f32, 
 /// The size of the body's and the comments' words.
 const BODY: f32 = 14.5;
 
-/// A drag over the texts of the detail picks them up (Ctrl+C copies them), a
-/// double click takes a word and a triple click a line; Ctrl+click on a web
-/// address opens it. A click anywhere else lets them go.
-fn select_text(ui: &Ui, p: &Painter, grab: &egui::Response, body: Rect, out: &mut Out) {
+/// A drag over the texts of the detail picks them up, a double click takes a
+/// word (the whole web address under it) and a triple click a line; letting
+/// go copies what was picked up, as tsumugi does, and Ctrl+C copies it again.
+/// Ctrl+click on a web address opens it. A click anywhere else lets them go.
+fn select_text(ui: &Ui, grab: &egui::Response, body: Rect, out: &mut Out) {
     use crate::select;
-    if let Some(url) = select::drive(grab, body) {
+    let driven = select::drive(grab, body);
+    if let Some(url) = driven.open {
         out.open_url = Some(url);
+    }
+    if let Some(text) = driven.copy {
+        ui.ctx().copy_text(text);
     }
     if ui.input(|i| i.modifiers.command) && grab.hover_pos().is_some_and(|at| select::url_at(at, body)) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    select::paint(p);
+    select::paint();
 }
 
 /// The composer at the foot: the fields to set as chips, then the box to
