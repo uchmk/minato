@@ -41,6 +41,8 @@ pub struct Out {
     /// The field the detail's strip left for the writing box, while the box
     /// is open on the item it shows.
     pub compose_at: Option<Rect>,
+    /// The detail's strip (the box's whole place), when it is drawn.
+    pub strip: Option<Rect>,
     /// The wheel turned over a list or a detail, by so many notches (up is
     /// plus).
     pub wheel: Option<(Wheel, f32)>,

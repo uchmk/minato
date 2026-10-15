@@ -295,6 +295,7 @@ impl Md {
 }
 
 fn paint_text(p: &Painter, at: egui::Pos2, t: &Text) {
+    crate::select::note(at, &t.galley);
     p.galley(at, t.galley.clone(), Color32::PLACEHOLDER);
     if let Some(b) = &t.bold {
         p.galley(at + vec2(0.45, 0.0), b.clone(), Color32::PLACEHOLDER);

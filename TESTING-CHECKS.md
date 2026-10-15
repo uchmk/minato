@@ -406,3 +406,10 @@
 - [x] **37.3** On "Notifications" in Everywhere press ＋, then `Ctrl+Shift+Enter`; look at `%APPDATA%\uchmk\minato\keymap.toml` (a test config folder); press `Enter` → Before `Enter` the chip reads `Ctrl+Shift+Enter` and no file is written; after it the file has only one `[[main.prepend_keymap]]` table with `on = "<C-S-Enter>"`, `run = "notes"` and `desc = "Notifications"`, the chip has a • and "Default: n" under it, and `Ctrl+Shift+Enter` in the inbox opens the notifications
 - [x] **37.4** Press ＋ on any row and press `F1`, then `Esc`; press ＋ again and `Esc` → `F1` does not open the key list while a key is taken; a line says minato reads `F1` itself; `Esc` gives the key up and the settings stay open; a second `Esc` with nothing taken closes them
 - [x] **37.5** Press × on the `n` chip of "Notifications", then ↺ on the row → After × the file has `{ on = "n", run = "none" }` and `n` does nothing in the inbox; after ↺ the row is back to `n` alone (↺ also takes out the `Ctrl+Shift+Enter` of 37.3) and the file has no line about it left
+
+## 38. Detail text selection, click-away and palette IME
+
+- [ ] **38.1** Open an item with a long body; drag the mouse over several lines of the message in the detail, then press `Ctrl+C` and paste elsewhere → The dragged text is highlighted and the pasted text is exactly it (several paragraphs joined by a line break); chips and links in the detail still take their clicks
+- [ ] **38.2** With a selection, click once in the detail; then open another item → The click clears the highlight; another item never shows the old selection
+- [ ] **38.3** Press `r` to open the writing box, type a word, then click elsewhere in the window (the list, the detail body) → The box loses the focus and closes with its draft kept; `r` opens it again with the word still there; clicking inside the box keeps the focus
+- [ ] **38.4** Open the command palette (`Ctrl+Shift+P`) and type Japanese with the IME (e.g. `せってい`, convert, Enter) → The composition is not cut off at each frame; the converted text lands in the field and narrows the list

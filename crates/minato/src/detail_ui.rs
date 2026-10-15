@@ -41,10 +41,13 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
         ui.painter().text(r.center(), Align2::CENTER_CENTER, app.tr("detail.pick"), FontId::proportional(13.0), c.dim);
         return;
     };
+    crate::select::begin(&item.id);
     let stub = minato_core::mainci::is_stub(item);
     let open = app.compose.as_ref().is_some_and(|w| w.id == item.id);
     let body = if stub { r } else { Rect::from_min_max(r.min, pos2(r.right(), r.bottom() - strip_h(r.height(), open))) };
     let p = ui.painter().with_clip_rect(body);
+    // Under what is drawn on it, so a chip still takes its own click.
+    let grab = ui.interact(body, ui.id().with("detail-select"), egui::Sense::click_and_drag());
     let x = body.left() + 26.0;
     let w = (body.width() - 52.0).min(MAX_W);
     let top = body.top() + 18.0 - scroll * LINE;
@@ -57,6 +60,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, scroll: f32, out: &mut Out) {
     let mut y = keys(&p, app, item, card.as_ref(), x, y, w);
     if !stub {
         y = sections(&p, app, item, x, y, w);
+        select_text(ui, &p, &grab, body);
         let at = Rect::from_min_max(pos2(r.left(), body.bottom()), r.max);
         if open || r.height() >= SHORT {
             strip(ui, app, item, at, out)
@@ -331,12 +335,31 @@ fn files(p: &Painter, app: &App, d: &minato_core::list::Detail, x: f32, y: f32, 
 /// The size of the body's and the comments' words.
 const BODY: f32 = 14.5;
 
+/// A drag over the texts of the detail picks them up (Ctrl+C copies them);
+/// a click anywhere else lets them go.
+fn select_text(ui: &Ui, p: &Painter, grab: &egui::Response, body: Rect) {
+    use crate::select;
+    if grab.drag_started() {
+        let at = ui.input(|i| i.pointer.press_origin()).and_then(|o| select::place(o, body));
+        select::set(at.map(|a| (a, a)));
+    } else if grab.dragged() {
+        let head = grab.interact_pointer_pos().and_then(|o| select::place(o, body));
+        if let (Some((a, _)), Some(h)) = (select::get(), head) {
+            select::set(Some((a, h)));
+        }
+    } else if grab.clicked() {
+        select::set(None);
+    }
+    select::paint(p);
+}
+
 /// The composer at the foot: the fields to set as chips, then the box to
 /// write in. A click anywhere on it starts writing; while the box is open
 /// for this item the field itself is the writing box's (`out.compose_at`).
 fn strip(ui: &Ui, app: &App, item: &Item, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
+    out.strip = Some(r);
     p.rect_filled(r, 0.0, style::head());
     p.line_segment([r.left_top(), r.right_top()], Stroke::new(1.0, c.border));
     // The strip takes a click first; what is drawn on it takes it before.

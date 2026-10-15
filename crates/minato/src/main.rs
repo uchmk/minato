@@ -22,6 +22,7 @@ mod notes_ui;
 mod overlay;
 mod overlay_ui;
 mod prefs;
+mod select;
 mod settings;
 mod status_ui;
 mod style;
@@ -156,7 +157,10 @@ impl Minato {
                 _ if self.app.confirm.is_some() => {}
                 // egui hands Ctrl+C, Ctrl+X and Ctrl+V over as these, not as
                 // keys.
-                egui::Event::Copy => _ = self.app.press(ito_keys::Key::ctrl('c')),
+                egui::Event::Copy => match select::text() {
+                    Some(text) => ctx.copy_text(text),
+                    None => _ = self.app.press(ito_keys::Key::ctrl('c')),
+                },
                 egui::Event::Cut => _ = self.app.press(ito_keys::Key::ctrl('x')),
                 egui::Event::Paste(_) => _ = self.app.press(ito_keys::Key::ctrl('v')),
                 // The rest through keymap.toml; the characters come as text.
@@ -289,8 +293,15 @@ impl eframe::App for Minato {
                 || out.drop.is_some()
                 || out.bell
                 || out.palette;
-            if inline && elsewhere {
+            // A press outside the strip the box is in lets go of it too, on
+            // blank ground and on the detail's text as well.
+            let pressed_away = out.compose_at.is_some()
+                && self.app.compose.as_ref().is_some_and(|c| c.picker.is_none())
+                && ctx.input(|i| i.pointer.primary_pressed())
+                && ctx.input(|i| i.pointer.press_origin()).zip(out.strip).is_some_and(|(o, s)| !s.contains(o));
+            if inline && (elsewhere || pressed_away) {
                 self.app.close_compose();
+                ctx.memory_mut(|m| m.surrender_focus(egui::Id::new("minato-compose")));
             }
             if let Some(v) = out.view {
                 self.app.view = v;
