@@ -62,6 +62,8 @@ tsumugi と同じ。`Cargo.toml` の `version` が正、版の繰り上げと CH
 - **描画とロジックを分ける**: GitHub の型・受信箱の規則・絞り込み・折りたたみは egui に依らない層（クレートかモジュール）に置き、単体テストを付ける。
 - **マルチ OS**: Windows・macOS（Cmd キー）・Linux の違いは `#[cfg(...)]` のモジュールに閉じ込める。修飾キーは macOS では Cmd、ほかは Ctrl。
 - **マルチアーキテクチャ**: x86_64 と ARM64 の 6 ターゲットへのクロスコンパイルを軽く保つ。Pure Rust のクレートを優先する（HTTP は rustls、OpenSSL を使わない）。
+  rustls の暗号は C を含む ring のまま（2026-10-16 の持ち主の判断）。C の要らない rustls-graviola は 0.4 と若く、新しめの CPU（x86_64 は AVX2・ADX・BMI2、ARM64 は AES・SHA2）が要り、
+  rustls-rustcrypto は alpha のままなので見送った。graviola が 1.0 になるか、rustls の組み込みの provider になったら考え直す。
 - **GitHub を変える操作は取り消せるか確かめる。**マージ・閉じる・再実行・止めるなどはトーストで結果を出し、`u` で戻せるものは戻す。
   受信箱の「済み」「あとで」は GitHub を変えないローカルの印。
 - **スクロールバーを出さない。**入りきらない行は 1 行に畳み、それでも足りなければ「上に N 件」「下に N 件」の行にまとめる（design.md の「折りたたみ」）。
