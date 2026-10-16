@@ -79,6 +79,7 @@ keymap = [
     { on = "x", run = "close", desc = "Close or reopen" },
     { on = "C", run = "closed", desc = "Show the closed ones" },
     { on = "W", run = "save_search", desc = "Save the search" },
+    { on = "Z", run = "forget_search", desc = "Forget the saved search" },
     { on = "/", run = "find", desc = "Find" },
 ]
 

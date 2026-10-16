@@ -58,6 +58,11 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
                 + 12.0;
         }
     }
+    // While the search box filters: how many of the alerts it leaves.
+    if !app.inbox.find.is_empty() && !app.alerts.is_empty() {
+        let words = format!("{} / {}", app.sec_shown().len(), app.alerts.len());
+        p.text(pos2(x, head.center().y), Align2::LEFT_CENTER, words, FontId::monospace(11.5), c.dim);
+    }
     if app.sec_unreadable > 0 {
         let words = format!("{} {}", app.sec_unreadable, app.tr("sec.unreadable"));
         p.text(pos2(head.right() - PAD, head.center().y), Align2::RIGHT_CENTER, words, FontId::proportional(11.5), c.dim);
@@ -107,7 +112,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         } else if resp.hovered() {
             p.rect_filled(lr, 6.0, c.selection().gamma_multiply(0.3));
         }
-        row(&p.with_clip_rect(lr.intersect(r)), app, a, lr, now);
+        row(&p.with_clip_rect(lr.intersect(r)), app, a, lr, now, &app.inbox.find);
     }
     if f.below > 0 {
         style::more(&p, app.ja(), app.tr("list.below"), area.left() + 8.0, area.bottom() - MORE_H / 2.0, f.below);
@@ -116,7 +121,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
 
 /// An alert: its severity and kind, the repository, what it is and where; at
 /// the right how long ago it was raised.
-fn row(p: &egui::Painter, app: &App, a: &security::Alert, r: Rect, now: i64) {
+fn row(p: &egui::Painter, app: &App, a: &security::Alert, r: Rect, now: i64, lit: &minato_core::find::Query) {
     let c = ito_theme::colors();
     let y = r.center().y;
     let t = tone(a.severity);
@@ -127,12 +132,12 @@ fn row(p: &egui::Painter, app: &App, a: &security::Alert, r: Rect, now: i64) {
     let when = epoch(&a.created_at).map(|t| age(&a.created_at, now.max(t))).unwrap_or_default();
     let mut right = p.text(pos2(r.right() - 10.0, y), Align2::RIGHT_CENTER, when, FontId::monospace(11.5), c.dim).left() - 12.0;
     if !a.place.is_empty() {
-        let g = style::truncated(p, a.place.clone(), FontId::monospace(11.5), c.dim, ((right - x) * 0.35).max(0.0));
+        let g = style::truncated_lit(p, a.place.clone(), FontId::monospace(11.5), c.dim, ((right - x) * 0.35).max(0.0), lit);
         let w = g.size().x;
         p.galley(pos2(right - w, y - g.size().y / 2.0), g, c.dim);
         right -= w + 12.0;
     }
     let text = if a.summary.is_empty() { a.what.clone() } else { format!("{} — {}", a.what, a.summary) };
-    let g = style::truncated(p, text, FontId::proportional(13.0), c.fg, (right - x).max(0.0));
+    let g = style::truncated_lit(p, text, FontId::proportional(13.0), c.fg, (right - x).max(0.0), lit);
     p.galley(pos2(x, y - g.size().y / 2.0), g, c.fg);
 }

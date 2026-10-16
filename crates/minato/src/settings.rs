@@ -201,6 +201,13 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                     st.rules.shift(at, step);
                 }
             });
+            section(ui, l, tr("settings.auto_done"), |ui| {
+                if ito_prefs::row(ui, l, tr("settings.auto_done_row"), tr("settings.auto_done_note"), |ui| {
+                    ito_prefs::switch(ui, l, st.auto_done)
+                }) {
+                    st.auto_done = !st.auto_done;
+                }
+            });
             section(ui, l, tr("settings.searches"), |ui| {
                 ui.label(egui::RichText::new(tr("settings.searches_note")).color(ito_theme::colors().dim).size(12.0));
                 let edit =

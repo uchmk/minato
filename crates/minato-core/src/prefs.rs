@@ -173,6 +173,8 @@ pub struct Settings {
     /// The title of the Project the board shows (the first when none has it).
     pub project: String,
     pub rules: Rules,
+    /// Mark an inbox item done (locally) once you have commented on it.
+    pub auto_done: bool,
     /// Labels, Assignees, Status, Milestone, Priority, Reviewers.
     pub fields: [bool; FIELDS],
     /// The fields in the order the writing box lists them (indexes into `fields`).
@@ -188,6 +190,7 @@ impl Default for Settings {
             also: Vec::new(),
             project: crate::board::TITLE.into(),
             rules: Rules::default(),
+            auto_done: false,
             fields: [true, true, true, false, false, false],
             order: [0, 1, 2, 3, 4, 5],
             notify: Notify::default(),
@@ -197,7 +200,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn to_json(&self) -> String {
-        json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "fields": self.fields, "order": self.order, "notify": self.notify.to_json() }).to_string()
+        json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "auto_done": self.auto_done, "fields": self.fields, "order": self.order, "notify": self.notify.to_json() }).to_string()
     }
 
     /// What `text` says; anything missing or unreadable keeps its default.
@@ -236,6 +239,9 @@ impl Settings {
             }
         };
         fill("rules", &mut s.rules.0);
+        if let Some(b) = v.get("auto_done").and_then(Value::as_bool) {
+            s.auto_done = b;
+        }
         fill("fields", &mut s.fields);
         // `grow`: an order saved before a rule was added is shorter; the new ones go last.
         let perm = |key: &str, out: &mut [usize], grow: bool| {
@@ -407,6 +413,14 @@ mod tests {
         assert_eq!(odd.sounds, ["chime", "low", "chime"]);
         assert!(odd.focus);
         assert_eq!([Status::Ok, Status::Bad, Status::Idle, Status::Running].map(Notify::slot), [0, 1, 2, 2]);
+    }
+
+    #[test]
+    fn auto_done_is_off_by_default_and_round_trips() {
+        assert!(!Settings::default().auto_done);
+        assert!(!Settings::parse("{}").auto_done);
+        let s = Settings { auto_done: true, ..Settings::default() };
+        assert!(Settings::parse(&s.to_json()).auto_done);
     }
 
     #[test]

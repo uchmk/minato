@@ -285,6 +285,8 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 23.3 | Choose "All" under saved, or switch to the inbox | The ordinary list comes back |
 | 23.5 | In the list narrow with `/` (or choose a saved search), then press `W` | A toast says the search was saved; it is added to the saved group (and to `minato-searches.txt`) as the GitHub search, with ` | words` when the box had words; `W` again says it is already saved |
 | 23.4 | Write a saved search `is:pr`, a space, a vertical bar and `flaky` (`is:pr` + bar + `flaky`), and choose it | The header shows only the GitHub part; the rows are the answer narrowed to those with `flaky` (title, label, author, …) like the `/` box; the `/` box still narrows further |
+| 23.6 | In the list choose a saved search (so it is in force), then press `Z`; press `Z` again with none chosen | The search is gone from the saved group and from `minato-searches.txt` (the first matching line), the filter returns to the ordinary list and a toast says it was forgotten; with none in force a toast says so and nothing changes |
+| 23.7 | In the settings (`,`) Views page, switch "Done after a comment" on, comment on an inbox card with `r` and `Ctrl+Enter`; quit and start again | The card moves to "Done today" at once (GitHub is not changed besides the comment; `u` undoes the mark); with the switch off the card stays; the switch stays after the restart |
 
 ## 24. Columns, mouse and arrows
 
@@ -516,3 +518,4 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 40.7 | With a critical or high alert open, look at the tab bar from another view | A red dot sits on "6 Security"; the inbox lists the alert under "your turn" with its reason; `Enter` on that card opens the alert's page; with the rule off in the settings it is gone |
 | 40.8 | Dismiss an alert from the inbox's list (40.5) and look at the inbox | Its card is gone with the row |
 | 40.9 | Press `/` in the security view and type a repository, a package, a file, `high` or `dependabot` | The alerts that have every word stay (the counter says how many); `j` `k` `x` `o` act on the shown ones; with no match the view says so; `Esc` brings them all back |
+| 40.10 | While `/` narrows the security view, look at the title row and the rows | The counter reads `shown / total`; the typed words are marked in each row's summary and place |

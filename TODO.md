@@ -35,6 +35,7 @@
 - [x] 22. (v0.52.0) `/` in the security view (repository, rule, package, place, severity, kind)
 - [x] 23. (v0.52.0) `W` in the list saves the search (filter or saved search, plus the box's words) into the saved searches
 - [x] 24. (v0.53.0) Several webhooks in the Notifications page (tsumugi #164, ito 0.47.0): `notify.webhooks` with `url`, `format`, `on`; the old single webhook is read as the first
+- [x] 25. (v0.54.0) Security `/` shows `shown / total` and marks the words; `Z` forgets the saved search in force; setting "Done after a comment" (`auto_done`, off by default); `app.rs` tests moved to `app/tests.rs`
 
 ## Owner
 
