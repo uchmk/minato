@@ -497,6 +497,9 @@ pub struct App {
     pub find_fresh: bool,
     /// The columns of the inbox, the list and the Actions view, as the mouse left them.
     pub inbox_split: Node<Pane>,
+    /// The security and status views: the rows at the left, the detail at the right (not kept).
+    pub security_split: Node<Pane>,
+    pub status_split: Node<Pane>,
     pub list_split: Node<Pane>,
     pub acts_split: Node<Pane>,
     /// The runs watched with `w`, as last seen: a toast and a sound when one
@@ -730,6 +733,8 @@ impl App {
             quit: false,
             // The mock's widths at 1280 px: 400 | rest, and 210 | 470 | rest.
             inbox_split: two(0.31),
+            security_split: two(0.58),
+            status_split: two(0.58),
             list_split: three(0.165, 0.44),
             acts_split: three(0.165, 0.44),
             watched: Vec::new(),
@@ -1858,7 +1863,9 @@ impl App {
             View::Inbox => self.inbox_split = n,
             View::List => self.list_split = n,
             View::Actions => self.acts_split = n,
-            View::Board | View::Status | View::Security => {}
+            View::Security => self.security_split = n,
+            View::Status => self.status_split = n,
+            View::Board => {}
         }
         if let Some(tx) = &self.state_tx {
             let _ = tx.send(minato_core::state::format(&self.columns()));

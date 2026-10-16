@@ -8,7 +8,7 @@ use minato_core::fold::{fold, Show};
 use minato_core::list::{age, epoch};
 use minato_core::security::{self, Severity};
 
-use crate::app::{now_epoch, App, Click, Wheel};
+use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::style;
 use crate::ui::Out;
 
@@ -28,6 +28,19 @@ fn tone(s: Severity) -> Color32 {
 }
 
 pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
+    for (pane, rect) in crate::ui::panes(&app.security_split, r) {
+        if pane == Pane::Left {
+            list(ui, app, rect, out);
+        } else {
+            let shown = app.sec_shown();
+            let sheet = shown.get(app.security_sel.min(shown.len().saturating_sub(1))).map(|&i| crate::side_ui::alert(app, &app.alerts[i]));
+            crate::side_ui::draw(ui, app, rect, sheet);
+        }
+    }
+    crate::ui::dividers(ui, &app.security_split, r, out);
+}
+
+fn list(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
     let head = Rect::from_min_size(r.min, vec2(r.width(), HEAD_H));

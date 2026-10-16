@@ -25,6 +25,7 @@ mod prefs;
 mod security_ui;
 mod select;
 mod settings;
+mod side_ui;
 mod status_ui;
 mod style;
 mod ui;

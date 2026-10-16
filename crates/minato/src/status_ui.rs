@@ -8,7 +8,7 @@ use minato_core::fold::{fold, Show};
 use minato_core::list::{age, epoch};
 use minato_core::overview::{Health, Row};
 
-use crate::app::{now_epoch, App, Click, Wheel};
+use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::style;
 use crate::ui::Out;
 
@@ -27,6 +27,19 @@ enum Line {
 }
 
 pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
+    for (pane, rect) in crate::ui::panes(&app.status_split, r) {
+        if pane == Pane::Left {
+            list(ui, app, rect, out);
+        } else {
+            let rows = app.status_rows();
+            let sheet = rows.get(app.status_sel.min(rows.len().saturating_sub(1))).map(|row| crate::side_ui::status(app, row));
+            crate::side_ui::draw(ui, app, rect, sheet);
+        }
+    }
+    crate::ui::dividers(ui, &app.status_split, r, out);
+}
+
+fn list(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     let c = ito_theme::colors();
     let p = ui.painter().with_clip_rect(r);
     let rows = app.status_rows();
