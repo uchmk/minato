@@ -1,0 +1,96 @@
+name: Build
+
+# A downloadable binary for each of the six targets of a release, on every
+# push to main, as kura's build.yml. Kept apart from ci.yml: this one produces
+# an artifact, that one is the gate, and a failure here should not read as a
+# failing test. ci.yml and arm64.yml build Windows and Linux in debug, and
+# clippy type-checks the macOS code but never links; this is where macOS is
+# linked, and every target built the way a release builds it, ahead of one.
+#
+# The targets and runners are release.yml's: both Windows builds on the x64
+# runner, macOS x64 cross-built on the ARM runner, Linux on native runners.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'LICENSE*']
+  # Or from the Actions tab, on any branch, whenever a build is wanted.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Which target broke, and whether the rest still build, is the useful
+      # information.
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - name: windows-arm64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+          - name: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+          - name: macos-x64
+            os: macos-14
+            target: x86_64-apple-darwin
+          - name: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # The jobs sharing a runner image would otherwise share one cache
+          # entry and keep evicting each other's.
+          key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build
+        run: cargo build --release --locked -p minato --target ${{ matrix.target }}
+
+      # The binary a release packs starts and answers. A GUI-subsystem
+      # program: PowerShell neither waits for it nor takes its output with a
+      # bare `$v = & minato.exe --version`, but a pipe into Out-File does both
+      # (kura's build.yml, and tried on Windows 11). x64 only: the runner
+      # cannot run ARM64.
+      - name: It starts
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          & "target/${{ matrix.target }}/release/minato.exe" --version | Out-File -Encoding utf8 version.txt
+          $v = (Get-Content -Raw version.txt).Trim()
+          if (-not ($v -match '^minato \d')) { throw "minato --version | Out-File gave: '$v'" }
+          $v
+
+      - name: Gather the files
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/minato${{ runner.os == 'Windows' && '.exe' || '' }} dist/
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          # The commit is in the name, so two downloads are never confused.
+          name: minato-${{ matrix.name }}-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error

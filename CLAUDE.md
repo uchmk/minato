@@ -29,6 +29,8 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
   CI の `clippy` が Linux の機械から Linux と `aarch64-apple-darwin`（2026-10-16 から、verify.sh と同じく cargo-zigbuild で）を、`clippy-windows` が Windows の機械で msvc を見る。
 - `Audit`（`.github/workflows/audit.yml`、2026-10-16 から。kura・tsumugi・ito・yagura・michi と同じ）は `cargo audit`（RustSec の脆弱性の一覧）を
   main への push・PR・毎週月曜に回す。脆弱性で落ち、警告では落ちない。赤くなったら、直った版に `cargo update -p <クレート>` で上げる。
+- `Build`（`.github/workflows/build.yml`、2026-10-16 から。kura・ito・yagura・michi と同じ 6 つのターゲット）は main への push と手動で、
+  リリースと同じターゲットを `--release` でリンクし、Windows x64 で `--version` を確かめ、実行ファイルを成果物に残す。テストは回さない（CI の役目）。
 
 ## 共有のクレート（ito）
 
