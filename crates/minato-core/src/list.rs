@@ -243,6 +243,17 @@ pub fn split_search(line: &str) -> (&str, &str) {
     }
 }
 
+/// The line that saves a search: `query`, then ` | words` when the search
+/// box holds some.
+pub fn saved_line(query: &str, words: &str) -> String {
+    let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+    if words.is_empty() {
+        query.trim().to_string()
+    } else {
+        format!("{} | {words}", query.trim())
+    }
+}
+
 /// The GitHub search for a saved search `text`: scoped to the owners when it
 /// names no `user:`, `org:` or `repo:`, newest first when it names no sort.
 pub fn search_query(text: &str, owners: &str) -> String {
@@ -547,6 +558,8 @@ mod tests {
         assert_eq!(s.active_search(), Some("is:open label:bug"));
         assert_eq!(split_search("is:pr | flaky  ci"), ("is:pr", "flaky  ci"));
         assert_eq!(split_search(" is:pr "), ("is:pr", ""));
+        assert_eq!(saved_line(" is:pr ", " a  b "), "is:pr | a b");
+        assert_eq!(saved_line("is:pr", " "), "is:pr");
         assert!(s.is_chosen(&Pick::Search(0)) && !s.is_chosen(&Pick::Saved(Saved::None)));
         s.apply(Pick::Saved(Saved::None));
         assert_eq!(s.active_search(), None);

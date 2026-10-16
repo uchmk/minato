@@ -45,6 +45,11 @@ impl Query {
         self.words.iter().all(|w| fields.iter().any(|f| self.found(f, w)) || item.labels.iter().any(|l| self.found(&l.name, w)))
     }
 
+    /// Whether every word is in one of `fields` (for what is not an item).
+    pub fn takes_fields(&self, fields: &[&str]) -> bool {
+        self.words.iter().all(|w| fields.iter().any(|f| self.found(f, w)))
+    }
+
     /// Where the words are in `text`, as byte ranges in order, joined where
     /// they touch or overlap.
     pub fn ranges(&self, text: &str) -> Vec<Range<usize>> {

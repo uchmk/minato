@@ -139,6 +139,7 @@ impl View {
                 ("{merge}", "key.merge"),
                 ("{close}", "key.close"),
                 ("{closed}", "key.closed"),
+                ("{save_search}", "key.save_search"),
                 ("i", "key.inbox_add"),
                 ("{open}", "key.browser"),
                 ("{open_outside}", "key.outside"),
@@ -974,7 +975,7 @@ impl App {
                 }
             }
             (_, View::Status) => self.status_sel = if end { self.status_rows().len().saturating_sub(1) } else { 0 },
-            (_, View::Security) => self.security_sel = if end { self.alerts.len().saturating_sub(1) } else { 0 },
+            (_, View::Security) => self.security_sel = if end { self.sec_shown().len().saturating_sub(1) } else { 0 },
         }
     }
 
@@ -1042,10 +1043,11 @@ impl App {
             (Mode::Main, ',') => self.mode = Mode::Settings,
             (Mode::Main, 'n') => self.mode = Mode::Notes,
             (Mode::Main, '@') => self.palette = Some(owner_palette()),
+            (Mode::Main, 'W') if self.view == View::List => self.save_search(),
             (Mode::Main, 'S') if matches!(self.view, View::Inbox | View::List) => self.repo_settings(),
             (Mode::Main, 'M') if matches!(self.view, View::Inbox | View::List) => self.mark_answer(),
             (Mode::Main, 'N') if matches!(self.view, View::Inbox | View::List) => self.new_issue(),
-            (Mode::Main, '/') if matches!(self.view, View::Inbox | View::List) => self.find_start(),
+            (Mode::Main, '/') if matches!(self.view, View::Inbox | View::List | View::Security) => self.find_start(),
             (Mode::Main, c) => match View::from_digit(c) {
                 Some(v) => self.view = v,
                 None if self.view == View::List => return self.list_key(c),
@@ -1475,13 +1477,15 @@ impl App {
     /// GitHub, `y` copies its link, `Enter` opens it too, `x` asks to dismiss
     /// it, `u` reopens the one dismissed last.
     fn security_key(&mut self, c: char) -> bool {
-        let last = self.alerts.len().saturating_sub(1);
+        let shown = self.sec_shown();
+        let last = shown.len().saturating_sub(1);
         self.security_sel = self.security_sel.min(last);
+        let at = shown.get(self.security_sel).copied();
         match c {
             'j' => self.security_sel = (self.security_sel + 1).min(last),
             'k' => self.security_sel = self.security_sel.saturating_sub(1),
             'o' | '\n' | 'y' => {
-                let Some(url) = self.alerts.get(self.security_sel).map(|a| a.url.clone()) else { return true };
+                let Some(url) = at.map(|i| self.alerts[i].url.clone()) else { return true };
                 if c == 'y' {
                     self.copy_link(url);
                 } else {
@@ -1489,7 +1493,7 @@ impl App {
                 }
             }
             'x' => {
-                if let Some(key) = self.alerts.get(self.security_sel).map(|a| a.key()) {
+                if let Some(key) = at.map(|i| self.alerts[i].key()) {
                     self.confirm = Some(key);
                     self.confirm_act = Confirm::Dismiss;
                 }
@@ -1509,12 +1513,17 @@ impl App {
         true
     }
 
+    /// The alerts the search box leaves, as places in `alerts`.
+    pub fn sec_shown(&self) -> Vec<usize> {
+        security::shown(&self.alerts, &self.inbox.find)
+    }
+
     /// Dismiss the alert whose key is `key` (confirmed), and forget it here
     /// at once; `u` reopens it.
     fn dismiss(&mut self, key: &str) {
         let Some(at) = self.alerts.iter().position(|a| a.key() == key) else { return };
         let a = self.alerts.remove(at);
-        self.security_sel = self.security_sel.min(self.alerts.len().saturating_sub(1));
+        self.security_sel = self.security_sel.min(self.sec_shown().len().saturating_sub(1));
         let call = Call::Send {
             method: minato_core::github::http::Method::Patch,
             path: a.source.alert_path(&a.repo, a.number),
@@ -1671,6 +1680,7 @@ impl App {
             self.list.find = q;
             (self.inbox.sel, self.inbox.scroll) = (0, 0.0);
             (self.list.sel, self.list.scroll) = (0, 0.0);
+            self.security_sel = 0;
         }
     }
 
@@ -1682,7 +1692,9 @@ impl App {
 
     /// Whether the search filters the view on screen.
     pub fn find_on(&self) -> bool {
-        self.mode == Mode::Main && matches!(self.view, View::Inbox | View::List) && (self.find_open || !self.inbox.find.is_empty())
+        self.mode == Mode::Main
+            && matches!(self.view, View::Inbox | View::List | View::Security)
+            && (self.find_open || !self.inbox.find.is_empty())
     }
 
     /// The search's words for what the view shows.
@@ -1692,6 +1704,9 @@ impl App {
 
     /// How many cards or rows the search leaves in the view.
     pub fn find_count(&self) -> usize {
+        if self.view == View::Security {
+            return self.sec_shown().len();
+        }
         if self.view == View::Inbox {
             return self.inbox.shown(&self.inbox_all(), &self.items).len();
         }
@@ -2363,6 +2378,36 @@ impl App {
             }
             None => self.say_key("write.no_answer"),
         }
+    }
+
+    /// `W`: keep the list's search (the filter, or the saved search in
+    /// force) with the search box's words as a new saved search.
+    fn save_search(&mut self) {
+        let owners = self.owners_shown();
+        let query = match self.list.active_search() {
+            Some(t) => t.to_string(),
+            None => self.list.filter.query(&owners),
+        };
+        let words = if self.find_text.trim().is_empty() {
+            minato_core::list::split_search(self.list.filter.search.and_then(|i| self.list.searches.get(i)).map_or("", String::as_str))
+                .1
+                .to_string()
+        } else {
+            self.find_text.clone()
+        };
+        let line = minato_core::list::saved_line(&query, &words);
+        if self.list.searches.contains(&line) {
+            self.say(self.tr("search.already"));
+            return;
+        }
+        if !self.searches_text.is_empty() && !self.searches_text.ends_with('\n') {
+            self.searches_text.push('\n');
+        }
+        self.searches_text.push_str(&line);
+        self.searches_text.push('\n');
+        self.sync_searches();
+        self.save_searches();
+        self.say(format!("{} {line}", self.tr("search.saved")));
     }
 
     /// `S`: show the settings of the selected item's repository (read only).
@@ -3310,6 +3355,42 @@ mod tests {
         assert_eq!(a.outbox.len(), 2);
         a.feed('o');
         assert_eq!(a.open_url.as_deref(), Some("https://github.com/uchmk/kura/security/1"));
+    }
+
+    #[test]
+    fn slash_narrows_the_security_alerts_and_keys_act_on_the_shown_one() {
+        let mut a = app();
+        a.feed('6');
+        let mut dep = alert(2, security::Source::Dependabot);
+        dep.what = "lodash".into();
+        a.alerts = vec![alert(1, security::Source::Code), dep];
+        a.feed('/');
+        assert!(a.find_on());
+        a.set_find("lodash");
+        assert_eq!(a.find_count(), 1);
+        assert_eq!(a.sec_shown(), vec![1]);
+        a.feed('x');
+        assert_eq!(a.confirm.as_deref(), Some("dep:uchmk/kura#2"));
+        a.set_find("nothing-like-this");
+        assert_eq!(a.find_count(), 0);
+        a.confirm = None;
+        a.feed('x');
+        assert!(a.confirm.is_none());
+        a.find_clear();
+        assert_eq!(a.sec_shown(), vec![0, 1]);
+    }
+
+    #[test]
+    fn w_saves_the_list_search_with_the_box_words_once() {
+        let mut a = app();
+        a.feed('2');
+        a.set_find("flaky ci");
+        a.feed('W');
+        assert_eq!(a.list.searches.len(), 1);
+        assert!(a.list.searches[0].ends_with(" | flaky ci"), "{:?}", a.list.searches);
+        a.feed('W');
+        assert_eq!(a.list.searches.len(), 1);
+        assert_eq!(a.searches_text.lines().count(), 1);
     }
 
     #[test]

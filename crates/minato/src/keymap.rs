@@ -94,6 +94,7 @@ const ACTIONS: &[(&str, &str, Fire)] = &[
     ("merge", "list", Fire::Char('m')),
     ("close", "list", Fire::Char('x')),
     ("closed", "list", Fire::Char('C')),
+    ("save_search", "list", Fire::Char('W')),
     ("find", "list", Fire::Char('/')),
     ("select", "actions", Fire::Char(' ')),
     ("watch", "actions", Fire::Char('w')),

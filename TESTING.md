@@ -283,6 +283,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 23.1 | In the settings (`,`), Views page, type `is:open label:bug` in "Saved searches" | It stays after closing and reopening the settings and the app (`minato-searches.txt`) |
 | 23.2 | In the list move to the filter column and choose that search under saved | The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds |
 | 23.3 | Choose "All" under saved, or switch to the inbox | The ordinary list comes back |
+| 23.5 | In the list narrow with `/` (or choose a saved search), then press `W` | A toast says the search was saved; it is added to the saved group (and to `minato-searches.txt`) as the GitHub search, with ` | words` when the box had words; `W` again says it is already saved |
 | 23.4 | Write a saved search `is:pr`, a space, a vertical bar and `flaky` (`is:pr` + bar + `flaky`), and choose it | The header shows only the GitHub part; the rows are the answer narrowed to those with `flaky` (title, label, author, …) like the `/` box; the `/` box still narrows further |
 
 ## 24. Columns, mouse and arrows
@@ -513,3 +514,4 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 40.6 | Press `u` after 40.5 | The alert is reopened on GitHub (toast), and it is back in the list within a poll or after F5 |
 | 40.7 | With a critical or high alert open, look at the tab bar from another view | A red dot sits on "6 Security"; the inbox lists the alert under "your turn" with its reason; `Enter` on that card opens the alert's page; with the rule off in the settings it is gone |
 | 40.8 | Dismiss an alert from the inbox's list (40.5) and look at the inbox | Its card is gone with the row |
+| 40.9 | Press `/` in the security view and type a repository, a package, a file, `high` or `dependabot` | The alerts that have every word stay (the counter says how many); `j` `k` `x` `o` act on the shown ones; with no match the view says so; `Esc` brings them all back |

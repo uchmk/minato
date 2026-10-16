@@ -157,6 +157,7 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
   入りきらないときは折りたたむ（スクロールバーは出さない）。
 - 取得: `GET /repos/{o}/{r}/code-scanning/alerts`・`dependabot/alerts`・`secret-scanning/alerts`（`state=open`）。
   受信箱が critical・high を出すため、安全を開いていなくても 15 分ごと、開いている間は 5 分ごとに問う。
+- `/` で絞り込む（リポジトリ・ルール・パッケージ・場所・深刻度・種類に語が全部あるもの。v0.52.0 から）。
 - `j` `k` 選ぶ、`Enter` `o` ブラウザで開く、`y` リンクを写す。クリックで選び、ダブルクリックで開く。
 - `x` で閉じる。確認（理由つき: コードは「修正しない」、Dependabot は「許容できるリスク」、シークレットは「修正しない」）を出し、
   `Enter` で `PATCH` を送る（`state=dismissed`＋理由）。トーストで結果を出し、`u` で開き直す（`state=open`）。

@@ -32,6 +32,8 @@
   spans painted along one line, and the `paint` fill must stay semi-transparent (kura's was opaque and hid the text). Worked example:
   kura v0.112.1 `src/ui/preview.rs` (`draw` / `copy_selection`). Add the rows to TESTING.md. (From the yagura session, 2026-10-15.)
 - [x] 21. Security tab (`6`, v0.50.0): the open code scanning, Dependabot and secret scanning alerts of the watched repositories, `x` dismisses (asks first, `u` reopens), critical and high ones in the inbox, a red dot on the tab（回答: #64 の C）。実機の確認は TESTING.md の 40
+- [x] 22. (v0.52.0) `/` in the security view (repository, rule, package, place, severity, kind)
+- [x] 23. (v0.52.0) `W` in the list saves the search (filter or saved search, plus the box's words) into the saved searches
 
 ## Owner
 

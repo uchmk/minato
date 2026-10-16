@@ -80,6 +80,17 @@ impl Severity {
         }
     }
 
+    /// The English name, for the search box.
+    pub fn word(self) -> &'static str {
+        match self {
+            Severity::Critical => "critical",
+            Severity::High => "high",
+            Severity::Medium => "medium",
+            Severity::Low => "low",
+            Severity::Unknown => "unknown",
+        }
+    }
+
     /// The i18n key of the name.
     pub fn label(self) -> &'static str {
         match self {
@@ -193,6 +204,18 @@ pub fn sort(alerts: &mut [Alert]) {
             .then_with(|| a.source.cmp(&b.source))
             .then_with(|| a.number.cmp(&b.number))
     });
+}
+
+/// The places (indexes into `alerts`) of the alerts the search box's words
+/// leave: each word in the repository, the rule or package, the summary, the
+/// place, the severity or the kind.
+pub fn shown(alerts: &[Alert], q: &crate::find::Query) -> Vec<usize> {
+    (0..alerts.len())
+        .filter(|&i| {
+            let a = &alerts[i];
+            q.takes_fields(&[&a.repo, &a.what, &a.summary, &a.place, a.severity.word(), a.source.word(), &format!("#{}", a.number)])
+        })
+        .collect()
 }
 
 /// How many alerts per severity, for the band at the top: critical, high, medium, low (unknown counts as low).

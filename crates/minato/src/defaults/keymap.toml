@@ -78,6 +78,7 @@ keymap = [
     { on = "m", run = "merge", desc = "Merge" },
     { on = "x", run = "close", desc = "Close or reopen" },
     { on = "C", run = "closed", desc = "Show the closed ones" },
+    { on = "W", run = "save_search", desc = "Save the search" },
     { on = "/", run = "find", desc = "Find" },
 ]
 

@@ -436,3 +436,4 @@
 - [ ] **40.6** Press `u` after 40.5 → The alert is reopened on GitHub (toast), and it is back in the list within a poll or after F5
 - [ ] **40.7** With a critical or high alert open, look at the tab bar from another view → A red dot sits on "6 Security"; the inbox lists the alert under "your turn" with its reason; `Enter` on that card opens the alert's page; with the rule off in the settings it is gone
 - [ ] **40.8** Dismiss an alert from the inbox's list (40.5) and look at the inbox → Its card is gone with the row
+- [ ] **40.9** Press `/` in the security view and type a repository, a package, a file, `high` or `dependabot` → The alerts that have every word stay (the counter says how many); `j` `k` `x` `o` act on the shown ones; with no match the view says so; `Esc` brings them all back

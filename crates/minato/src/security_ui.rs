@@ -76,8 +76,13 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         p.text(area.center(), Align2::CENTER_CENTER, app.tr(words), FontId::proportional(13.0), c.dim);
         return;
     }
-    let sel = app.security_sel.min(app.alerts.len() - 1);
-    let heights = vec![ROW_H; app.alerts.len()];
+    let shown = app.sec_shown();
+    if shown.is_empty() {
+        p.text(area.center(), Align2::CENTER_CENTER, app.tr("find.none"), FontId::proportional(13.0), c.dim);
+        return;
+    }
+    let sel = app.security_sel.min(shown.len() - 1);
+    let heights = vec![ROW_H; shown.len()];
     let f = fold(&heights, MORE_H, area.height(), sel);
     let now = now_epoch();
     let mut y = area.top();
@@ -85,7 +90,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         style::more(&p, app.ja(), app.tr("list.above"), area.left() + 8.0, y + MORE_H / 2.0, f.above);
         y += MORE_H;
     }
-    for (k, a) in app.alerts.iter().enumerate() {
+    for (k, a) in shown.iter().map(|&i| &app.alerts[i]).enumerate() {
         if f.rows[k] == Show::Hidden {
             continue;
         }
