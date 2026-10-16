@@ -1589,7 +1589,7 @@ fn cache_writer(dir: PathBuf) -> mpsc::Sender<cache::Entry> {
 /// so set).
 pub fn ring(app: &mut App) {
     for r in app.rings.drain(..) {
-        if let Some(h) = r.hook {
+        for h in r.hooks {
             ito_notify::webhook::send(h.url, h.format, h.level, r.title.clone(), r.body.clone(), h.folder);
         }
         if r.system {

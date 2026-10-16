@@ -37,13 +37,55 @@ pub struct Notify {
     pub sounds: [String; 3],
     /// No sound in Windows' focus mode, a presentation or a full-screen game.
     pub focus: bool,
-    /// A message to `webhook_url`.
-    pub webhook: [bool; 3],
-    /// An ntfy topic, a Slack or Discord webhook, or any address that takes JSON;
-    /// nothing is sent while it is not an http(s) address.
-    pub webhook_url: String,
+    /// The places a message goes to, each with the ends it is told of.
+    pub hooks: Vec<Hook>,
+}
+
+/// One webhook: an ntfy topic, a Slack or Discord webhook, or any address
+/// that takes JSON.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hook {
+    /// Nothing is sent while it is not an http(s) address.
+    pub url: String,
     /// The form the address takes (a word of [`FORMATS`]).
-    pub webhook_format: String,
+    pub format: String,
+    /// Told of a run that passed, failed, was cancelled.
+    pub on: [bool; 3],
+}
+
+impl Hook {
+    /// A hook just added: ntfy, told of every end.
+    pub fn new() -> Hook {
+        Hook { url: String::new(), format: "ntfy".into(), on: [true; 3] }
+    }
+
+    fn to_json(&self) -> Value {
+        json!({ "url": self.url, "format": self.format, "on": self.on })
+    }
+
+    fn parse(v: &Value) -> Hook {
+        let mut h = Hook::new();
+        if let Some(s) = v.get("url").and_then(Value::as_str) {
+            h.url = s.trim().to_string();
+        }
+        if let Some(s) = v.get("format").and_then(Value::as_str).filter(|s| FORMATS.contains(s)) {
+            h.format = s.to_string();
+        }
+        if let Some(list) = v.get("on").and_then(Value::as_array) {
+            for (slot, x) in h.on.iter_mut().zip(list) {
+                if let Some(b) = x.as_bool() {
+                    *slot = b;
+                }
+            }
+        }
+        h
+    }
+}
+
+impl Default for Hook {
+    fn default() -> Self {
+        Hook::new()
+    }
 }
 
 impl Default for Notify {
@@ -53,9 +95,7 @@ impl Default for Notify {
             sound: [true; 3],
             sounds: ["chime", "alert", "chime"].map(String::from),
             focus: true,
-            webhook: [true; 3],
-            webhook_url: String::new(),
-            webhook_format: "ntfy".into(),
+            hooks: Vec::new(),
         }
     }
 }
@@ -71,10 +111,10 @@ impl Notify {
         }
     }
 
-    /// The webhook's address and form for a run that ended in `slot`, when
-    /// one is to be sent there.
-    pub fn hook(&self, slot: usize) -> Option<(&str, &str)> {
-        (self.webhook[slot] && is_http(&self.webhook_url)).then(|| (self.webhook_url.trim(), self.webhook_format.as_str()))
+    /// The webhooks' addresses and forms for a run that ended in `slot`:
+    /// those told of it that have an http(s) address.
+    pub fn hooks_for(&self, slot: usize) -> Vec<(&str, &str)> {
+        self.hooks.iter().filter(|h| h.on[slot] && is_http(&h.url)).map(|h| (h.url.trim(), h.format.as_str())).collect()
     }
 
     fn to_json(&self) -> Value {
@@ -83,15 +123,13 @@ impl Notify {
             "sound": self.sound,
             "sounds": self.sounds,
             "focus": self.focus,
-            "webhook": self.webhook,
-            "webhook_url": self.webhook_url,
-            "webhook_format": self.webhook_format,
+            "webhooks": self.hooks.iter().map(Hook::to_json).collect::<Vec<_>>(),
         })
     }
 
     fn parse(v: &Value) -> Notify {
         let mut n = Notify::default();
-        for (key, out) in [("system", &mut n.system), ("sound", &mut n.sound), ("webhook", &mut n.webhook)] {
+        for (key, out) in [("system", &mut n.system), ("sound", &mut n.sound)] {
             if let Some(list) = v.get(key).and_then(Value::as_array) {
                 for (slot, x) in out.iter_mut().zip(list) {
                     if let Some(b) = x.as_bool() {
@@ -110,11 +148,12 @@ impl Notify {
         if let Some(b) = v.get("focus").and_then(Value::as_bool) {
             n.focus = b;
         }
-        if let Some(s) = v.get("webhook_url").and_then(Value::as_str) {
-            n.webhook_url = s.trim().to_string();
+        // The single webhook of before (`webhook`, `webhook_url`, `webhook_format`) is the first.
+        if v.get("webhook_url").and_then(Value::as_str).is_some_and(|u| !u.trim().is_empty()) {
+            n.hooks.push(Hook::parse(&json!({ "url": v["webhook_url"], "format": v.get("webhook_format"), "on": v.get("webhook") })));
         }
-        if let Some(s) = v.get("webhook_format").and_then(Value::as_str).filter(|s| FORMATS.contains(s)) {
-            n.webhook_format = s.to_string();
+        if let Some(list) = v.get("webhooks").and_then(Value::as_array) {
+            n.hooks.extend(list.iter().map(Hook::parse));
         }
         n
     }
@@ -371,23 +410,34 @@ mod tests {
     }
 
     #[test]
-    fn the_webhook_round_trips_and_is_sent_only_to_an_http_address() {
+    fn webhooks_round_trip_and_are_sent_only_to_an_http_address() {
         let mut s = Settings::default();
-        assert_eq!((s.notify.webhook, s.notify.webhook_format.as_str()), ([true; 3], "ntfy"));
-        // Nothing until there is an address.
-        assert_eq!(s.notify.hook(0), None);
-        s.notify.webhook = [false, true, true];
-        s.notify.webhook_url = "https://ntfy.sh/my-topic".into();
-        s.notify.webhook_format = "slack".into();
+        // Nothing until there is a hook with an address.
+        assert!(s.notify.hooks.is_empty() && s.notify.hooks_for(0).is_empty());
+        let mut a = Hook::new();
+        assert_eq!((a.on, a.format.as_str()), ([true; 3], "ntfy"));
+        a.url = "https://ntfy.sh/my-topic".into();
+        a.on = [false, true, true];
+        a.format = "slack".into();
+        let mut b = Hook::new();
+        b.url = "ntfy.sh/no-scheme".into();
+        s.notify.hooks = vec![a, b, Hook { url: "http://127.0.0.1:9/x".into(), format: "json".into(), on: [true; 3] }];
         assert_eq!(Settings::parse(&s.to_json()), s);
-        assert_eq!(s.notify.hook(0), None);
-        assert_eq!(s.notify.hook(1), Some(("https://ntfy.sh/my-topic", "slack")));
-        s.notify.webhook_url = "ntfy.sh/my-topic".into();
-        assert_eq!(s.notify.hook(1), None);
-        let odd =
-            Settings::parse(r#"{"notify":{"webhook":[1,false],"webhook_url":" http://127.0.0.1:9/x ","webhook_format":"xml"}}"#).notify;
-        assert_eq!(odd.webhook, [true, false, true]);
-        assert_eq!((odd.webhook_url.as_str(), odd.webhook_format.as_str()), ("http://127.0.0.1:9/x", "ntfy"));
+        assert_eq!(s.notify.hooks_for(0), [("http://127.0.0.1:9/x", "json")]);
+        assert_eq!(s.notify.hooks_for(1), [("https://ntfy.sh/my-topic", "slack"), ("http://127.0.0.1:9/x", "json")]);
+        // The one webhook of before is the first.
+        let old = Settings::parse(
+            r#"{"notify":{"webhook":[1,false],"webhook_url":" http://127.0.0.1:9/x ","webhook_format":"xml","webhooks":[{"url":"https://b/","format":"discord"}]}}"#,
+        )
+        .notify;
+        assert_eq!(old.hooks.len(), 2);
+        assert_eq!(
+            (old.hooks[0].url.as_str(), old.hooks[0].format.as_str(), old.hooks[0].on),
+            ("http://127.0.0.1:9/x", "ntfy", [true, false, true])
+        );
+        assert_eq!((old.hooks[1].url.as_str(), old.hooks[1].format.as_str()), ("https://b/", "discord"));
+        // An old empty address is no hook.
+        assert!(Settings::parse(r#"{"notify":{"webhook_url":" "}}"#).notify.hooks.is_empty());
         assert!(is_http(" https://a") && !is_http("ftp://a") && !is_http(""));
     }
 

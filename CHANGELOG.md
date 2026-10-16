@@ -2,6 +2,16 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.53.0] - 2026-10-16
+
+### 変更
+
+- ito を 0.47.0 に上げた（0.43〜0.46 も一緒に入る）。
+- 設定の「通知」の Webhook を何個でも持てるようにした（tsumugi #164）。「追加」「削除」で増減し、1 つごとにアドレス・形式・知らせる終わり方（成功・失敗・取り消し）を選ぶ。
+  「テストを送る」は上のボタンが全部、各 Webhook のボタンがその 1 つだけ（その 1 つのときはウィンドウの通知も音もなし）。
+  「知らせるとき」の表の Webhook の行は、各 Webhook のスイッチに移った。
+- `minato-settings.json` の `notify` は `webhooks`（`url`・`format`・`on`）の並びで書く。前の `webhook`・`webhook_url`・`webhook_format` は最初の 1 つとして読む。
+
 ## [0.52.0] - 2026-10-16
 
 ### 追加

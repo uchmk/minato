@@ -16,24 +16,24 @@ name = "make-testcheck"
 test = true
 
 [build-dependencies]
-ito-winres = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
+ito-winres = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
 
 [dependencies]
 minato-core = { path = "../minato-core" }
 # Every ito crate at the same rev as tsumugi and kura.
-ito-i18n = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086", features = ["edit"] }
-ito-common = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086", features = ["clock"] }
-ito-theme = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-prefs = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-keys = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086", features = ["egui"] }
-ito-keymap = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-palette = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-layout = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086", features = ["egui"] }
-ito-browser = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-select = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
-ito-notify = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
+ito-i18n = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92", features = ["edit"] }
+ito-common = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92", features = ["clock"] }
+ito-theme = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-prefs = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-keys = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92", features = ["egui"] }
+ito-keymap = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-palette = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-layout = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92", features = ["egui"] }
+ito-browser = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-select = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
+ito-notify = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
 # `minato.com` (src/bin/minato-com.rs) and the answers `say` writes.
-ito-console = { git = "https://github.com/uchmk/ito", rev = "30efd6228241dafb5055b2a9511995c0508a0086" }
+ito-console = { git = "https://github.com/uchmk/ito", rev = "37bf3ded67c7602a2a0813a15e93fb639419ef92" }
 # eframe's own defaults, but for `winit/default` (see tsumugi): the Wayland
 # frame is drawn without the title's text, which brings an unmaintained crate.
 eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "links", "wayland", "web_screen_reader", "wgpu", "x11"] }

@@ -31,11 +31,12 @@ const LAYERS: [(&str, &str); 8] = [
 ];
 
 /// The words of the Notifications page, for the search.
-const NOTIFY_WORDS: [&str; 12] = [
+const NOTIFY_WORDS: [&str; 13] = [
     "settings.notify_when",
     "settings.notify_system",
     "settings.notify_sound",
     "settings.notify_webhook",
+    "settings.webhook_add",
     "settings.webhook_url",
     "settings.webhook_format",
     "settings.sound_ok",
@@ -109,7 +110,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let searches_text = &mut app.searches_text;
     let drafts = &mut app.fields_typed;
     let mut searches_changed = false;
-    let mut test = false;
+    let mut test = None;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
         GENERAL => {
@@ -233,16 +234,25 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         }
         _ => {}
     });
-    if test {
+    if let Some(test) = test {
         let n = &app.settings.notify;
         let (title, body) = (app.tr("notify.test_title").to_string(), app.tr("notify.test_body").to_string());
-        let hook = is_http(&n.webhook_url).then(|| Hook {
-            url: n.webhook_url.trim().into(),
-            format: n.webhook_format.clone(),
+        let hook = |h: &minato_core::prefs::Hook| Hook {
+            url: h.url.trim().into(),
+            format: h.format.clone(),
             level: ito_notify::webhook::Level::Done,
             folder: String::new(),
-        });
-        app.rings.push(Ring { title, body, system: true, sound: Some(n.sounds[0].clone()), focus: n.focus, hook });
+        };
+        let hooks = n
+            .hooks
+            .iter()
+            .enumerate()
+            .filter(|(k, h)| is_http(&h.url) && matches!(test, Test::All) || test == Test::Hook(*k) && is_http(&h.url))
+            .map(|(_, h)| hook(h))
+            .collect();
+        // A webhook's own button tries only that one: no window notification, no sound.
+        let all = test == Test::All;
+        app.rings.push(Ring { title, body, system: all, sound: all.then(|| n.sounds[0].clone()), focus: n.focus, hooks });
         crate::net::ring(app);
     }
     if searches_changed {
@@ -269,21 +279,34 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     app.prefs.common_change(asked, no_folder);
 }
 
+/// What the "Send a test" buttons asked for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Test {
+    /// The button at the top: every way, every webhook.
+    All,
+    /// A webhook's own button, by its place in the list.
+    Hook(usize),
+}
+
 /// The Notifications page: a switch per way of telling and per end (passed,
-/// failed, cancelled), then the sounds and the webhook. Whether the test was
-/// asked for.
-fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, n: &mut Notify, drafts: &mut ito_prefs::Drafts) -> bool {
+/// failed, cancelled), then the sounds and the webhooks. What test was asked
+/// for.
+fn notify_page(
+    ui: &mut Ui,
+    l: Look,
+    tr: &dyn Fn(&'static str) -> &'static str,
+    n: &mut Notify,
+    drafts: &mut ito_prefs::Drafts,
+) -> Option<Test> {
     let c = l.c;
-    let mut test = false;
+    let mut test = None;
     ui.horizontal(|ui| {
-        test = ito_prefs::button(ui, l, tr("settings.notify_test"));
+        if ito_prefs::button(ui, l, tr("settings.notify_test")) {
+            test = Some(Test::All);
+        }
         if ito_prefs::button(ui, l, tr("settings.notify_reset")) {
-            // The webhook's address and format stay: they are not a choice but a place.
-            *n = Notify {
-                webhook_url: std::mem::take(&mut n.webhook_url),
-                webhook_format: std::mem::take(&mut n.webhook_format),
-                ..Notify::default()
-            };
+            // The webhooks stay: they are not a choice but places.
+            *n = Notify { hooks: std::mem::take(&mut n.hooks), ..Notify::default() };
         }
     });
     ui.add_space(8.0);
@@ -313,7 +336,6 @@ fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, 
         let rows = [
             ("settings.notify_system", "settings.notify_system_note", &mut n.system),
             ("settings.notify_sound", "settings.notify_sound_note", &mut n.sound),
-            ("settings.notify_webhook", "settings.notify_webhook_note", &mut n.webhook),
         ];
         for (label, note, list) in rows {
             ito_prefs::sep(ui, l);
@@ -356,23 +378,63 @@ fn notify_page(ui: &mut Ui, l: Look, tr: &dyn Fn(&'static str) -> &'static str, 
         }
     });
     section(ui, l, tr("settings.webhook"), |ui| {
-        let typed = ito_prefs::row(ui, l, tr("settings.webhook_url"), tr("settings.webhook_url_note"), |ui| {
-            ito_prefs::field(ui, drafts, "webhook", &n.webhook_url, "https://ntfy.sh/my-topic", 260.0)
-        });
-        if let Some(t) = typed {
-            n.webhook_url = t.trim().to_string();
-        }
-        if !n.webhook_url.is_empty() && !is_http(&n.webhook_url) {
-            ito_prefs::status(ui, tr("settings.webhook_bad"), c.err);
-            ui.add_space(4.0);
-        }
-        ito_prefs::sep(ui, l);
+        let count = n.hooks.len();
         let names: Vec<(&str, &str)> = FORMATS.iter().map(|f| (*f, format_word(f))).collect();
-        let picked = ito_prefs::row(ui, l, tr("settings.webhook_format"), tr("settings.webhook_format_note"), |ui| {
-            ito_prefs::select(ui, "webhook-format", n.webhook_format.as_str(), &names)
-        });
-        if let Some(f) = picked {
-            n.webhook_format = f.to_string();
+        let mut gone = None;
+        for (k, h) in n.hooks.iter_mut().enumerate() {
+            if k > 0 {
+                ito_prefs::sep(ui, l);
+            }
+            let label =
+                if count == 1 { tr("settings.notify_webhook").to_string() } else { format!("{} {}", tr("settings.notify_webhook"), k + 1) };
+            let note = if h.url.is_empty() { tr("settings.webhook_empty") } else { "" };
+            ito_prefs::row(ui, l, &label, note, |ui| {
+                // Right to left: the first one added is the rightmost.
+                if ito_prefs::button(ui, l, tr("settings.webhook_remove")) {
+                    gone = Some(k);
+                }
+                if ito_prefs::button(ui, l, tr("settings.webhook_test")) {
+                    test = Some(Test::Hook(k));
+                }
+            });
+            ito_prefs::sep(ui, l);
+            let typed = ito_prefs::row(ui, l, tr("settings.webhook_url"), tr("settings.webhook_url_note"), |ui| {
+                ito_prefs::field(ui, drafts, &format!("webhook-{k}"), &h.url, "https://ntfy.sh/my-topic", 260.0)
+            });
+            if let Some(t) = typed {
+                h.url = t.trim().to_string();
+            }
+            if !h.url.is_empty() && !is_http(&h.url) {
+                ito_prefs::status(ui, tr("settings.webhook_bad"), c.err);
+                ui.add_space(4.0);
+            }
+            ito_prefs::sep(ui, l);
+            let picked = ito_prefs::row(ui, l, tr("settings.webhook_format"), tr("settings.webhook_format_note"), |ui| {
+                ito_prefs::select(ui, &format!("webhook-format-{k}"), h.format.as_str(), &names)
+            });
+            if let Some(f) = picked {
+                h.format = f.to_string();
+            }
+            ito_prefs::sep(ui, l);
+            ito_prefs::row(ui, l, tr("settings.webhook_ends"), tr("settings.webhook_ends_note"), |ui| {
+                // Right to left, so the last end is placed first.
+                for (end, on) in ["run.idle", "run.bad", "run.ok"].into_iter().zip(h.on.iter_mut().rev()) {
+                    if ito_prefs::switch(ui, l, *on) {
+                        *on = !*on;
+                    }
+                    ui.label(egui::RichText::new(tr(end)).size(12.0).color(c.dim));
+                }
+            });
+        }
+        if let Some(k) = gone {
+            n.hooks.remove(k);
+        }
+        if count > 0 {
+            ito_prefs::sep(ui, l);
+        }
+        let note = if count == 0 { tr("settings.webhook_none") } else { "" };
+        if ito_prefs::row(ui, l, tr("settings.notify_webhook"), note, |ui| ito_prefs::button(ui, l, tr("settings.webhook_add"))) {
+            n.hooks.push(minato_core::prefs::Hook::new());
         }
     });
     test

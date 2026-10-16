@@ -535,8 +535,8 @@ pub struct Ring {
     pub sound: Option<String>,
     /// No sound in Windows' focus mode.
     pub focus: bool,
-    /// A message for the webhook, if one is to be sent.
-    pub hook: Option<Hook>,
+    /// The messages for the webhooks that are told of it.
+    pub hooks: Vec<Hook>,
 }
 
 /// A message for a webhook (`ito_notify::webhook::send`).
@@ -1429,8 +1429,12 @@ impl App {
             let n = &self.settings.notify;
             let sound = n.sound[k].then(|| n.sounds[k].clone());
             let level = if k == 1 { ito_notify::webhook::Level::Error } else { ito_notify::webhook::Level::Done };
-            let hook = n.hook(k).map(|(url, format)| Hook { url: url.into(), format: format.into(), level, folder: r.repo.clone() });
-            self.rings.push(Ring { title, body, system: n.system[k], sound, focus: n.focus, hook });
+            let hooks = n
+                .hooks_for(k)
+                .into_iter()
+                .map(|(url, format)| Hook { url: url.into(), format: format.into(), level, folder: r.repo.clone() })
+                .collect();
+            self.rings.push(Ring { title, body, system: n.system[k], sound, focus: n.focus, hooks });
         }
     }
 
@@ -3463,7 +3467,7 @@ mod tests {
         assert!(!r[1].system && r[1].sound.as_deref() == Some("low") && r[1].title == a.tr("watch.cancelled"));
         assert!(!r[1].focus);
         // No address, no webhook.
-        assert!(r.iter().all(|r| r.hook.is_none()));
+        assert!(r.iter().all(|r| r.hooks.is_empty()));
         // Said in the window either way.
         assert!(a.toast.as_ref().is_some_and(|t| t.0.starts_with(a.tr("watch.cancelled"))));
     }
@@ -3480,17 +3484,21 @@ mod tests {
             a.feed('j');
         }
         let n = &mut a.settings.notify;
-        n.webhook_url = "http://127.0.0.1:9/hook".into();
-        n.webhook_format = "json".into();
-        n.webhook[2] = false;
+        let mut first = minato_core::prefs::Hook::new();
+        (first.url, first.format, first.on[2]) = ("http://127.0.0.1:9/hook".into(), "json".into(), false);
+        let second = minato_core::prefs::Hook { url: "https://ntfy.sh/t".into(), format: "ntfy".into(), on: [false, true, true] };
+        n.hooks = vec![first, second];
         a.runs[0].status = actions::Status::Ok;
         a.runs[1].status = actions::Status::Bad;
         a.runs[2].status = actions::Status::Idle;
         a.runs_came(&[]);
-        let hooks: Vec<_> = a.rings.iter().map(|r| r.hook.as_ref().map(|h| (h.url.as_str(), h.format.as_str(), h.level))).collect();
+        let hooks: Vec<Vec<_>> =
+            a.rings.iter().map(|r| r.hooks.iter().map(|h| (h.url.as_str(), h.format.as_str(), h.level)).collect()).collect();
         let url = "http://127.0.0.1:9/hook";
-        assert_eq!(hooks, [Some((url, "json", Level::Done)), Some((url, "json", Level::Error)), None]);
-        assert_eq!(a.rings[1].hook.as_ref().map(|h| h.folder.as_str()), Some(a.runs[1].repo.as_str()));
+        assert_eq!(hooks[0], [(url, "json", Level::Done)]);
+        assert_eq!(hooks[1], [(url, "json", Level::Error), ("https://ntfy.sh/t", "ntfy", Level::Error)]);
+        assert_eq!(hooks[2], [("https://ntfy.sh/t", "ntfy", Level::Done)]);
+        assert_eq!(a.rings[1].hooks[0].folder.as_str(), a.runs[1].repo.as_str());
     }
 
     #[test]

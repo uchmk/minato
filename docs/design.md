@@ -175,15 +175,15 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
     決める前に「minato が先に読むので動かない」と出す。
 - 「通知」のページ（v0.41.0 から、tsumugi の通知のページと同じ形）: `w` で見張った実行が終わったときの知らせ方。
   - 上に「試しに送る」（システムの通知と成功の音、Webhook のアドレスがあればそこにも）と「既定に戻す」（Webhook のアドレスと形式は残す）。
-  - 「知らせるとき」の表: 列は 成功・失敗・取り消し（skipped なども）、行は「システムの通知」「音」「Webhook」のスイッチ。既定は全部入り。
+  - 「知らせるとき」の表: 列は 成功・失敗・取り消し（skipped なども）、行は「システムの通知」「音」のスイッチ（Webhook は下のカードに、1 つごとの「知らせる終わり方」のスイッチ）。既定は全部入り。
   - 「鳴らす音」: 終わり方ごとの音（やわらかいチャイム・低い音・警告音・システムの既定、`ito_notify::SOUNDS`、▶ で鳴らす。
     既定は成功と取り消しがチャイム、失敗が警告音）と「Windows の集中モードに従う」（既定は入り。切ると集中モードでも鳴る）。
-  - 「Webhook」（v0.42.0 から、tsumugi の `[notify] webhook` と同じ）: アドレス（ntfy のトピック・Slack や Discord の webhook・JSON を受ける
+  - 「Webhook」（v0.42.0 から、tsumugi の `[notify] webhook` と同じ。v0.53.0 から何個でも。「追加」「削除」「テストを送る」は 1 つごと、上のテストは全部）: アドレス（ntfy のトピック・Slack や Discord の webhook・JSON を受ける
     任意のアドレス。Enter か欄を離れたときに書く。空なら送らない。http(s) で始まらなければ赤い注意を出して送らない）と形式
     （ntfy・Slack・Discord・JSON、`ito_notify::FORMATS`。Discord は v0.47.0 から）。送るのは `ito_notify::webhook::send`
     （`curl -f`、別のスレッド。届かなかったときと、相手が HTTP のエラーで断ったときは 30 秒後にもう 1 回）。
     状態は失敗が `error`（ntfy は ❌・優先度 high）、成功と取り消しが `done`。JSON の `folder` はリポジトリ。
-  - `minato-settings.json` の `notify`（`system`・`sound`・`sounds`・`focus`・`webhook`・`webhook_url`・`webhook_format`）に残る。
+  - `minato-settings.json` の `notify`（`system`・`sound`・`sounds`・`focus`・`webhooks`＝`url`・`format`・`on` の並び。前の `webhook`・`webhook_url`・`webhook_format` は最初の 1 つとして読む）に残る。
     知らない音・形式の名前は既定に戻す。
 - ito の共通の設定の画面（`ito-prefs`）に、minato の「ビュー」のページ（英語は Views）を足す（v0.39.13 まで名前は「minato」だった）:
   - 書く欄に出す項目（`Space` 出す・出さない、`J` `K` 並びを変える）。Project の独自の項目は GitHub から読んで足される。

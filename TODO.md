@@ -34,6 +34,7 @@
 - [x] 21. Security tab (`6`, v0.50.0): the open code scanning, Dependabot and secret scanning alerts of the watched repositories, `x` dismisses (asks first, `u` reopens), critical and high ones in the inbox, a red dot on the tab（回答: #64 の C）。実機の確認は TESTING.md の 40
 - [x] 22. (v0.52.0) `/` in the security view (repository, rule, package, place, severity, kind)
 - [x] 23. (v0.52.0) `W` in the list saves the search (filter or saved search, plus the box's words) into the saved searches
+- [x] 24. (v0.53.0) Several webhooks in the Notifications page (tsumugi #164, ito 0.47.0): `notify.webhooks` with `url`, `format`, `on`; the old single webhook is read as the first
 
 ## Owner
 
