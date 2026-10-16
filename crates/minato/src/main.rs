@@ -415,51 +415,21 @@ fn overlay_keys(e: &egui::Event) -> Vec<overlay::K> {
 /// when `err` (kura's `say`).
 ///
 /// A release build on Windows is a GUI-subsystem program and has no console
-/// of its own. When the standard handle is a file or a pipe (`minato.com`
-/// hands on its own, `cmd`'s `>`), the line goes there; otherwise minato
-/// borrows the console it was started from and writes to that. A write that
-/// fails is let go: PowerShell gives a bare `$v = & minato.exe --version` a
-/// pipe and closes it without waiting, and `println!` panicked on that
-/// ("failed printing to stdout", os error 232). `minato.com` is the way to
-/// read it there.
+/// of its own; `ito_console` writes to a file or a pipe when the standard
+/// handle is one (`minato.com` hands on its own, `cmd`'s `>`), and otherwise
+/// to the console minato was started from. A write that fails is let go:
+/// PowerShell gives a bare `$v = & minato.exe --version` a pipe and closes it
+/// without waiting, and `println!` panicked on that ("failed printing to
+/// stdout", os error 232). `minato.com` is the way to read it there.
 fn say(text: &str, err: bool) {
-    use std::io::Write;
-    #[cfg(windows)]
-    {
-        if !redirected(err) && attach_console() {
-            if let Ok(mut con) = std::fs::OpenOptions::new().write(true).open("CONOUT$") {
-                let _ = writeln!(con, "{text}");
-                return;
-            }
-        }
+    let line = format!(
+        "{text}
+"
+    );
+    match err {
+        true => ito_console::err(&line),
+        false => ito_console::out(&line),
     }
-    let _ = match err {
-        true => writeln!(std::io::stderr().lock(), "{text}"),
-        false => writeln!(std::io::stdout().lock(), "{text}"),
-    };
-}
-
-/// Whether standard output (standard error when `err`) is a file or a pipe.
-#[cfg(windows)]
-fn redirected(err: bool) -> bool {
-    use windows_sys::Win32::Storage::FileSystem::{GetFileType, FILE_TYPE_DISK, FILE_TYPE_PIPE};
-    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
-
-    // SAFETY: this process's own standard handle; a missing one is null, which
-    // GetFileType answers as unknown.
-    let kind = unsafe { GetFileType(GetStdHandle(if err { STD_ERROR_HANDLE } else { STD_OUTPUT_HANDLE })) };
-    kind == FILE_TYPE_DISK || kind == FILE_TYPE_PIPE
-}
-
-/// Borrows the console minato was started from. False when there is none
-/// (started from Explorer: nobody asked, so the text goes nowhere) or it has
-/// one already (a debug build, a console program).
-#[cfg(windows)]
-fn attach_console() -> bool {
-    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-
-    // SAFETY: no arguments to get wrong.
-    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
 }
 
 fn main() -> eframe::Result {
