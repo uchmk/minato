@@ -15,6 +15,7 @@ pub mod notes;
 pub mod overview;
 pub mod prefs;
 pub mod reposettings;
+pub mod security;
 pub mod state;
 pub mod status;
 pub mod workflow;

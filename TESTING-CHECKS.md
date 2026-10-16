@@ -424,3 +424,14 @@
 - [ ] **39.4** Run `.\minato` with no argument → The window opens and the prompt comes back as soon as it is up, with minato still open; closing the window later prints nothing in the console
 - [ ] **39.5** Run `$v = .\minato.exe --version` (the windowed program itself), wait a few seconds, then run `.\minato.exe --version` → `$v` is empty and no `panicked` message appears later (the line has nowhere to go and is let go); the second, with no `$v =`, prints the version in the console
 - [ ] **39.6** Run `$v = .\minato` (no argument, its output taken through a pipe); once the prompt is back, run `Get-ChildItem $env:TEMP\minato-com-*`; close minato and run it again → The prompt comes back once the window is up, with minato still open; two files (`.out` and `.err`) while it runs, none after it closes
+
+## 40. The security tab
+
+- [ ] **40.1** Press `6` (or click the tab "6 Security") with a few watched repositories → "Loading…" first, then the open alerts, the worst first (critical, high, medium, low; oldest first inside one); the severity counts stand beside the title; each row has its severity dot and name, the kind, the repository tag, the rule or package, the place and its age; nothing overflows and no scrollbar shows
+- [ ] **40.2** Narrow the window until the alerts do not fit → The rows that do not fit fold into "N above" / "N below" lines around the selected one
+- [ ] **40.3** Include a repository whose alerts you cannot read (no access, or the feature is off) → It is skipped without a message, and the title row says how many repositories are not readable; with every alert resolved the view says nothing is open
+- [ ] **40.4** Press `j` `k`, click a row, double-click a row, press `o`, `Enter`, `y` → The selection moves; a click selects and a double-click opens the alert's page in the browser; `o` and `Enter` open it; `y` copies its link
+- [ ] **40.5** Press `x` on an alert of a repository you may write to → A box asks to dismiss it with the reason (won't fix / tolerable risk), `Esc` leaves it alone; `Enter` removes the row at once, a toast says it was dismissed, and GitHub shows the alert as dismissed
+- [ ] **40.6** Press `u` after 40.5 → The alert is reopened on GitHub (toast), and it is back in the list within a poll or after F5
+- [ ] **40.7** With a critical or high alert open, look at the tab bar from another view → A red dot sits on "6 Security"; the inbox lists the alert under "your turn" with its reason; `Enter` on that card opens the alert's page; with the rule off in the settings it is gone
+- [ ] **40.8** Dismiss an alert from the inbox's list (40.5) and look at the inbox → Its card is gone with the row

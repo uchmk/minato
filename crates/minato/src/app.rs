@@ -17,6 +17,7 @@ use minato_core::mainci;
 use minato_core::notes::{self, Note, NotesState};
 use minato_core::overview;
 use minato_core::prefs::Settings;
+use minato_core::security;
 
 use minato_core::workflow::{self, Workflow};
 
@@ -28,7 +29,7 @@ use crate::keymap::{Cmd as KeyCmd, Ctx, Fire, Keys};
 use crate::overlay::{Form, LogView, Out, Overlay, K};
 use crate::prefs::Prefs;
 
-/// The five views, opened by `1` to `5` (docs/design.md).
+/// The six views, opened by `1` to `6` (docs/design.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum View {
     Inbox,
@@ -36,10 +37,11 @@ pub enum View {
     Actions,
     Board,
     Status,
+    Security,
 }
 
 impl View {
-    pub const ALL: [View; 5] = [View::Inbox, View::List, View::Actions, View::Board, View::Status];
+    pub const ALL: [View; 6] = [View::Inbox, View::List, View::Actions, View::Board, View::Status, View::Security];
 
     /// The digit that opens it.
     pub fn digit(self) -> char {
@@ -49,6 +51,7 @@ impl View {
             View::Actions => '3',
             View::Board => '4',
             View::Status => '5',
+            View::Security => '6',
         }
     }
 
@@ -72,6 +75,7 @@ impl View {
             View::Actions => "view.actions",
             View::Board => "view.board",
             View::Status => "view.status",
+            View::Security => "view.security",
         }
     }
 
@@ -83,6 +87,7 @@ impl View {
             View::Actions => "actions",
             View::Board => "board",
             View::Status => "status",
+            View::Security => "security",
         }
     }
 
@@ -94,6 +99,7 @@ impl View {
             View::Actions => "empty.actions",
             View::Board => "empty.board",
             View::Status => "empty.status",
+            View::Security => "empty.security",
         }
     }
 
@@ -169,13 +175,22 @@ impl View {
                 ("{open_outside}", "key.outside"),
                 ("{copy_link}", "key.copy_link"),
             ],
+            View::Security => &[
+                ("{down} {up}", "key.next"),
+                ("{enter}", "key.open"),
+                ("{open}", "key.browser"),
+                ("{open_outside}", "key.outside"),
+                ("{copy_link}", "key.copy_link"),
+                ("{dismiss}", "key.dismiss"),
+                ("{undo}", "key.undo"),
+            ],
         }
     }
 }
 
 /// The keys that work in every view, `{action}` as in [`View::keys`].
 pub const GLOBAL_KEYS: [(&str, &str); 11] = [
-    ("{view inbox} {view list} {view actions} {view board} {view status}", "key.views"),
+    ("{view inbox} {view list} {view actions} {view board} {view status} {view security}", "key.views"),
     ("{next_view} {prev_view}", "key.cycle"),
     ("{top} {bottom}", "key.ends"),
     ("Ctrl+,", "key.settings"),
@@ -274,6 +289,8 @@ pub enum Click {
     /// A line of the status view (a row of `status_rows`); opened on a
     /// double click, as `Enter` does.
     StatusRow(usize, bool),
+    /// A row of the security view (its place among `alerts`); opened on a double click.
+    SecurityRow(usize, bool),
     /// The writing box's strip under the detail.
     Write,
     /// A button of the box's toolbar.
@@ -311,6 +328,8 @@ pub enum Wheel {
     Notes,
     /// The status view's lines.
     Status,
+    /// The security view's alerts.
+    Security,
 }
 
 /// What the mouse did in the notifications.
@@ -485,6 +504,16 @@ pub struct App {
     pub rings: Vec<Ring>,
     /// The status view's selection (a row of `status_rows`).
     pub status_sel: usize,
+    /// The open security alerts of the watched repositories, sorted; the
+    /// security view's selection; the alerts dismissed here (to reopen with
+    /// `u`); how many repositories could not be read; whether any answer came.
+    pub alerts: Vec<security::Alert>,
+    pub security_sel: usize,
+    pub sec_undo: Vec<security::Alert>,
+    pub sec_unreadable: usize,
+    pub sec_loaded: bool,
+    /// Set when `alerts` changed here, so the network rebuilds the inbox's stubs.
+    pub alerts_changed: bool,
     /// The latest release of each repository (`None`: it has none), as GitHub last said.
     pub shipped: HashMap<String, Option<overview::Shipped>>,
     /// The commits on the default branch since a repository's latest
@@ -529,6 +558,8 @@ pub enum Confirm {
     Dispatch,
     /// Stop a run that is going.
     Cancel,
+    /// Dismiss a security alert (the confirm is the alert's key).
+    Dismiss,
 }
 
 /// What GitHub said about one run.
@@ -702,6 +733,12 @@ impl App {
             watched: Vec::new(),
             rings: Vec::new(),
             status_sel: 0,
+            alerts: Vec::new(),
+            security_sel: 0,
+            sec_undo: Vec::new(),
+            sec_unreadable: 0,
+            sec_loaded: false,
+            alerts_changed: false,
             shipped: HashMap::new(),
             ahead: HashMap::new(),
             status_repos: Vec::new(),
@@ -888,6 +925,9 @@ impl App {
                 Wheel::Status => {
                     self.status_key(key);
                 }
+                Wheel::Security => {
+                    self.security_key(key);
+                }
                 Wheel::Detail => {}
             }
         }
@@ -901,7 +941,7 @@ impl App {
             View::Inbox => &mut self.inbox.scroll,
             View::List => &mut self.list.scroll,
             View::Actions => &mut self.acts.scroll,
-            View::Board | View::Status => return,
+            View::Board | View::Status | View::Security => return,
         };
         *s = s.min(max);
     }
@@ -934,6 +974,7 @@ impl App {
                 }
             }
             (_, View::Status) => self.status_sel = if end { self.status_rows().len().saturating_sub(1) } else { 0 },
+            (_, View::Security) => self.security_sel = if end { self.alerts.len().saturating_sub(1) } else { 0 },
         }
     }
 
@@ -1012,6 +1053,7 @@ impl App {
                 None if self.view == View::Actions => return self.actions_key(c),
                 None if self.view == View::Board => return self.board_key(c),
                 None if self.view == View::Status => return self.status_key(c),
+                None if self.view == View::Security => return self.security_key(c),
                 None => return false,
             },
         }
@@ -1069,6 +1111,7 @@ impl App {
                 Confirm::Merge => self.merge(&id),
                 Confirm::Close => self.close(&id),
                 Confirm::Reopen => self.reopen(&id),
+                Confirm::Dismiss => self.dismiss(&id),
                 Confirm::Dispatch | Confirm::Cancel => {
                     if let Some(run) = self.runs.iter().find(|r| r.id.to_string() == id).cloned() {
                         if self.confirm_act == Confirm::Cancel {
@@ -1090,6 +1133,7 @@ impl App {
                 View::Actions => self.actions_key(' '),
                 View::Board => self.board_key('\n'),
                 View::Status => self.status_key('\n'),
+                View::Security => self.security_key('\n'),
                 _ => false,
             }
     }
@@ -1156,6 +1200,7 @@ impl App {
                 Confirm::Reopen => vec![("Enter", "bar.reopen"), ("Esc", "bar.no")],
                 Confirm::Dispatch => vec![("Enter", "bar.run"), ("Esc", "bar.no")],
                 Confirm::Cancel => vec![("Enter", "bar.stop"), ("Esc", "bar.keep")],
+                Confirm::Dismiss => vec![("Enter", "bar.dismiss"), ("Esc", "bar.no")],
             });
         }
         if let Some(c) = &self.compose {
@@ -1426,6 +1471,60 @@ impl App {
         true
     }
 
+    /// A key in the security view: `j k` move, `o` opens the alert on
+    /// GitHub, `y` copies its link, `Enter` opens it too, `x` asks to dismiss
+    /// it, `u` reopens the one dismissed last.
+    fn security_key(&mut self, c: char) -> bool {
+        let last = self.alerts.len().saturating_sub(1);
+        self.security_sel = self.security_sel.min(last);
+        match c {
+            'j' => self.security_sel = (self.security_sel + 1).min(last),
+            'k' => self.security_sel = self.security_sel.saturating_sub(1),
+            'o' | '\n' | 'y' => {
+                let Some(url) = self.alerts.get(self.security_sel).map(|a| a.url.clone()) else { return true };
+                if c == 'y' {
+                    self.copy_link(url);
+                } else {
+                    self.open_url = Some(url).filter(|u| !u.is_empty());
+                }
+            }
+            'x' => {
+                if let Some(key) = self.alerts.get(self.security_sel).map(|a| a.key()) {
+                    self.confirm = Some(key);
+                    self.confirm_act = Confirm::Dismiss;
+                }
+            }
+            'u' => {
+                let Some(a) = self.sec_undo.pop() else { return true };
+                let key = format!("write:sec:{}", self.outbox.len());
+                let call = Call::Send {
+                    method: minato_core::github::http::Method::Patch,
+                    path: a.source.alert_path(&a.repo, a.number),
+                    body: security::reopen_body(),
+                };
+                self.queue(&key, call, Some("sec.reopened"));
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Dismiss the alert whose key is `key` (confirmed), and forget it here
+    /// at once; `u` reopens it.
+    fn dismiss(&mut self, key: &str) {
+        let Some(at) = self.alerts.iter().position(|a| a.key() == key) else { return };
+        let a = self.alerts.remove(at);
+        self.security_sel = self.security_sel.min(self.alerts.len().saturating_sub(1));
+        let call = Call::Send {
+            method: minato_core::github::http::Method::Patch,
+            path: a.source.alert_path(&a.repo, a.number),
+            body: security::dismiss_body(a.source, security::default_reason(a.source).1),
+        };
+        self.sec_undo.push(a);
+        self.queue(&format!("write:sec:{}", self.outbox.len()), call, Some("sec.dismissed"));
+        self.alerts_changed = true;
+    }
+
     /// A key over the notifications: `j k` move, `Enter` opens the thread in
     /// minato (in the browser if minato does not have it) and marks it read,
     /// `o` opens it in the browser, `d` only marks it read, `A` marks all,
@@ -1682,6 +1781,12 @@ impl App {
                 }
             }
             Click::ActCol(col) => self.acts.col = col,
+            Click::SecurityRow(k, open) => {
+                self.security_sel = k;
+                if open {
+                    self.security_key('\n');
+                }
+            }
             Click::StatusRow(k, open) => {
                 self.status_sel = k;
                 if open {
@@ -1732,7 +1837,7 @@ impl App {
             View::Inbox => self.inbox_split = n,
             View::List => self.list_split = n,
             View::Actions => self.acts_split = n,
-            View::Board | View::Status => {}
+            View::Board | View::Status | View::Security => {}
         }
         if let Some(tx) = &self.state_tx {
             let _ = tx.send(minato_core::state::format(&self.columns()));
@@ -3153,28 +3258,74 @@ mod tests {
     fn digits_open_the_views() {
         let mut a = app();
         assert_eq!(a.view, View::Inbox);
-        for (c, v) in [('2', View::List), ('3', View::Actions), ('4', View::Board), ('5', View::Status), ('1', View::Inbox)] {
+        for (c, v) in
+            [('2', View::List), ('3', View::Actions), ('4', View::Board), ('5', View::Status), ('6', View::Security), ('1', View::Inbox)]
+        {
             assert!(a.feed(c));
             assert_eq!(a.view, v);
         }
-        assert!(!a.feed('6'));
+        assert!(!a.feed('7'));
         assert!(!a.feed('z'));
+    }
+
+    fn alert(n: u64, source: security::Source) -> security::Alert {
+        security::Alert {
+            repo: "uchmk/kura".into(),
+            source,
+            number: n,
+            severity: security::Severity::High,
+            what: "rule".into(),
+            summary: String::new(),
+            place: "src/a.rs:1".into(),
+            created_at: "2026-10-12T09:00:00Z".into(),
+            url: format!("https://github.com/uchmk/kura/security/{n}"),
+        }
+    }
+
+    #[test]
+    fn x_asks_then_dismisses_and_u_reopens() {
+        let mut a = app();
+        a.feed('6');
+        assert_eq!(a.view, View::Security);
+        a.alerts = vec![alert(1, security::Source::Code), alert(2, security::Source::Dependabot)];
+        a.feed('j');
+        assert_eq!(a.security_sel, 1);
+        a.feed('x');
+        assert_eq!(a.confirm.as_deref(), Some("dep:uchmk/kura#2"));
+        a.enter();
+        assert!(a.confirm.is_none());
+        assert_eq!(a.alerts.len(), 1);
+        assert_eq!(a.security_sel, 0);
+        assert_eq!(a.outbox.len(), 1);
+        assert!(a.alerts_changed);
+        // Esc leaves it alone; `u` queues the reopening of the one dismissed.
+        a.feed('x');
+        assert!(a.confirm.is_some());
+        a.confirm = None;
+        assert_eq!(a.alerts.len(), 1);
+        a.feed('u');
+        assert_eq!(a.outbox.len(), 2);
+        assert!(a.sec_undo.is_empty());
+        a.feed('u');
+        assert_eq!(a.outbox.len(), 2);
+        a.feed('o');
+        assert_eq!(a.open_url.as_deref(), Some("https://github.com/uchmk/kura/security/1"));
     }
 
     #[test]
     fn tab_cycles_the_views_round() {
         let mut a = app();
-        for v in [View::List, View::Actions, View::Board, View::Status, View::Inbox] {
+        for v in [View::List, View::Actions, View::Board, View::Status, View::Security, View::Inbox] {
             assert!(a.cycle_view(false));
             assert_eq!(a.view, v);
         }
         assert!(a.cycle_view(true));
-        assert_eq!(a.view, View::Status);
+        assert_eq!(a.view, View::Security);
         assert!(a.cycle_view(true));
-        assert_eq!(a.view, View::Board);
+        assert_eq!(a.view, View::Status);
         a.mode = Mode::Notes;
         assert!(!a.cycle_view(false));
-        assert_eq!(a.view, View::Board);
+        assert_eq!(a.view, View::Status);
     }
 
     #[test]
@@ -3917,7 +4068,7 @@ jobs:
         a.view = View::Inbox;
         let ctrl_d = if cfg!(target_os = "macos") { "⌘D" } else { "Ctrl+D" };
         assert!(a.bar_keys().iter().any(|(k, w)| k == ctrl_d && *w == "key.done"), "{:?}", a.bar_keys());
-        assert_eq!(a.key_rows(Ctx::View(View::Inbox), &GLOBAL_KEYS)[0].0, "1 F2 3 4 5");
+        assert_eq!(a.key_rows(Ctx::View(View::Inbox), &GLOBAL_KEYS)[0].0, "1 F2 3 4 5 6");
         assert_eq!(a.char_label(Ctx::View(View::Inbox), "d"), ctrl_d);
         assert_eq!(a.char_label(Ctx::View(View::List), "i"), "i", "no action: as it is");
         // What does not work is said, and the rest stays.

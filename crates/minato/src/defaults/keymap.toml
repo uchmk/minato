@@ -7,7 +7,7 @@
 # of tokens; `on_mac` is used instead on macOS. `run = "none"` makes a key do
 # nothing.
 #
-# A view's section ([inbox], [list], [actions], [board], [status]) and
+# A view's section ([inbox], [list], [actions], [board], [status], [security]) and
 # [notes] come before [main]: a key bound there wins over [main]'s in that
 # view. [main] alone is read over the list of keys (F1).
 #
@@ -24,6 +24,7 @@ keymap = [
     { on = "3", run = "view actions", desc = "Actions" },
     { on = "4", run = "view board", desc = "Board" },
     { on = "5", run = "view status", desc = "Status" },
+    { on = "6", run = "view security", desc = "Security" },
     { on = "<Tab>", run = "next_view", desc = "Next view" },
     { on = "<BackTab>", run = "prev_view", desc = "Previous view" },
     { on = "j", run = "down", desc = "Down" },
@@ -102,6 +103,11 @@ keymap = [
 
 [status]
 keymap = []
+
+[security]
+keymap = [
+    { on = "x", run = "dismiss", desc = "Dismiss the alert" },
+]
 
 [notes]
 keymap = [

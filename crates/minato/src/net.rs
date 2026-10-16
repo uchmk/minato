@@ -38,6 +38,7 @@ use minato_core::github::write::{self, parse_names};
 use minato_core::github::{client, Bucket, Client, Etags, Rate, Token, UreqTransport};
 use minato_core::notes;
 use minato_core::overview;
+use minato_core::security;
 use minato_core::workflow;
 
 use minato_core::list::Item;
@@ -155,6 +156,11 @@ pub struct Net {
     /// repository's commits since were last asked against.
     status_asked: Option<Instant>,
     cmp_asked: HashMap<String, String>,
+    /// When the security alerts were last asked for, the alerts each
+    /// ("word:repo") answered with, and the ones that could not be read.
+    sec_asked: Option<Instant>,
+    sec_found: HashMap<String, Vec<security::Alert>>,
+    sec_failed: HashSet<String>,
 }
 
 /// A sync asked for by hand: the keys asked in it and not answered yet,
@@ -200,6 +206,11 @@ const REPOS: usize = 8;
 /// How often the status view asks for the releases again while it is open.
 const STATUS: Duration = Duration::from_secs(300);
 
+/// How often the security alerts are asked again, while their view is open
+/// and while it is not (the inbox shows the critical and high ones).
+const SECURITY: Duration = Duration::from_secs(300);
+const SECURITY_AWAY: Duration = Duration::from_secs(900);
+
 /// How often the lists are searched again.
 const SEARCH: Duration = Duration::from_secs(120);
 
@@ -236,6 +247,7 @@ impl Net {
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         if !self.searched_closed {
             all.extend(self.stubs.iter().cloned());
+            all.extend(security::stubs(&app.alerts));
         }
         let card = app.inbox.selected(&app.inbox_all(), &app.items).map(|c| app.items[c.at].id.clone());
         let before = std::mem::replace(&mut app.items, all);
@@ -322,6 +334,9 @@ impl Net {
             scope: None,
             round: None,
             status_asked: None,
+            sec_asked: None,
+            sec_found: HashMap::new(),
+            sec_failed: HashSet::new(),
             cmp_asked: HashMap::new(),
         }
     }
@@ -405,6 +420,7 @@ impl Net {
         }
         app.status_repos = self.repos.clone();
         self.status_asked = None;
+        self.sec_asked = None;
         self.show_runs(app);
         self.runs_asked = None;
     }
@@ -419,6 +435,7 @@ impl Net {
         self.repos.clear();
         self.repo_sets.clear();
         (self.status_asked, self.cmp_asked) = (None, HashMap::new());
+        self.sec_asked = None;
         (self.asked, self.refetch) = (None, true);
         (self.asked_run, self.run_refetch) = (None, true);
         self.round = Some(Round { want: HashSet::new(), asked: 0, since: now });
@@ -462,6 +479,10 @@ impl Net {
             self.repo_sets.clear();
             app.status_repos.clear();
             self.status_asked = None;
+            (self.sec_asked, self.sec_found, self.sec_failed) = (None, HashMap::new(), HashSet::new());
+            app.alerts.clear();
+            app.sec_loaded = false;
+            app.sec_unreadable = 0;
             self.run_found.clear();
             self.show_runs(app);
             self.runs_asked = None;
@@ -688,7 +709,32 @@ impl Net {
                     }
                 }
             }
+            k if k.starts_with("s-sec:") => {
+                // "s-sec:word:owner/name": one kind of alert of one repository.
+                let id = &k["s-sec:".len()..];
+                let repo = id.split_once(':').map_or("", |(_, r)| r);
+                if !self.repos.iter().any(|r| r == repo) {
+                    return;
+                }
+                let source = id.split_once(':').and_then(|(w, _)| security::Source::from_word(w));
+                if let Some(source) = source {
+                    match security::parse(source, repo, body) {
+                        Ok(v) => {
+                            self.sec_failed.remove(id);
+                            self.sec_found.insert(id.to_string(), v);
+                        }
+                        Err(_) => {
+                            self.sec_found.remove(id);
+                            self.sec_failed.insert(id.to_string());
+                        }
+                    }
+                    self.show_security(app);
+                }
+            }
             k if k.starts_with("write:") => {
+                if k.starts_with("write:sec:") {
+                    self.sec_asked = None;
+                }
                 if body.contains("\"errors\"") {
                     app.say(body.chars().take(160).collect::<String>());
                 } else if let Some(done) = self.pending.remove(k) {
@@ -705,6 +751,29 @@ impl Net {
             }
             _ => {}
         }
+    }
+
+    /// The alerts found so far, worst first, in the security view and (the
+    /// critical and high ones) the inbox.
+    fn show_security(&mut self, app: &mut App) {
+        let repos = &self.repos;
+        let mut all: Vec<security::Alert> = self
+            .sec_found
+            .iter()
+            .filter(|(k, _)| k.split_once(':').is_some_and(|(_, r)| repos.iter().any(|x| x == r)))
+            .flat_map(|(_, v)| v.iter().cloned())
+            .collect();
+        security::sort(&mut all);
+        let asked = repos.len() * 3;
+        let answered = self.sec_found.len() + self.sec_failed.len();
+        // A repository none of whose three kinds can be read (no access, or
+        // the features are off) is only counted.
+        app.sec_unreadable =
+            repos.iter().filter(|r| ["code", "dependabot", "secret"].iter().all(|w| self.sec_failed.contains(&format!("{w}:{r}")))).count();
+        app.sec_loaded = asked > 0 && answered >= asked;
+        app.alerts = all;
+        app.security_sel = app.security_sel.min(app.alerts.len().saturating_sub(1));
+        self.rebuild(app);
     }
 
     /// The board from an answer (all its pages merged, or kept).
@@ -1026,6 +1095,14 @@ impl Net {
                     // A repository with no release to read, or none to
                     // compare with: the status view just shows none.
                     if reply.key.starts_with("s-rel:") || reply.key.starts_with("s-cmp:") {
+                        continue;
+                    }
+                    // Alerts of a kind that cannot be read (not enabled, or no
+                    // access) are counted, not said.
+                    if let Some(id) = reply.key.strip_prefix("s-sec:") {
+                        self.sec_found.remove(id);
+                        self.sec_failed.insert(id.to_string());
+                        self.show_security(app);
                         continue;
                     }
                     // An owner not found is not asked again until F5.
@@ -1379,6 +1456,32 @@ impl Net {
                 self.cmp_asked.insert(repo.clone(), s.tag.clone());
             }
         }
+        // The security alerts: asked in every view (the inbox shows the
+        // urgent ones), more often while their view is open.
+        if app.viewer.is_some() && !self.repos.is_empty() {
+            if std::mem::take(&mut app.alerts_changed) {
+                let keep: HashSet<String> = app.alerts.iter().map(|a| a.key()).collect();
+                for v in self.sec_found.values_mut() {
+                    v.retain(|a| keep.contains(&a.key()));
+                }
+                self.rebuild(app);
+            }
+            let every = if app.view == View::Security { SECURITY } else { SECURITY_AWAY };
+            if due(self.sec_asked, every, now) <= now {
+                let mut n = 0;
+                for r in &self.repos {
+                    for source in [security::Source::Code, security::Source::Dependabot, security::Source::Secret] {
+                        let job = get(&format!("s-sec:{}:{r}", source.word()), &source.list_path(r));
+                        track(&mut self.round, &job.key);
+                        if let Some(w) = self.runs.get(n % RUN_LANES).or(self.worker.as_ref()) {
+                            w.send_first(job);
+                        }
+                        n += 1;
+                    }
+                }
+                self.sec_asked = Some(now);
+            }
+        }
         if app.viewer.is_some() {
             self.read_ahead(app);
         }
@@ -1392,8 +1495,12 @@ impl Net {
         };
         let wake = if self.run_retry > now { wake.min(self.run_retry) } else { wake };
         let wake = match &app.viewer {
-            Some(_) if app.view == View::Status => wake.min(due(self.status_asked, STATUS, now)),
-            Some(_) if !app.watched.is_empty() => wake.min(due(self.runs_asked, RUNS, now)),
+            Some(_) if app.view == View::Status => {
+                wake.min(due(self.status_asked, STATUS, now)).min(due(self.sec_asked, SECURITY_AWAY, now))
+            }
+            Some(_) if app.view == View::Security => wake.min(due(self.sec_asked, SECURITY, now)),
+            Some(_) if !app.watched.is_empty() => wake.min(due(self.runs_asked, RUNS, now)).min(due(self.sec_asked, SECURITY_AWAY, now)),
+            Some(_) => wake.min(due(self.sec_asked, SECURITY_AWAY, now)),
             _ => wake,
         };
         ctx.request_repaint_after(wake.saturating_duration_since(now));

@@ -15,13 +15,14 @@ pub const DEFAULTS: &str = include_str!("defaults/keymap.toml");
 /// The user's file, in the `minato` folder of the `uchmk` one.
 pub const FILE: &str = "keymap.toml";
 
-const LAYERS: [Layer; 7] = [
+const LAYERS: [Layer; 8] = [
     Layer::new("main"),
     Layer::new("inbox"),
     Layer::new("list"),
     Layer::new("actions"),
     Layer::new("board"),
     Layer::new("status"),
+    Layer::new("security"),
     Layer::new("notes"),
 ];
 
@@ -51,6 +52,7 @@ const ACTIONS: &[(&str, &str, Fire)] = &[
     ("view actions", "main", Fire::Char('3')),
     ("view board", "main", Fire::Char('4')),
     ("view status", "main", Fire::Char('5')),
+    ("view security", "main", Fire::Char('6')),
     ("next_view", "main", Fire::Tab(false)),
     ("prev_view", "main", Fire::Tab(true)),
     ("down", "main", Fire::Char('j')),
@@ -101,6 +103,7 @@ const ACTIONS: &[(&str, &str, Fire)] = &[
     ("logs", "actions", Fire::Char('e')),
     ("log", "actions", Fire::Char('L')),
     ("open_pr", "actions", Fire::Char('p')),
+    ("dismiss", "security", Fire::Char('x')),
     ("card_left", "board", Fire::Char('H')),
     ("card_right", "board", Fire::Char('L')),
     ("read", "notes", Fire::Char('d')),
@@ -152,7 +155,7 @@ pub enum Ctx {
 /// The bindings in force in each [`Ctx`]: its own layer's, then [main]'s.
 pub struct Keys {
     main: Vec<Binding<Cmd>>,
-    views: [Vec<Binding<Cmd>>; 5],
+    views: [Vec<Binding<Cmd>>; 6],
     notes: Vec<Binding<Cmd>>,
     /// Each layer's own bindings, in [`SPEC`]'s order: what the settings
     /// screen's Keys page lists.
@@ -195,11 +198,11 @@ impl Keys {
             b.extend(main.iter().cloned());
             b
         };
-        let views = [own(1), own(2), own(3), own(4), own(5)];
-        let notes = own(6);
+        let views = [own(1), own(2), own(3), own(4), own(5), own(6)];
+        let notes = own(7);
         // A key of a view's section in front of [main]'s chords that start
         // with it: there those chords can no longer be pressed.
-        let sections = ["inbox", "list", "actions", "board", "status", "notes"];
+        let sections = ["inbox", "list", "actions", "board", "status", "security", "notes"];
         for (layer, list) in sections.iter().zip(views.iter().chain([&notes])) {
             for b in &list[..list.len() - main.len()] {
                 for m in main.iter().filter(|m| m.on.len() > b.on.len() && m.on.starts_with(&b.on)) {
@@ -331,7 +334,7 @@ mod tests {
 prepend_keymap = [{ on = "<F2>", run = "notes" }]"#,
         );
         let names: Vec<&str> = k.layers().iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["main", "inbox", "list", "actions", "board", "status", "notes"]);
+        assert_eq!(names, ["main", "inbox", "list", "actions", "board", "status", "security", "notes"]);
         assert_eq!(k.layers()[0].1.len(), Keys::built_in_layers()[0].1.len() + 1);
         assert_eq!(Keys::fixed(&[Key::parse("<F1>").unwrap()]), Key::parse("<F1>").as_ref());
         assert_eq!(Keys::fixed(&[Key::parse("<F2>").unwrap()]), None);

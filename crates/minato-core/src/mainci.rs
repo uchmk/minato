@@ -13,14 +13,15 @@ pub fn query(owner: Option<&str>) -> String {
     format!("query {{ {head} repositories(first: 30, ownerAffiliations: OWNER, isFork: false, orderBy: {{field: PUSHED_AT, direction: DESC}}) {{ nodes {{ nameWithOwner url isArchived defaultBranchRef {{ name target {{ ... on Commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}")
 }
 
-/// Whether `item` stands for a repository, not for something on GitHub.
+/// Whether `item` stands for a repository or a security alert, not for
+/// something writable on GitHub.
 pub fn is_stub(item: &Item) -> bool {
-    item.id.starts_with("main:")
+    item.id.starts_with("main:") || crate::security::is_stub(item)
 }
 
 /// The branch a stub says is red.
 pub fn branch(item: &Item) -> Option<&str> {
-    item.title.strip_prefix(RED).filter(|_| is_stub(item))
+    item.title.strip_prefix(RED).filter(|_| item.id.starts_with("main:"))
 }
 
 /// A stub's title, before the branch.

@@ -22,6 +22,7 @@ mod notes_ui;
 mod overlay;
 mod overlay_ui;
 mod prefs;
+mod security_ui;
 mod select;
 mod settings;
 mod status_ui;

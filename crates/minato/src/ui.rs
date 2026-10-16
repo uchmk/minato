@@ -178,6 +178,7 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         _ if app.view == View::Actions => crate::actions_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Board => crate::board_ui::draw(ui, app, body, &mut out),
         _ if app.view == View::Status => crate::status_ui::draw(ui, app, body, &mut out),
+        _ if app.view == View::Security => crate::security_ui::draw(ui, app, body, &mut out),
         _ => empty_view(ui, app, body),
     }
     if let Some(page) = page {
@@ -311,6 +312,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     // A lane in trouble lights a dot on the status tab, seen from any view.
     let now = crate::app::now_epoch();
     let lane_bad = minato_core::overview::lanes(&app.items).iter().any(|l| l.health(now) == minato_core::overview::Health::Bad);
+    let urgent = minato_core::security::any_urgent(&app.alerts);
     for (v, digit, text) in tabs {
         let on = app.is_on(v);
         let text = (labels || on).then_some(text);
@@ -327,7 +329,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         if let Some(text) = text {
             p.galley(pos2(tab.left() + 10.0 + digit.size().x + 6.0, mid - text.size().y / 2.0), text, tc);
         }
-        if v == View::Status && lane_bad {
+        if (v == View::Status && lane_bad) || (v == View::Security && urgent) {
             crate::style::dot(&p, pos2(tab.right() - 5.0, tab.top() + 6.0), 3.0, crate::style::BAD);
         }
         if resp.clicked() {

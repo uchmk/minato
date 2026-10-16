@@ -46,7 +46,10 @@ fn confirm(ui: &mut Ui, app: &App) {
     p.rect_filled(b, CornerRadius::same(8), c.panel);
     p.rect_stroke(b, CornerRadius::same(8), Stroke::new(1.0, ACCENT), StrokeKind::Inside);
     let id = app.confirm.as_deref().unwrap_or_default();
-    let title = if matches!(app.confirm_act, Confirm::Dispatch | Confirm::Cancel) {
+    let alert = app.alerts.iter().find(|a| a.key() == id);
+    let title = if app.confirm_act == Confirm::Dismiss {
+        alert.map(|a| format!("{}  {}  {}", a.repo, a.what, a.place))
+    } else if matches!(app.confirm_act, Confirm::Dispatch | Confirm::Cancel) {
         app.runs.iter().find(|r| r.id.to_string() == id).map(|r| format!("{}  {}  ({})", r.repo, r.workflow, r.branch))
     } else {
         app.items.iter().find(|i| i.id == id).map(|i| format!("{} #{}  {}", i.repo, i.number, i.title))
@@ -57,7 +60,12 @@ fn confirm(ui: &mut Ui, app: &App) {
         Confirm::Reopen => ("confirm.reopen", "confirm.reopen_hint"),
         Confirm::Dispatch => ("confirm.dispatch", "confirm.dispatch_hint"),
         Confirm::Cancel => ("confirm.cancel", "confirm.cancel_hint"),
+        Confirm::Dismiss => ("confirm.dismiss", "confirm.dismiss_hint"),
     };
+    let mut ask_text = app.tr(ask).to_string();
+    if let (Confirm::Dismiss, Some(a)) = (app.confirm_act, alert) {
+        ask_text = format!("{}: {}", ask_text, app.tr(minato_core::security::default_reason(a.source).0));
+    }
     p.with_clip_rect(b.shrink(14.0)).text(
         pos2(b.left() + 18.0, b.top() + 32.0),
         Align2::LEFT_CENTER,
@@ -65,7 +73,7 @@ fn confirm(ui: &mut Ui, app: &App) {
         FontId::proportional(12.5),
         c.dim,
     );
-    p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, app.tr(ask), FontId::proportional(14.0), c.fg);
+    p.text(pos2(b.left() + 18.0, b.top() + 62.0), Align2::LEFT_CENTER, ask_text, FontId::proportional(14.0), c.fg);
     p.text(pos2(b.left() + 18.0, b.top() + 94.0), Align2::LEFT_CENTER, app.tr(hint), FontId::proportional(11.5), ACCENT);
 }
 

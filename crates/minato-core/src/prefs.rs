@@ -198,16 +198,20 @@ impl Settings {
         };
         fill("rules", &mut s.rules.0);
         fill("fields", &mut s.fields);
-        let perm = |key: &str, out: &mut [usize]| {
+        // `grow`: an order saved before a rule was added is shorter; the new ones go last.
+        let perm = |key: &str, out: &mut [usize], grow: bool| {
             let Some(list) = v.get(key).and_then(Value::as_array) else { return };
-            let order: Vec<usize> = list.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect();
+            let mut order: Vec<usize> = list.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect();
             let mut seen = vec![false; out.len()];
-            if order.len() == out.len() && order.iter().all(|&k| k < out.len() && !std::mem::replace(&mut seen[k], true)) {
+            let fits = (order.len() == out.len() || (grow && !order.is_empty() && order.len() < out.len()))
+                && order.iter().all(|&k| k < out.len() && !std::mem::replace(&mut seen[k], true));
+            if fits {
+                order.extend((0..out.len()).filter(|&k| !seen[k]));
                 out.copy_from_slice(&order);
             }
         };
-        perm("order", &mut s.order);
-        perm("rule_order", &mut s.rules.1);
+        perm("order", &mut s.order, false);
+        perm("rule_order", &mut s.rules.1, true);
         if let Some(n) = v.get("notify") {
             s.notify = Notify::parse(n);
         }
@@ -342,6 +346,10 @@ mod tests {
         assert_eq!(Settings::parse(&s.to_json()).rules.1[0], 1);
         assert_eq!(Settings::parse(r#"{"order":[0,0,1,2,3,4]}"#).order, [0, 1, 2, 3, 4, 5]);
         assert_eq!(Settings::parse(r#"{"order":[0,1,2]}"#).order, [0, 1, 2, 3, 4, 5]);
+        // A rule order saved with nine rules keeps its places; the tenth goes last.
+        let old = Settings::parse(r#"{"rule_order":[1,0,2,3,4,5,6,7,8],"rules":[true,true,true,true,true,true,false,true,true]}"#);
+        assert_eq!(old.rules.1, [1, 0, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert!(old.rules.0[9] && !old.rules.0[6]);
     }
 
     #[test]

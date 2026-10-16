@@ -1,4 +1,4 @@
-//! The inbox (docs/design.md, 「1 受信箱」): what is your turn. Seven rules
+//! The inbox (docs/design.md, 「1 受信箱」): what is your turn. Ten rules
 //! pick items out of the list's data, three groups sort them, and `d` `s`
 //! `u` are local marks that never touch GitHub. No egui; tested on its own.
 
@@ -28,9 +28,11 @@ pub enum Rule {
     Mention,
     /// A repository whose default branch has a red CI (a stub item, id `main:...`).
     MainRed,
+    /// A critical or high security alert (a stub item, id `sec:...`).
+    Security,
 }
 
-pub const RULES: [Rule; 9] = [
+pub const RULES: [Rule; 10] = [
     Rule::RedCi,
     Rule::Mergeable,
     Rule::Question,
@@ -40,6 +42,7 @@ pub const RULES: [Rule; 9] = [
     Rule::Dependabot,
     Rule::Mention,
     Rule::MainRed,
+    Rule::Security,
 ];
 
 impl Rule {
@@ -59,6 +62,7 @@ impl Rule {
             Rule::Dependabot => "why.dependabot",
             Rule::Mention => "why.mention",
             Rule::MainRed => "why.main_red",
+            Rule::Security => "why.security",
         }
     }
 
@@ -74,6 +78,7 @@ impl Rule {
             Rule::Dependabot => "do.dependabot",
             Rule::Mention => "do.mention",
             Rule::MainRed => "do.main_red",
+            Rule::Security => "do.security",
         }
     }
 
@@ -89,6 +94,7 @@ impl Rule {
             Rule::Dependabot => "ask.dependabot",
             Rule::Mention => "ask.mention",
             Rule::MainRed => "ask.main_red",
+            Rule::Security => "ask.security",
         }
     }
 
@@ -104,6 +110,7 @@ impl Rule {
             Rule::Dependabot => ("o", "next.open"),
             Rule::Mention => ("r", "next.reply"),
             Rule::MainRed => ("o", "next.open"),
+            Rule::Security => ("o", "next.open"),
         }
     }
 
@@ -119,13 +126,14 @@ impl Rule {
             Rule::Dependabot => "note.dependabot",
             Rule::Mention => "note.mention",
             Rule::MainRed => "note.main_red",
+            Rule::Security => "note.security",
         }
     }
 
     /// The colour of the card's edge and the next box.
     pub fn tone(self) -> Tone {
         match self {
-            Rule::RedCi | Rule::MainRed => Tone::Bad,
+            Rule::RedCi | Rule::MainRed | Rule::Security => Tone::Bad,
             Rule::Mergeable => Tone::Ok,
             Rule::Question | Rule::NeedsOwner => Tone::Ask,
             Rule::LaneStalled => Tone::Run,
@@ -138,11 +146,11 @@ impl Rule {
 /// Which rules are on (`.0`) and their priority (`.1`: rule indexes, the
 /// first that fits an item is its reason).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rules(pub [bool; 9], pub [usize; 9]);
+pub struct Rules(pub [bool; 10], pub [usize; 10]);
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules([true, true, true, true, true, true, false, true, true], [0, 1, 2, 3, 4, 5, 6, 7, 8])
+        Rules([true, true, true, true, true, true, false, true, true, true], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     }
 }
 
@@ -150,7 +158,7 @@ impl Rules {
     /// Move the rule at place `at` of the priority one place (`-1` up, `1` down).
     pub fn shift(&mut self, at: usize, step: isize) {
         let to = at as isize + step;
-        if (0..9).contains(&to) {
+        if (0..RULES.len() as isize).contains(&to) {
             self.1.swap(at, to as usize);
         }
     }
@@ -185,6 +193,7 @@ pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
         Rule::Dependabot => pr && item.author.starts_with("dependabot"),
         Rule::Mention => item.mentioned && !mine && item.kind != Kind::Discussion,
         Rule::MainRed => item.id.starts_with("main:"),
+        Rule::Security => item.id.starts_with("sec:"),
     })
 }
 

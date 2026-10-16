@@ -1,0 +1,8 @@
+[
+  {"number":7,"created_at":"2026-10-05T01:00:00Z","state":"open","html_url":"https://github.com/u/r/security/dependabot/7",
+   "dependency":{"package":{"ecosystem":"npm","name":"lodash"},"manifest_path":"package-lock.json"},
+   "security_advisory":{"severity":"critical","summary":"Prototype pollution in lodash"}},
+  {"number":8,"created_at":"2026-10-06T01:00:00Z","state":"open","html_url":"https://github.com/u/r/security/dependabot/8",
+   "dependency":{"package":{"ecosystem":"npm","name":"left-pad"},"manifest_path":"package-lock.json"},
+   "security_advisory":{"severity":"medium","summary":"Something minor"}}
+]

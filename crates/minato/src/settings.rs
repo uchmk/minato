@@ -19,13 +19,14 @@ const KEYS: usize = 3;
 const NOTIFY: usize = 4;
 
 /// The keymap's layers and the words that name them on the Keys page.
-const LAYERS: [(&str, &str); 7] = [
+const LAYERS: [(&str, &str); 8] = [
     ("main", "keys.main"),
     ("inbox", "view.inbox"),
     ("list", "view.list"),
     ("actions", "view.actions"),
     ("board", "view.board"),
     ("status", "view.status"),
+    ("security", "view.security"),
     ("notes", "keys.notes"),
 ];
 
