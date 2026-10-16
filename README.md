@@ -29,3 +29,14 @@ yagura and tsumugi.
 
 ![The Project board: Todo, In Progress and Done, with the issues of the uchmk repositories as cards](docs/images/board.png)
 
+## `minato.com` on Windows
+
+`minato.exe` is a windowed program, so PowerShell does not wait for it:
+`$v = & minato --version` would come back empty. The Windows zip holds
+`minato.com` beside it, a small console program, the same as kura's `kura.com`
+and yagura's `yagura.com`. `PATHEXT` lists `.COM` before `.EXE`, so typing
+`minato` finds it first. Given an argument (`--version`, `--help`) it runs
+`minato.exe` with the same arguments and handles, waits, and passes on the exit
+code; given none it opens the window and returns once it is up. **Keep the two
+in one folder.** Building yourself, `cargo build --release` makes
+`minato-com.exe`: copy it to `minato.com` beside `minato.exe`.

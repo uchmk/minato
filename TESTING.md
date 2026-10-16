@@ -488,3 +488,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 38.4 | Open the command palette (`Ctrl+Shift+P`) and type Japanese with the IME (e.g. `せってい`, convert, Enter) | The composition is not cut off at each frame; the converted text lands in the field and narrows the list |
 | 38.5 | In the detail, double-click a word of the message and paste; triple-click a line and paste; double-click inside a web address and paste | The word is highlighted (behind the letters, as in 38.1) and the paste is the word; then the whole paragraph line; then the whole address (not the part between its dots or slashes). Each is copied without `Ctrl+C` |
 | 38.6 | Put a web address (`https://...`, or `www....`) in a message; hold `Ctrl` (`Cmd` on a Mac) over it, then Ctrl+click | The pointer turns to a hand while `Ctrl` is held; the click opens the address the way `o` does (the built-in browser, or the system's when there is none); a plain click on it only clears the selection |
+
+## 39. The command line and `minato.com` (Windows)
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 39.1 | Unzip a release's Windows zip; in PowerShell in that folder run `$v = .\minato --version; "[$v]"` | `minato.com` answers: `[minato 0.48.0]` (the version), printed by the second statement, and the prompt comes back after it |
+| 39.2 | Run `.\minato --help` in PowerShell, then in `cmd` | The usage lines print before the prompt comes back, in both |
+| 39.3 | Run `.\minato --bogus`, then `$LASTEXITCODE` (`echo %ERRORLEVEL%` in `cmd`) | `minato: unknown argument` and the usage, then `2` |
+| 39.4 | Run `.\minato` with no argument | The window opens and the prompt comes back as soon as it is up, with minato still open; closing the window later prints nothing in the console |
+| 39.5 | Run `$v = .\minato.exe --version` (the windowed program itself), wait a few seconds, then run `.\minato.exe --version` | `$v` is empty and no `panicked` message appears later (the line has nowhere to go and is let go); the second, with no `$v =`, prints the version in the console |

@@ -30,7 +30,12 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
 - `Audit`（`.github/workflows/audit.yml`、2026-10-16 から。kura・tsumugi・ito・yagura・michi と同じ）は `cargo audit`（RustSec の脆弱性の一覧）を
   main への push・PR・毎週月曜に回す。脆弱性で落ち、警告では落ちない。赤くなったら、直った版に `cargo update -p <クレート>` で上げる。
 - `Build`（`.github/workflows/build.yml`、2026-10-16 から。kura・ito・yagura・michi と同じ 6 つのターゲット）は main への push と手動で、
-  リリースと同じターゲットを `--release` でリンクし、Windows x64 で `--version` を確かめ、実行ファイルを成果物に残す。テストは回さない（CI の役目）。
+  リリースと同じターゲットを `--release` でリンクし、Windows x64 で `minato.com` の `--version`・`--help`・知らない引数と、
+  閉じたパイプへの `minato.exe --version` が panic しないことを確かめ、実行ファイルを成果物に残す。テストは回さない（CI の役目）。
+- `minato.com`（`crates/minato/src/bin/minato-com.rs`、v0.48.0 から。kura の `kura.com`・yagura の `yagura.com` と同じ）は Windows の
+  コンソールの前段。引数があれば `minato.exe` を同じ引数で走らせて待ち、無ければ窓が上がるまで待って戻る。`main.rs` の引数を変えたら
+  `answers_in_text` も揃える。文字の出力は `main.rs` の `say`（ファイルかパイプならそこへ、そうでなければ親のコンソールへ。書けなくても panic しない）。
+  リリースの zip には `minato-com.exe` を `minato.com` の名で入れる（`release.yml`）。
 
 ## 共有のクレート（ito）
 

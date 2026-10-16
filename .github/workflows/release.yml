@@ -3,7 +3,8 @@ name: Release
 # Started by hand from the Actions tab with the tag (`v0.8.0`), which is
 # created at the commit this runs on if it does not exist yet. It fails when
 # the tag differs from the version in Cargo.toml. Six files: Windows (x64 and
-# ARM64, built on the x64 runner) as .zip; macOS and Linux as .tar.gz.
+# ARM64, built on the x64 runner) as .zip, minato.exe with its console front
+# minato.com; macOS and Linux as .tar.gz.
 # Nothing is code-signed. The tests on ARM64 (arm64.yml) go first, and the
 # SHA-256 of every file is written onto the page last (release-sums.yml).
 
@@ -74,6 +75,9 @@ jobs:
             $name = "minato-$tag-windows-$arch"
             New-Item -ItemType Directory -Force "stage/$name" | Out-Null
             Copy-Item "target/$target/release/minato.exe" "stage/$name"
+            # The console front, under the name that makes `minato` find it
+            # first (src/bin/minato-com.rs).
+            Copy-Item "target/$target/release/minato-com.exe" "stage/$name/minato.com"
             Compress-Archive -Path "stage/$name" -DestinationPath "dist/$name.zip" -Force
           }
           Get-ChildItem dist

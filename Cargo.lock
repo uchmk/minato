@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "minato"
-version = "0.47.2"
+version = "0.48.0"
 dependencies = [
  "chrono",
  "eframe",
@@ -2163,12 +2163,13 @@ dependencies = [
  "ito-theme",
  "ito-winres",
  "minato-core",
+ "windows-sys 0.61.2",
  "winit",
 ]
 
 [[package]]
 name = "minato-core"
-version = "0.47.2"
+version = "0.48.0"
 dependencies = [
  "serde",
  "serde_json",

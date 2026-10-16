@@ -2,6 +2,20 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.48.0] - 2026-10-16
+
+### 追加
+
+- Windows の zip に `minato.com` を入れた（kura の `kura.com`・yagura の `yagura.com` と同じコンソールの前段）。`minato.exe` は窓のプログラムなので、
+  PowerShell は待たず、`$v = & minato.exe --version` は空だった。`PATHEXT` で `.COM` が `.EXE` より先なので、`minato` と打てばこちらが動く。
+  引数があれば `minato.exe` を同じ引数で走らせて待ち、終了コードを返す。無ければ窓を開き、上がったら戻る。**2 つは同じフォルダに置く。**
+
+### 修正
+
+- `--version`・`--help`・知らない引数の文字を書けなくても panic しない。PowerShell の `$v = & minato.exe --version` は、閉じたパイプへの書き込みで
+  後から「failed printing to stdout」（os error 232）の panic を出していた。文字は、出力がファイルかパイプならそこへ、そうでなければ起動した
+  コンソールへ出す（kura と同じ）。
+
 ## [0.47.2] - 2026-10-16
 
 ### セキュリティ

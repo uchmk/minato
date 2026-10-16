@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# `minato-com` (src/bin/minato-com.rs) makes two binaries, and a bare
+# `cargo run` would not know which one to start.
+default-run = "minato"
 
 # The checklist generator; its own tests run with the rest.
 [[example]]
@@ -35,3 +38,8 @@ eframe = { version = "0.36", default-features = false, features = ["accesskit", 
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita-notitle"] }
 egui = "0.36"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+# The console calls of `say` in main.rs and of `minato.com`
+# (src/bin/minato-com.rs), at the version winit already brings.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Threading"] }

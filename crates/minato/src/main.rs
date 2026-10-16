@@ -411,30 +411,65 @@ fn overlay_keys(e: &egui::Event) -> Vec<overlay::K> {
     }
 }
 
-/// A release build on Windows has no console of its own: borrow the one it
-/// was started from, so `--help` and `--version` can be read.
-#[cfg(windows)]
-fn attach_console() {
-    // SAFETY: no arguments to get wrong; failing (no parent console) is fine.
-    unsafe extern "system" {
-        fn AttachConsole(process: u32) -> i32;
+/// Puts a line where whoever typed the command is looking, on standard error
+/// when `err` (kura's `say`).
+///
+/// A release build on Windows is a GUI-subsystem program and has no console
+/// of its own. When the standard handle is a file or a pipe (`minato.com`
+/// hands on its own, `cmd`'s `>`), the line goes there; otherwise minato
+/// borrows the console it was started from and writes to that. A write that
+/// fails is let go: PowerShell gives a bare `$v = & minato.exe --version` a
+/// pipe and closes it without waiting, and `println!` panicked on that
+/// ("failed printing to stdout", os error 232). `minato.com` is the way to
+/// read it there.
+fn say(text: &str, err: bool) {
+    use std::io::Write;
+    #[cfg(windows)]
+    {
+        if !redirected(err) && attach_console() {
+            if let Ok(mut con) = std::fs::OpenOptions::new().write(true).open("CONOUT$") {
+                let _ = writeln!(con, "{text}");
+                return;
+            }
+        }
     }
-    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
-    let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+    let _ = match err {
+        true => writeln!(std::io::stderr().lock(), "{text}"),
+        false => writeln!(std::io::stdout().lock(), "{text}"),
+    };
 }
 
-#[cfg(not(windows))]
-fn attach_console() {}
+/// Whether standard output (standard error when `err`) is a file or a pipe.
+#[cfg(windows)]
+fn redirected(err: bool) -> bool {
+    use windows_sys::Win32::Storage::FileSystem::{GetFileType, FILE_TYPE_DISK, FILE_TYPE_PIPE};
+    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
+
+    // SAFETY: this process's own standard handle; a missing one is null, which
+    // GetFileType answers as unknown.
+    let kind = unsafe { GetFileType(GetStdHandle(if err { STD_ERROR_HANDLE } else { STD_OUTPUT_HANDLE })) };
+    kind == FILE_TYPE_DISK || kind == FILE_TYPE_PIPE
+}
+
+/// Borrows the console minato was started from. False when there is none
+/// (started from Explorer: nobody asked, so the text goes nowhere) or it has
+/// one already (a debug build, a console program).
+#[cfg(windows)]
+fn attach_console() -> bool {
+    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+
+    // SAFETY: no arguments to get wrong.
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
+}
 
 fn main() -> eframe::Result {
     let mut args = std::env::args().skip(1);
     if let Some(a) = args.next() {
-        attach_console();
         match a.as_str() {
-            "--version" | "-V" => println!("minato {}", env!("CARGO_PKG_VERSION")),
-            "--help" | "-h" => println!("{USAGE}"),
+            "--version" | "-V" => say(&format!("minato {}", env!("CARGO_PKG_VERSION")), false),
+            "--help" | "-h" => say(USAGE, false),
             other => {
-                eprintln!("minato: unknown argument `{other}`\n\n{USAGE}");
+                say(&format!("minato: unknown argument `{other}`\n\n{USAGE}"), true);
                 std::process::exit(2);
             }
         }

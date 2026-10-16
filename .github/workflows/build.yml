@@ -67,25 +67,55 @@ jobs:
       - name: Build
         run: cargo build --release --locked -p minato --target ${{ matrix.target }}
 
-      # The binary a release packs starts and answers. A GUI-subsystem
-      # program: PowerShell neither waits for it nor takes its output with a
-      # bare `$v = & minato.exe --version`, but a pipe into Out-File does both
-      # (kura's build.yml, and tried on Windows 11). x64 only: the runner
+      # The binaries a release packs start and answer. x64 only: the runner
       # cannot run ARM64.
-      - name: It starts
+      #
+      # minato.com (v0.48.0) is the console front the zip ships beside
+      # minato.exe, as kura.com and yagura.com. Being a console program,
+      # PowerShell waits for it and takes its output, so the bare forms that
+      # come back empty from minato.exe have to work here.
+      #
+      # minato.exe itself is a GUI-subsystem program: PowerShell hands it a
+      # pipe for `$v = & minato.exe --version` and closes it without waiting.
+      # The write is let go there, where println! panicked (os error 232):
+      # here the pipe is closed before minato.exe has started writing.
+      - name: Check minato.com
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
         run: |
-          & "target/${{ matrix.target }}/release/minato.exe" --version | Out-File -Encoding utf8 version.txt
-          $v = (Get-Content -Raw version.txt).Trim()
-          if (-not ($v -match '^minato \d')) { throw "minato --version | Out-File gave: '$v'" }
-          $v
+          $exe = (Resolve-Path "target/${{ matrix.target }}/release/minato.exe").Path
+          $com = "target/${{ matrix.target }}/release/minato.com"
+          Copy-Item "target/${{ matrix.target }}/release/minato-com.exe" $com
+          $ver = & $com --version
+          if (-not ($ver -match '^minato \d')) { throw "& minato.com --version gave: '$ver'" }
+          $help = & $com --help
+          if ($help.Count -lt 2) { throw "& minato.com --help gave $($help.Count) line(s)" }
+          $p = [System.Diagnostics.Process]::new()
+          $p.StartInfo.FileName = $exe
+          $p.StartInfo.Arguments = '--version'
+          $p.StartInfo.UseShellExecute = $false
+          $p.StartInfo.RedirectStandardOutput = $true
+          [void]$p.Start()
+          $p.StandardOutput.Close()
+          $p.WaitForExit()
+          if ($p.ExitCode -ne 0) { throw "minato.exe --version into a closed pipe exited $($p.ExitCode)" }
+          & $com --bogus 2> refused.txt
+          $refused = $LASTEXITCODE
+          $said = (Get-Content -Raw refused.txt).Trim()
+          if (-not ($said -match 'unknown argument')) { throw "minato.com --bogus said: '$said'" }
+          # The step ends with `exit $LASTEXITCODE`, and this 2 is the pass.
+          $global:LASTEXITCODE = 0
+          if ($refused -ne 2) { throw "minato.com --bogus exited $refused, not minato.exe's 2" }
+          "minato.com: $ver, $($help.Count) lines of help, refusal exit $refused"
 
       - name: Gather the files
         shell: bash
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/minato${{ runner.os == 'Windows' && '.exe' || '' }} dist/
+          # And Windows gets the console front beside it, under the name that
+          # makes `minato` find it first (v0.48.0, src/bin/minato-com.rs).
+          if [ "${{ runner.os }}" = Windows ]; then cp target/${{ matrix.target }}/release/minato-com.exe dist/minato.com; fi
 
       - name: Upload
         uses: actions/upload-artifact@v7
