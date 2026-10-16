@@ -37,6 +37,7 @@
 - [x] 24. (v0.53.0) Several webhooks in the Notifications page (tsumugi #164, ito 0.47.0): `notify.webhooks` with `url`, `format`, `on`; the old single webhook is read as the first
 - [x] 25. (v0.54.0) Security `/` shows `shown / total` and marks the words; `Z` forgets the saved search in force; setting "Done after a comment" (`auto_done`, off by default); `app.rs` tests moved to `app/tests.rs`
 - [x] 26. (v0.55.0) Status and Security views get a detail pane beside the list (`side_ui.rs`)
+- [x] 27. (v0.56.0) Status / Security detail panes drawn like the Actions run detail (chips, next box, checks, files, notes, advisory facts); their dividers are saved in state.toml
 
 ## Owner
 

@@ -1874,7 +1874,13 @@ impl App {
 
     /// The columns' widths as state.toml keeps them.
     pub fn columns(&self) -> minato_core::state::State {
-        minato_core::state::State { inbox: ratios(&self.inbox_split), list: ratios(&self.list_split), actions: ratios(&self.acts_split) }
+        minato_core::state::State {
+            inbox: ratios(&self.inbox_split),
+            list: ratios(&self.list_split),
+            actions: ratios(&self.acts_split),
+            security: ratios(&self.security_split),
+            status: ratios(&self.status_split),
+        }
     }
 
     pub fn mark_all_read(&mut self) {
@@ -2207,6 +2213,8 @@ impl App {
             set_ratios(&mut self.inbox_split, &st.inbox);
             set_ratios(&mut self.list_split, &st.list);
             set_ratios(&mut self.acts_split, &st.actions);
+            set_ratios(&mut self.security_split, &st.security);
+            set_ratios(&mut self.status_split, &st.status);
         }
         self.state_tx = Some(writer(path));
     }

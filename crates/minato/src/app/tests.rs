@@ -625,6 +625,8 @@ fn alert(n: u64, source: security::Source) -> security::Alert {
         place: "src/a.rs:1".into(),
         created_at: "2026-10-12T09:00:00Z".into(),
         url: format!("https://github.com/uchmk/kura/security/{n}"),
+        body: String::new(),
+        extra: Vec::new(),
     }
 }
 
@@ -883,6 +885,7 @@ fn the_status_view_lists_lanes_releases_and_what_waits() {
         files: 6,
         sums: true,
         url: "https://github.com/uchmk/kura/releases/tag/v1".into(),
+        ..Default::default()
     };
     a.shipped.insert("uchmk/kura".into(), Some(shipped));
     a.shipped.insert("uchmk/ito".into(), None);

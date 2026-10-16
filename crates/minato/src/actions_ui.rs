@@ -429,7 +429,7 @@ fn detail_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
 /// One artifact on the line at `cy`: its mark and name at the left, its size
 /// at the right. A name too long for the room between is cut short with `…`
 /// so it never runs under the size. Returns where the name and the size went.
-fn artifact(p: &Painter, x: f32, cy: f32, w: f32, name: &str, bytes: u64) -> (Rect, Rect) {
+pub(crate) fn artifact(p: &Painter, x: f32, cy: f32, w: f32, name: &str, bytes: u64) -> (Rect, Rect) {
     let c = ito_theme::colors();
     let font = FontId::monospace(13.0);
     let size = p.text(pos2(x + w - 10.0, cy), Align2::RIGHT_CENTER, actions::size(bytes), font.clone(), c.dim);

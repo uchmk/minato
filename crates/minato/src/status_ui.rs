@@ -33,7 +33,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         } else {
             let rows = app.status_rows();
             let sheet = rows.get(app.status_sel.min(rows.len().saturating_sub(1))).map(|row| crate::side_ui::status(app, row));
-            crate::side_ui::draw(ui, app, rect, sheet);
+            crate::side_ui::draw(ui, app, rect, out, sheet);
         }
     }
     crate::ui::dividers(ui, &app.status_split, r, out);

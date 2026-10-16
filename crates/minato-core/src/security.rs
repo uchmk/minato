@@ -123,6 +123,11 @@ pub struct Alert {
     pub place: String,
     pub created_at: String,
     pub url: String,
+    /// What the scanner says beyond that: an advisory's text, a code
+    /// scanning message. Never a secret's value.
+    pub body: String,
+    /// Facts by the i18n key of their label (`side.advisory`, …), empty ones left out.
+    pub extra: Vec<(&'static str, String)>,
 }
 
 impl Alert {
@@ -150,6 +155,8 @@ pub fn parse(source: Source, repo: &str, body: &str) -> Result<Vec<Alert>, Strin
 
 fn one(source: Source, repo: &str, a: &Value) -> Option<Alert> {
     let n = number(a)?;
+    let mut body = String::new();
+    let mut extra: Vec<(&'static str, String)> = Vec::new();
     let (severity, what, summary, place) = match source {
         Source::Code => {
             let level = text(a, "/rule/security_severity_level");
@@ -162,11 +169,32 @@ fn one(source: Source, repo: &str, a: &Value) -> Option<Alert> {
             };
             let id = text(a, "/rule/id");
             let desc = text(a, "/rule/description");
+            body = text(a, "/most_recent_instance/message/text");
+            let tool = format!("{} {}", text(a, "/tool/name"), text(a, "/tool/version"));
+            let tags = a
+                .pointer("/rule/tags")
+                .and_then(Value::as_array)
+                .map(|t| t.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "));
+            extra.push(("side.tool", tool.trim().to_string()));
+            extra.push(("side.branch", text(a, "/most_recent_instance/ref").trim_start_matches("refs/heads/").to_string()));
+            extra.push(("side.commit", text(a, "/most_recent_instance/commit_sha").chars().take(8).collect()));
+            extra.push(("side.tags", tags.unwrap_or_default()));
             (Severity::parse(&sev), if id.is_empty() { desc.clone() } else { id }, desc, place)
         }
         Source::Dependabot => {
             let name = text(a, "/dependency/package/name");
             let name = if name.is_empty() { text(a, "/security_vulnerability/package/name") } else { name };
+            body = text(a, "/security_advisory/description");
+            let ids = [text(a, "/security_advisory/ghsa_id"), text(a, "/security_advisory/cve_id")];
+            extra.push(("side.advisory", ids.iter().filter(|i| !i.is_empty()).cloned().collect::<Vec<_>>().join(" · ")));
+            extra.push(("side.ecosystem", text(a, "/dependency/package/ecosystem")));
+            extra.push(("side.range", text(a, "/security_vulnerability/vulnerable_version_range")));
+            extra.push(("side.fix", text(a, "/security_vulnerability/first_patched_version/identifier")));
+            extra.push((
+                "side.score",
+                a.pointer("/security_advisory/cvss/score").and_then(Value::as_f64).map(|f| format!("{f:.1}")).unwrap_or_default(),
+            ));
+            extra.push(("side.scope", text(a, "/dependency/scope")));
             (
                 Severity::parse(&text(a, "/security_advisory/severity")),
                 name,
@@ -177,6 +205,12 @@ fn one(source: Source, repo: &str, a: &Value) -> Option<Alert> {
         Source::Secret => {
             let name = text(a, "/secret_type_display_name");
             let name = if name.is_empty() { text(a, "/secret_type") } else { name };
+            extra.push(("side.validity", text(a, "/validity")));
+            for (key, ptr) in [("side.leaked", "/publicly_leaked"), ("side.bypassed", "/push_protection_bypassed")] {
+                if let Some(b) = a.pointer(ptr).and_then(Value::as_bool) {
+                    extra.push((key, if b { "yes" } else { "no" }.to_string()));
+                }
+            }
             // A leaked secret has no score; treat it as high.
             (Severity::High, name, String::new(), String::new())
         }
@@ -191,6 +225,8 @@ fn one(source: Source, repo: &str, a: &Value) -> Option<Alert> {
         place,
         created_at: text(a, "/created_at"),
         url: text(a, "/html_url"),
+        body: body.chars().take(1600).collect(),
+        extra: extra.into_iter().filter(|(_, v)| !v.is_empty()).collect(),
     })
 }
 
@@ -378,6 +414,40 @@ mod tests {
         assert_eq!(v[0].severity, Severity::High);
         assert_eq!(v[0].what, "GitHub Personal Access Token");
         assert_eq!(v[0].key(), "secret:u/r#1");
+    }
+
+    #[test]
+    fn the_scanners_words_are_kept_beside_the_alert() {
+        let code = r#"[{"number":1,"rule":{"id":"r","description":"d","tags":["a","b"],"security_severity_level":"high"},
+            "tool":{"name":"CodeQL","version":"2.1"},"most_recent_instance":{"ref":"refs/heads/main","commit_sha":"0123456789abcdef",
+            "message":{"text":"tainted"},"location":{"path":"a.js","start_line":2}}}]"#;
+        let a = &parse(Source::Code, "o/r", code).unwrap()[0];
+        assert_eq!(a.body, "tainted");
+        let got: Vec<_> = a.extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        assert_eq!(got, [("side.tool", "CodeQL 2.1"), ("side.branch", "main"), ("side.commit", "01234567"), ("side.tags", "a, b")]);
+        let dep = r#"[{"number":2,"dependency":{"package":{"name":"p","ecosystem":"npm"},"manifest_path":"m","scope":"runtime"},
+            "security_advisory":{"ghsa_id":"GHSA-x","cve_id":"CVE-1","severity":"low","summary":"s","description":"long","cvss":{"score":7.5}},
+            "security_vulnerability":{"vulnerable_version_range":"< 2","first_patched_version":{"identifier":"2.0.1"}}}]"#;
+        let a = &parse(Source::Dependabot, "o/r", dep).unwrap()[0];
+        assert_eq!(a.body, "long");
+        let got: Vec<_> = a.extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        assert_eq!(
+            got,
+            [
+                ("side.advisory", "GHSA-x · CVE-1"),
+                ("side.ecosystem", "npm"),
+                ("side.range", "< 2"),
+                ("side.fix", "2.0.1"),
+                ("side.score", "7.5"),
+                ("side.scope", "runtime")
+            ]
+        );
+        let sec = r#"[{"number":3,"secret":"ghp_TOPSECRET","secret_type_display_name":"PAT","validity":"active","publicly_leaked":false,"push_protection_bypassed":true}]"#;
+        let a = &parse(Source::Secret, "o/r", sec).unwrap()[0];
+        assert!(!format!("{a:?}").contains("TOPSECRET"), "the value is never kept");
+        assert!(a.body.is_empty());
+        let got: Vec<_> = a.extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        assert_eq!(got, [("side.validity", "active"), ("side.leaked", "no"), ("side.bypassed", "yes")]);
     }
 
     #[test]

@@ -6,6 +6,8 @@
 //! inbox = [0.31]
 //! list = [0.165, 0.44]
 //! actions = [0.165, 0.44]
+//! security = [0.58]
+//! status = [0.58]
 //! ```
 //!
 //! Each list is the view's split ratios in order (the outer one first). A
@@ -17,6 +19,8 @@ pub struct State {
     pub inbox: Vec<f32>,
     pub list: Vec<f32>,
     pub actions: Vec<f32>,
+    pub security: Vec<f32>,
+    pub status: Vec<f32>,
 }
 
 pub fn parse(text: &str) -> State {
@@ -39,6 +43,8 @@ pub fn parse(text: &str) -> State {
             "inbox" => &mut out.inbox,
             "list" => &mut out.list,
             "actions" => &mut out.actions,
+            "security" => &mut out.security,
+            "status" => &mut out.status,
             _ => continue,
         };
         *slot = ratios(value);
@@ -58,7 +64,14 @@ pub fn format(s: &State) -> String {
     let list = |v: &[f32]| {
         v.iter().map(|r| format!("{:.4}", r).trim_end_matches('0').trim_end_matches('.').to_string()).collect::<Vec<_>>().join(", ")
     };
-    format!("[columns]\ninbox = [{}]\nlist = [{}]\nactions = [{}]\n", list(&s.inbox), list(&s.list), list(&s.actions))
+    format!(
+        "[columns]\ninbox = [{}]\nlist = [{}]\nactions = [{}]\nsecurity = [{}]\nstatus = [{}]\n",
+        list(&s.inbox),
+        list(&s.list),
+        list(&s.actions),
+        list(&s.security),
+        list(&s.status)
+    )
 }
 
 #[cfg(test)]
@@ -67,9 +80,9 @@ mod tests {
 
     #[test]
     fn reads_back_what_it_writes() {
-        let s = State { inbox: vec![0.31], list: vec![0.165, 0.44], actions: vec![0.2, 0.5] };
+        let s = State { inbox: vec![0.31], list: vec![0.165, 0.44], actions: vec![0.2, 0.5], security: vec![0.6], status: vec![0.45] };
         let text = format(&s);
-        assert_eq!(text, "[columns]\ninbox = [0.31]\nlist = [0.165, 0.44]\nactions = [0.2, 0.5]\n");
+        assert_eq!(text, "[columns]\ninbox = [0.31]\nlist = [0.165, 0.44]\nactions = [0.2, 0.5]\nsecurity = [0.6]\nstatus = [0.45]\n");
         assert_eq!(parse(&text), s);
     }
 

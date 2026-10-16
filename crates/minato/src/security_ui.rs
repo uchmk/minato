@@ -34,7 +34,7 @@ pub fn draw(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         } else {
             let shown = app.sec_shown();
             let sheet = shown.get(app.security_sel.min(shown.len().saturating_sub(1))).map(|&i| crate::side_ui::alert(app, &app.alerts[i]));
-            crate::side_ui::draw(ui, app, rect, sheet);
+            crate::side_ui::draw(ui, app, rect, out, sheet);
         }
     }
     crate::ui::dividers(ui, &app.security_split, r, out);

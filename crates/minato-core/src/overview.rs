@@ -41,6 +41,9 @@ pub struct Lane {
     /// The runs that failed in a row.
     pub failed: u32,
     pub stalled: bool,
+    /// The script's version and the worktree's state, as the issue tells.
+    pub script: String,
+    pub worktree: String,
     /// The status issue's page.
     pub url: String,
 }
@@ -83,6 +86,8 @@ fn lane(i: &Item) -> Option<Lane> {
         outcome: after("This firing:").unwrap_or_default().to_string(),
         failed: after("Failed runs in a row:").and_then(|n| n.parse().ok()).unwrap_or(0),
         stalled: has(i, STALLED_LABEL),
+        script: after("Script").unwrap_or_default().to_string(),
+        worktree: after("Worktree:").unwrap_or_default().to_string(),
         url: i.url.clone(),
     })
 }
@@ -116,9 +121,16 @@ pub fn attention(items: &[Item]) -> Vec<(usize, &'static str)> {
 }
 
 /// A repository's last release.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Shipped {
     pub tag: String,
+    /// The release's title, who published it, and whether it is a pre-release.
+    pub name: String,
+    pub author: String,
+    pub prerelease: bool,
+    /// Its notes (the first part) and its files with their sizes.
+    pub notes: String,
+    pub assets: Vec<(String, u64)>,
     pub published_at: String,
     /// How many files it has, and whether its notes carry the SHA-256 table.
     pub files: usize,
@@ -149,6 +161,15 @@ pub fn parse_latest(body: &str) -> Result<Option<Shipped>, String> {
     let text = |r: &Value, k: &str| r.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
     Ok(a.iter().find(|r| !r.get("draft").and_then(Value::as_bool).unwrap_or(false)).map(|r| Shipped {
         tag: text(r, "tag_name"),
+        name: text(r, "name"),
+        author: r.pointer("/author/login").and_then(Value::as_str).unwrap_or_default().to_string(),
+        prerelease: r.get("prerelease").and_then(Value::as_bool).unwrap_or(false),
+        notes: text(r, "body").replace('\r', "").chars().take(2400).collect(),
+        assets: r
+            .get("assets")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().map(|f| (text(f, "name"), f.get("size").and_then(Value::as_u64).unwrap_or(0))).collect())
+            .unwrap_or_default(),
         published_at: text(r, "published_at"),
         files: r.get("assets").and_then(Value::as_array).map_or(0, Vec::len),
         sums: text(r, "body").contains("SHA-256"),
@@ -249,6 +270,8 @@ If Last firing is more than two hours old …";
         assert_eq!(t.fired, epoch("2026-10-14T05:23:00Z"));
         assert_eq!(t.outcome, "Done (test/win-5-10): WINTEST_DONE #119");
         assert_eq!((t.failed, t.stalled), (0, false));
+        assert_eq!(t.worktree, "clean");
+        assert!(!t.script.is_empty(), "the script line is kept");
         assert_eq!((v[0].failed, v[0].stalled), (2, true));
         let at = t.fired.unwrap();
         assert_eq!(t.health(at + 600), Health::Ok);
@@ -294,6 +317,12 @@ If Last firing is more than two hours old …";
         assert!(!s.lacks_sums());
         assert!(Shipped { sums: false, ..s.clone() }.lacks_sums());
         assert!(!Shipped { sums: false, files: 0, ..s.clone() }.lacks_sums(), "no files, nothing to sum");
+        // The title, the author, the files with their sizes and the notes.
+        let full = r#"[{"tag_name":"v3","name":"Third","author":{"login":"me"},"prerelease":true,"body":"a\r\nb",
+            "assets":[{"name":"x.zip","size":10},{"name":"y.zip"}]}]"#;
+        let t = parse_latest(full).unwrap().unwrap();
+        assert_eq!((t.name.as_str(), t.author.as_str(), t.prerelease, t.notes.as_str()), ("Third", "me", true, "a\nb"));
+        assert_eq!(t.assets, [("x.zip".to_string(), 10), ("y.zip".to_string(), 0)]);
         assert_eq!(parse_latest("[]").unwrap(), None);
         assert_eq!(parse_latest(r#"{"message":"Not Found"}"#), Err("Not Found".into()));
         assert_eq!(releases_path("o/r"), "/repos/o/r/releases?per_page=5");
