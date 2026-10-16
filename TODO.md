@@ -24,7 +24,7 @@
 - [x] 8. Notifications panel (v0.8.0: `n`, mark read, `A` all), release workflow (v0.8.0; run by hand with the tag)
 - [x] 17. Search box (v0.25.0: `/` in the inbox and the list, AND of words, smart case, marks in the rows and the detail)
 - [x] 18. Built-in browser beside the panes (v0.26.0: ito-browser for `o`, `O` for the system's, sign-in kept in the state folder)
-- [ ] 19. Search in saved searches: a saved search could keep `/` words too (wait until the box has been used a while)
+- [x] 19. (v0.51.0) Search in saved searches: `query | words` keeps the `/` words with a saved search
 - [x] 20. (v0.46.0) Move the detail pane's text selection (`crates/minato/src/select.rs`, v0.45.0) to ito-select from ito 0.35.2
   (rev `5d413895d2f9eb2dd2a490c54615ebf3f96c5681`; every ito crate on that rev). It adds a double-click for a word, a triple-click for a line
   and Ctrl (Cmd) + click to open a URL. `Select::drive(&resp, view)` returns the Ctrl+clicked URL (open it the way `o` does, through

@@ -234,6 +234,15 @@ pub fn join_found<'a>(mut all: Vec<Item>, more: impl IntoIterator<Item = &'a Ite
     all
 }
 
+/// A saved search line split at the first `|`: the GitHub search, then the
+/// words the search box (`/`) would hold over it (empty when there is no `|`).
+pub fn split_search(line: &str) -> (&str, &str) {
+    match line.split_once('|') {
+        Some((q, w)) => (q.trim(), w.trim()),
+        None => (line.trim(), ""),
+    }
+}
+
 /// The GitHub search for a saved search `text`: scoped to the owners when it
 /// names no `user:`, `org:` or `repo:`, newest first when it names no sort.
 pub fn search_query(text: &str, owners: &str) -> String {
@@ -323,13 +332,20 @@ impl Default for ListState {
 impl ListState {
     /// The text of the saved search in force, if one is.
     pub fn active_search(&self) -> Option<&str> {
-        self.filter.search.and_then(|i| self.searches.get(i)).map(String::as_str)
+        self.filter.search.and_then(|i| self.searches.get(i)).map(|t| split_search(t).0)
+    }
+
+    /// The words kept with the saved search in force (`query | words`), which
+    /// narrow its answer like the search box does.
+    pub fn saved_words(&self) -> crate::find::Query {
+        self.filter.search.and_then(|i| self.searches.get(i)).map_or_else(Default::default, |t| crate::find::Query::new(split_search(t).1))
     }
 
     /// The items that pass the filter and the search, in the order given. A
     /// main-branch stub (the inbox's and the board's) is never a row.
     pub fn shown<'a>(&self, items: &'a [Item], me: &str) -> Vec<&'a Item> {
-        items.iter().filter(|i| !crate::mainci::is_stub(i) && self.filter.matches(i, me) && self.find.takes(i)).collect()
+        let saved = self.saved_words();
+        items.iter().filter(|i| !crate::mainci::is_stub(i) && self.filter.matches(i, me) && saved.takes(i) && self.find.takes(i)).collect()
     }
 
     /// The selected item's node id, if any.
@@ -529,6 +545,8 @@ mod tests {
         assert_eq!(s.active_search(), None);
         s.apply(Pick::Search(0));
         assert_eq!(s.active_search(), Some("is:open label:bug"));
+        assert_eq!(split_search("is:pr | flaky  ci"), ("is:pr", "flaky  ci"));
+        assert_eq!(split_search(" is:pr "), ("is:pr", ""));
         assert!(s.is_chosen(&Pick::Search(0)) && !s.is_chosen(&Pick::Saved(Saved::None)));
         s.apply(Pick::Saved(Saved::None));
         assert_eq!(s.active_search(), None);

@@ -240,6 +240,7 @@
 - [x] **23.1** In the settings (`,`), Views page, type `is:open label:bug` in "Saved searches" → It stays after closing and reopening the settings and the app (`minato-searches.txt`)
 - [x] **23.2** In the list move to the filter column and choose that search under saved → The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds
 - [x] **23.3** Choose "All" under saved, or switch to the inbox → The ordinary list comes back
+- [ ] **23.4** Write a saved search `is:pr`, a space, a vertical bar and `flaky` (`is:pr` + bar + `flaky`), and choose it → The header shows only the GitHub part; the rows are the answer narrowed to those with `flaky` (title, label, author, …) like the `/` box; the `/` box still narrows further
 
 ## 24. Columns, mouse and arrows
 

@@ -133,7 +133,7 @@ const EN: &[(&str, &str)] = &[
 ("key.new", "New issue"),
 ("key.repo", "Repository settings"),
 ("settings.searches", "Saved searches"),
-("settings.searches_note", "One GitHub search per line; each shows up under saved in the list. Without user:, org: or repo: it is limited to the repositories of Whose repositories."),
+("settings.searches_note", "One GitHub search per line; each shows up under saved in the list. Without user:, org: or repo: it is limited to the repositories of Whose repositories. Words after a | narrow the answer like the search box (/)."),
 ("key.answer", "Mark answer"),
 ("write.not_discussion", "Only a discussion can have an answer."),
 ("write.already_answer", "That comment is already the answer."),
@@ -582,7 +582,7 @@ const JA: &[(&str, &str)] = &[
     ("settings.searches", "保存した検索"),
     (
         "settings.searches_note",
-        "GitHub の検索を 1 行に 1 つ書く。一覧の「保存した絞り込み」に並ぶ。user:・org:・repo: が無ければ「見る相手」のリポジトリに限る。",
+        "GitHub の検索を 1 行に 1 つ書く。一覧の「保存した絞り込み」に並ぶ。user:・org:・repo: が無ければ「見る相手」のリポジトリに限る。`|` の後ろの語は検索の箱（`/`）と同じに絞り込む。",
     ),
     ("key.answer", "回答にする"),
     ("write.not_discussion", "回答の印を付けられるのは discussion だけです。"),
