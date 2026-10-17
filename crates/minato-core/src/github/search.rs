@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::list::{peek_of, Check, Ci, Detail, Entry, FileChange, Item, Kind, Label};
 
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
-labels(first: 10) { nodes { name color } } comments { totalCount } bodyText";
+labels(first: 10) { nodes { name color } } comments(last: 1) { totalCount nodes { author { login } } } bodyText";
 
 /// Who a PR asks for a review: people by login, teams by name.
 const REVIEWERS: &str =
@@ -129,9 +129,16 @@ struct Login {
 }
 
 #[derive(Deserialize)]
-struct Count {
+struct CommentCount {
     #[serde(rename = "totalCount")]
     total_count: u32,
+    #[serde(default)]
+    nodes: Vec<RawLast>,
+}
+
+#[derive(Deserialize)]
+struct RawLast {
+    author: Option<Login>,
 }
 
 #[derive(Deserialize)]
@@ -194,7 +201,7 @@ struct RawItem {
     author: Option<Login>,
     repository: Option<Repo>,
     labels: Option<Nodes<RawLabel>>,
-    comments: Option<Count>,
+    comments: Option<CommentCount>,
     state: Option<String>,
     #[serde(rename = "isDraft", default)]
     is_draft: bool,
@@ -266,7 +273,8 @@ fn item_of(n: RawItem) -> Option<Item> {
         reviewers: n
             .review_requests
             .map_or_else(Vec::new, |r| r.nodes.into_iter().filter_map(|r| r.reviewer.and_then(|v| v.login.or(v.name))).collect()),
-        comments: n.comments.map_or(0, |c| c.total_count),
+        comments: n.comments.as_ref().map_or(0, |c| c.total_count),
+        last_by: n.comments.and_then(|c| c.nodes.into_iter().next()).and_then(|c| c.author).map(|a| a.login).unwrap_or_default(),
         created_at: n.created_at.unwrap_or_default(),
         updated_at: n.updated_at.unwrap_or_default(),
         draft: n.is_draft,

@@ -54,6 +54,8 @@ pub struct Item {
     /// Who a PR asks for a review (logins, or team names).
     pub reviewers: Vec<String>,
     pub comments: u32,
+    /// Who wrote the last comment (empty when there is none).
+    pub last_by: String,
     /// ISO 8601 UTC, as GitHub sends it.
     pub created_at: String,
     pub updated_at: String,
@@ -136,9 +138,74 @@ pub enum Saved {
     Finding,
 }
 
+/// A state of an item to narrow the list to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    Draft,
+    CiRed,
+    CiGreen,
+    Conflict,
+    Unassigned,
+}
+
+impl Stage {
+    pub const ALL: [Stage; 5] = [Stage::Draft, Stage::CiRed, Stage::CiGreen, Stage::Conflict, Stage::Unassigned];
+
+    pub fn takes(self, item: &Item) -> bool {
+        match self {
+            Stage::Draft => item.draft,
+            Stage::CiRed => item.ci == Some(Ci::Bad),
+            Stage::CiGreen => item.ci == Some(Ci::Ok),
+            Stage::Conflict => item.conflict,
+            Stage::Unassigned => item.assignees.is_empty(),
+        }
+    }
+
+    /// The search qualifier GitHub knows it by, if it does.
+    fn qualifier(self) -> Option<&'static str> {
+        match self {
+            Stage::Draft => Some("draft:true"),
+            Stage::CiRed => Some("status:failure"),
+            Stage::CiGreen => Some("status:success"),
+            Stage::Conflict => None,
+            Stage::Unassigned => Some("no:assignee"),
+        }
+    }
+}
+
+/// The order of the list.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sort {
+    /// As the search answered: the latest activity first.
+    #[default]
+    Updated,
+    Created,
+    Comments,
+    Title,
+    Repo,
+}
+
+impl Sort {
+    pub const ALL: [Sort; 5] = [Sort::Updated, Sort::Created, Sort::Comments, Sort::Title, Sort::Repo];
+
+    /// `items` put in this order (stable: ties keep the order given).
+    pub fn order(self, items: &mut [&Item]) {
+        match self {
+            Sort::Updated => {}
+            Sort::Created => items.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+            Sort::Comments => items.sort_by_key(|i| std::cmp::Reverse(i.comments)),
+            Sort::Title => items.sort_by_key(|i| i.title.to_lowercase()),
+            Sort::Repo => items.sort_by(|a, b| (&a.repo, a.number).cmp(&(&b.repo, b.number))),
+        }
+    }
+}
+
 /// What the filter column has chosen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Filter {
+    pub label: Option<String>,
+    pub assignee: Option<String>,
+    pub stage: Option<Stage>,
     pub repo: Option<String>,
     pub kind: Option<Kind>,
     pub author: Option<String>,
@@ -150,7 +217,7 @@ pub struct Filter {
 
 impl Default for Filter {
     fn default() -> Self {
-        Filter { repo: None, kind: None, author: None, saved: Saved::None, search: None }
+        Filter { label: None, assignee: None, stage: None, repo: None, kind: None, author: None, saved: Saved::None, search: None }
     }
 }
 
@@ -160,6 +227,9 @@ impl Filter {
         self.repo.as_ref().is_none_or(|r| *r == item.repo)
             && self.kind.is_none_or(|k| k == item.kind)
             && self.author.as_ref().is_none_or(|a| *a == item.author)
+            && self.label.as_ref().is_none_or(|l| item.labels.iter().any(|x| x.name == *l))
+            && self.assignee.as_ref().is_none_or(|a| item.assignees.contains(a))
+            && self.stage.is_none_or(|s| s.takes(item))
             && match self.saved {
                 _ if self.search.is_some() => true,
                 Saved::None => true,
@@ -184,6 +254,15 @@ impl Filter {
         if let Some(a) = &self.author {
             q.push(format!("author:{a}"));
         }
+        if let Some(l) = &self.label {
+            q.push(format!("label:\"{l}\""));
+        }
+        if let Some(a) = &self.assignee {
+            q.push(format!("assignee:{a}"));
+        }
+        if let Some(s) = self.stage.and_then(Stage::qualifier) {
+            q.push(s.into());
+        }
         match self.saved {
             Saved::None => {}
             Saved::Assigned => q.push("assignee:@me".into()),
@@ -204,6 +283,10 @@ pub enum Pick {
     Repo(Option<String>),
     Kind(Option<Kind>),
     Author(Option<String>),
+    Label(Option<String>),
+    Assignee(Option<String>),
+    Stage(Option<Stage>),
+    Sort(Sort),
     Saved(Saved),
     /// One of the owner's own saved searches.
     Search(usize),
@@ -281,10 +364,26 @@ pub fn options(items: &[Item], searches: &[String]) -> Vec<(&'static str, Vec<Pi
     repos.extend(distinct(&|i| i.repo.clone()).into_iter().map(|r| Pick::Repo(Some(r))));
     let mut authors = vec![Pick::Author(None)];
     authors.extend(distinct(&|i| i.author.clone()).into_iter().filter(|a| !a.is_empty()).map(|a| Pick::Author(Some(a))));
+    let real = || items.iter().filter(|i| !crate::mainci::is_stub(i));
+    let mut labels = vec![Pick::Label(None)];
+    let mut names: Vec<String> = real().flat_map(|i| i.labels.iter().map(|l| l.name.clone())).collect();
+    names.sort();
+    names.dedup();
+    labels.extend(names.into_iter().map(|n| Pick::Label(Some(n))));
+    let mut assignees = vec![Pick::Assignee(None)];
+    let mut who: Vec<String> = real().flat_map(|i| i.assignees.clone()).collect();
+    who.sort();
+    who.dedup();
+    assignees.extend(who.into_iter().map(|a| Pick::Assignee(Some(a))));
+    let stages = std::iter::once(Pick::Stage(None)).chain(Stage::ALL.into_iter().map(|s| Pick::Stage(Some(s)))).collect();
     vec![
         ("repo", repos),
         ("kind", vec![Pick::Kind(None), Pick::Kind(Some(Kind::Issue)), Pick::Kind(Some(Kind::Pr)), Pick::Kind(Some(Kind::Discussion))]),
         ("author", authors),
+        ("label", labels),
+        ("assignee", assignees),
+        ("stage", stages),
+        ("sort", Sort::ALL.into_iter().map(Pick::Sort).collect()),
         (
             "saved",
             vec![
@@ -324,6 +423,7 @@ pub struct ListState {
     pub searches: Vec<String>,
     /// The words of the search box (`/`), over the filter.
     pub find: crate::find::Query,
+    pub sort: Sort,
 }
 
 impl Default for ListState {
@@ -336,6 +436,7 @@ impl Default for ListState {
             scroll: 0.0,
             searches: Vec::new(),
             find: Default::default(),
+            sort: Sort::default(),
         }
     }
 }
@@ -356,7 +457,12 @@ impl ListState {
     /// main-branch stub (the inbox's and the board's) is never a row.
     pub fn shown<'a>(&self, items: &'a [Item], me: &str) -> Vec<&'a Item> {
         let saved = self.saved_words();
-        items.iter().filter(|i| !crate::mainci::is_stub(i) && self.filter.matches(i, me) && saved.takes(i) && self.find.takes(i)).collect()
+        let mut v: Vec<&Item> = items
+            .iter()
+            .filter(|i| !crate::mainci::is_stub(i) && self.filter.matches(i, me) && saved.takes(i) && self.find.takes(i))
+            .collect();
+        self.sort.order(&mut v);
+        v
     }
 
     /// The selected item's node id, if any.
@@ -423,6 +529,10 @@ impl ListState {
             Pick::Repo(r) => self.filter.repo = r,
             Pick::Kind(k) => self.filter.kind = k,
             Pick::Author(a) => self.filter.author = a,
+            Pick::Label(l) => self.filter.label = l,
+            Pick::Assignee(a) => self.filter.assignee = a,
+            Pick::Stage(s) => self.filter.stage = s,
+            Pick::Sort(s) => self.sort = s,
             Pick::Saved(s) => {
                 self.filter.saved = s;
                 self.filter.search = None;
@@ -439,6 +549,10 @@ impl ListState {
             Pick::Repo(r) => self.filter.repo == *r,
             Pick::Kind(k) => self.filter.kind == *k,
             Pick::Author(a) => self.filter.author == *a,
+            Pick::Label(l) => self.filter.label == *l,
+            Pick::Assignee(a) => self.filter.assignee == *a,
+            Pick::Stage(s) => self.filter.stage == *s,
+            Pick::Sort(s) => self.sort == *s,
             Pick::Saved(s) => self.filter.search.is_none() && self.filter.saved == *s,
             Pick::Search(i) => self.filter.search == Some(*i),
         }
@@ -523,6 +637,7 @@ mod tests {
             milestone: String::new(),
             reviewers: Vec::new(),
             comments: 0,
+            last_by: String::new(),
             created_at: String::new(),
             updated_at: String::new(),
             draft: false,
@@ -585,6 +700,9 @@ mod tests {
         assert_eq!(it.iter().filter(|i| f.matches(i, "me")).count(), 1);
         assert_eq!(f.query("uchmk"), "is:open user:uchmk is:pr status:failure");
         let f = Filter {
+            label: None,
+            assignee: None,
+            stage: None,
             repo: Some("uchmk/kura".into()),
             kind: Some(Kind::Pr),
             author: Some("uchmk".into()),
@@ -593,6 +711,47 @@ mod tests {
         };
         assert_eq!(f.query("uchmk"), "is:open repo:uchmk/kura is:pr author:uchmk assignee:@me");
         assert!(!f.matches(&it[1], "me"));
+    }
+
+    #[test]
+    fn label_assignee_state_filters_and_sort() {
+        let mut a = item("u/a", Kind::Pr, "x");
+        a.id = "A".into();
+        a.title = "beta".into();
+        a.created_at = "2026-01-01T00:00:00Z".into();
+        a.labels = vec![Label { name: "bug".into(), color: "f00".into() }];
+        a.assignees = vec!["me".into()];
+        a.draft = true;
+        let mut b = item("u/b", Kind::Issue, "y");
+        b.id = "B".into();
+        b.title = "Alpha".into();
+        b.created_at = "2026-02-01T00:00:00Z".into();
+        b.comments = 5;
+        let all = vec![a, b];
+        let mut l = ListState::default();
+        let ids = |l: &ListState| l.shown(&all, "me").iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&l), ["A", "B"]);
+        l.apply(Pick::Label(Some("bug".into())));
+        assert_eq!(ids(&l), ["A"]);
+        l.apply(Pick::Label(None));
+        l.apply(Pick::Assignee(Some("me".into())));
+        assert_eq!(ids(&l), ["A"]);
+        l.apply(Pick::Assignee(None));
+        l.apply(Pick::Stage(Some(Stage::Unassigned)));
+        assert_eq!(ids(&l), ["B"]);
+        l.apply(Pick::Stage(Some(Stage::Draft)));
+        assert_eq!(ids(&l), ["A"]);
+        assert!(l.filter.query("u").contains("draft:true"));
+        l.apply(Pick::Stage(None));
+        l.apply(Pick::Sort(Sort::Title));
+        assert_eq!(ids(&l), ["B", "A"]);
+        l.apply(Pick::Sort(Sort::Created));
+        assert_eq!(ids(&l), ["B", "A"]);
+        l.apply(Pick::Sort(Sort::Comments));
+        assert_eq!(ids(&l), ["B", "A"]);
+        l.apply(Pick::Sort(Sort::Repo));
+        assert_eq!(ids(&l), ["A", "B"]);
+        assert!(l.is_chosen(&Pick::Sort(Sort::Repo)) && !l.is_chosen(&Pick::Sort(Sort::Title)));
     }
 
     #[test]

@@ -5,7 +5,7 @@
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
 use minato_core::fold::{fold, Show};
 use minato_core::inbox::Group;
-use minato_core::list::{age, epoch, options, Ci, Col, Item, Kind, Pick, Saved};
+use minato_core::list::{age, epoch, options, Ci, Col, Item, Kind, Pick, Saved, Sort, Stage};
 
 use crate::app::{now_epoch, App, Click, Pane, Wheel};
 use crate::style::{self, ACCENT};
@@ -37,6 +37,27 @@ fn pick_label(app: &App, p: &Pick) -> String {
         Pick::Repo(r) => r.clone().unwrap_or_else(|| app.tr("list.all").into()),
         Pick::Kind(k) => k.map_or_else(|| app.tr("list.all").into(), |k| kind_word(app, k).into()),
         Pick::Author(a) => a.clone().unwrap_or_else(|| app.tr("list.all").into()),
+        Pick::Label(l) => l.clone().unwrap_or_else(|| app.tr("list.all").into()),
+        Pick::Assignee(a) => a.clone().unwrap_or_else(|| app.tr("list.all").into()),
+        Pick::Stage(s) => app
+            .tr(match s {
+                None => "list.all",
+                Some(Stage::Draft) => "stage.draft",
+                Some(Stage::CiRed) => "stage.ci_red",
+                Some(Stage::CiGreen) => "stage.ci_green",
+                Some(Stage::Conflict) => "stage.conflict",
+                Some(Stage::Unassigned) => "stage.unassigned",
+            })
+            .into(),
+        Pick::Sort(o) => app
+            .tr(match o {
+                Sort::Updated => "sort.updated",
+                Sort::Created => "sort.created",
+                Sort::Comments => "sort.comments",
+                Sort::Title => "sort.title",
+                Sort::Repo => "sort.repo",
+            })
+            .into(),
         Pick::Saved(Saved::None) => app.tr("list.all").into(),
         Pick::Saved(Saved::Assigned) => app.tr("saved.assigned").into(),
         Pick::Saved(Saved::Red) => app.tr("saved.red").into(),
@@ -106,6 +127,10 @@ fn filter_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
             "repo" => "list.repo",
             "kind" => "list.kind",
             "author" => "list.author",
+            "label" => "list.label",
+            "assignee" => "list.assignee",
+            "stage" => "list.stage",
+            "sort" => "list.sort",
             _ => "list.saved",
         });
         if y >= top && y + GROUP_H <= bottom {

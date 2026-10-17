@@ -318,6 +318,7 @@ pub fn stubs(alerts: &[Alert]) -> Vec<Item> {
                 milestone: String::new(),
                 reviewers: Vec::new(),
                 comments: 0,
+                last_by: String::new(),
                 created_at: a.created_at.clone(),
                 updated_at: a.created_at.clone(),
                 draft: false,

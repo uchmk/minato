@@ -214,6 +214,9 @@ fn next(p: &Painter, app: &App, card: Option<&Card>, x: f32, y: f32, w: f32) -> 
             note: app.tr(rule.note()),
             key: Some(&shown),
         },
+        (Group::Replied, _) => {
+            Next { tone: style::RUN, lead: app.tr("detail.replied"), label: why, note: app.tr("detail.replied_back"), key: None }
+        }
         (Group::Wait, _) => Next { tone: style::RUN, lead: app.tr("detail.wait"), label: why, note: app.tr("detail.back"), key: None },
         (Group::Done, _) => Next { tone: style::OK, lead: app.tr("detail.done"), label: why, note: "", key: None },
         (Group::Mine, None) => Next { tone: style::IDLE, lead: app.tr("detail.next"), label: why, note: "", key: None },

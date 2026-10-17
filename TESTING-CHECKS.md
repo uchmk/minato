@@ -60,6 +60,8 @@
 - [x] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation
 - [x] **6.9** Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' → A long repository name ends with "…" before its count (in a narrow column it loses its owner and the counts go); "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half
 - [x] **6.10** Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh → The selection stays on the same item, which moves down a row; the detail does not change
+- [ ] **6.11** Move to the filter column (`h`) and pick a label, an assignee, then "Draft" under State → The list narrows to the items carrying that label, assigned to that person, and (State) the drafts; "All" in each group clears it
+- [ ] **6.12** Pick "Most comments", "Newest", "Title" and "Repository" under Sort → The rows reorder at once (latest activity first is the default); the choice stays while you move between filters
 
 ## 7. Inbox view
 
@@ -68,6 +70,7 @@
 - [x] **7.3** Press `d`, then `u` → The card moves to "Done today" with a toast, and `u` brings it back
 - [x] **7.4** Press `s` → The card disappears (back tomorrow 9:00) with a toast; `u` brings it back
 - [x] **7.5** Press `f`, `F`, `t` → The chips at the lower left change and the cards narrow; after the last choice they return to All
+- [ ] **7.5a** Comment on a "Your turn" card of a question or mention (`r`, send), then look at the inbox after the refresh → The card is under "Replied" (返信済み) with its reason, not under "Your turn"; when someone else writes after you and the inbox refreshes it returns to "Your turn"; a red CI card stays in "Your turn" after a comment
 - [x] **7.6** Shrink the window height → As many whole cards as fit show around the selected one; the rest hide behind a "⋯" line inside their own section, under its header ("⋯ 下に N 件", or "⋯ N 件" for a section with none shown); no card is folded to its title and no scrollbar
 - [x] **7.7** Press `o` → The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser)
 - [x] **7.8** Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) → The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room

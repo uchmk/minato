@@ -130,6 +130,12 @@ impl Rule {
         }
     }
 
+    /// Whether the rule is about a conversation, which `Group::Replied` can
+    /// settle (a red CI or a PR to merge is not answered by a comment).
+    pub fn talk(self) -> bool {
+        matches!(self, Rule::Question | Rule::NeedsOwner | Rule::Finding | Rule::Mention)
+    }
+
     /// The colour of the card's edge and the next box.
     pub fn tone(self) -> Tone {
         match self {
@@ -202,6 +208,8 @@ pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
 pub enum Group {
     /// Your turn.
     Mine,
+    /// A conversation you took part in and wrote the last word of: not your turn until someone answers.
+    Replied,
     /// Yours, but waiting for someone else.
     Wait,
     /// Marked done today.
@@ -257,7 +265,7 @@ pub struct Card {
 /// A day, for "done today".
 const DAY: i64 = 24 * 3600;
 
-/// Sort the items into cards: Mine, then Wait, then Done.
+/// Sort the items into cards: Mine, then Replied, then Wait, then Done.
 pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Mark>, now: i64) -> Vec<Card> {
     let mut out = Vec::new();
     for (at, item) in items.iter().enumerate() {
@@ -276,7 +284,9 @@ pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Ma
                 }
             }
             _ => {
-                if rule.is_some() {
+                if rule.is_some_and(|r| r.talk()) && item.comments > 0 && item.last_by == me {
+                    Group::Replied
+                } else if rule.is_some() {
                     Group::Mine
                 } else if item.author == me && item.kind != Kind::Discussion && !automatic(item) {
                     Group::Wait
@@ -289,8 +299,9 @@ pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Ma
     }
     out.sort_by_key(|c| match c.group {
         Group::Mine => 0,
-        Group::Wait => 1,
-        Group::Done => 2,
+        Group::Replied => 1,
+        Group::Wait => 2,
+        Group::Done => 3,
     });
     out
 }
@@ -300,6 +311,7 @@ pub fn cards(items: &[Item], me: &str, rules: &Rules, marks: &HashMap<String, Ma
 pub enum Status {
     All,
     Mine,
+    Replied,
     Wait,
     Done,
 }
@@ -308,7 +320,8 @@ impl Status {
     fn next(self) -> Status {
         match self {
             Status::All => Status::Mine,
-            Status::Mine => Status::Wait,
+            Status::Mine => Status::Replied,
+            Status::Replied => Status::Wait,
             Status::Wait => Status::Done,
             Status::Done => Status::All,
         }
@@ -318,6 +331,7 @@ impl Status {
         match self {
             Status::All => "inbox.all",
             Status::Mine => "inbox.mine",
+            Status::Replied => "inbox.replied",
             Status::Wait => "inbox.wait",
             Status::Done => "inbox.done",
         }
@@ -325,7 +339,14 @@ impl Status {
 
     /// Whether a card of group `g` passes this filter.
     pub fn takes(self, g: Group) -> bool {
-        matches!((self, g), (Status::All, _) | (Status::Mine, Group::Mine) | (Status::Wait, Group::Wait) | (Status::Done, Group::Done))
+        matches!(
+            (self, g),
+            (Status::All, _)
+                | (Status::Mine, Group::Mine)
+                | (Status::Replied, Group::Replied)
+                | (Status::Wait, Group::Wait)
+                | (Status::Done, Group::Done)
+        )
     }
 }
 
@@ -473,6 +494,7 @@ mod tests {
             milestone: String::new(),
             reviewers: Vec::new(),
             comments: 0,
+            last_by: String::new(),
             created_at: String::new(),
             updated_at: String::new(),
             draft: false,
@@ -489,6 +511,34 @@ mod tests {
     fn labelled(mut i: Item, l: &str) -> Item {
         i.labels.push(Label { name: l.into(), color: "000000".into() });
         i
+    }
+
+    #[test]
+    fn a_conversation_you_wrote_the_last_word_of_is_replied() {
+        let r = Rules::default();
+        let mut q = labelled(item("q", Kind::Issue, "me"), "question");
+        q.comments = 2;
+        q.last_by = "you".into();
+        let now = 1000;
+        let marks = HashMap::new();
+        let group = |i: &Item| cards(std::slice::from_ref(i), "me", &r, &marks, now).first().map(|c| c.group);
+        assert_eq!(group(&q), Some(Group::Mine), "the other side wrote last");
+        q.last_by = "me".into();
+        assert_eq!(group(&q), Some(Group::Replied));
+        assert!(Status::Replied.takes(Group::Replied) && !Status::Mine.takes(Group::Replied));
+        // No comment at all, or a rule that a comment does not answer: still your turn.
+        q.comments = 0;
+        assert_eq!(group(&q), Some(Group::Mine));
+        let mut red = item("p", Kind::Pr, "me");
+        red.ci = Some(Ci::Bad);
+        red.comments = 1;
+        red.last_by = "me".into();
+        assert_eq!(group(&red), Some(Group::Mine));
+        // Done and later marks still come first.
+        q.comments = 2;
+        let mut m = HashMap::new();
+        m.insert("q".to_string(), Mark::Done(now - 5));
+        assert_eq!(cards(std::slice::from_ref(&q), "me", &r, &m, now)[0].group, Group::Done);
     }
 
     #[test]

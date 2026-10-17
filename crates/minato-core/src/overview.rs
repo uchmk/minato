@@ -238,6 +238,7 @@ mod tests {
             milestone: String::new(),
             reviewers: Vec::new(),
             comments: 0,
+            last_by: String::new(),
             created_at: "2026-10-01T00:00:00Z".into(),
             updated_at: "2026-10-14T05:00:00Z".into(),
             draft: false,

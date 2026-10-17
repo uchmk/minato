@@ -64,7 +64,7 @@ fn queue(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
     }
     // The rows of chips at the top and the foot share what one section with
     // one card leaves: the foot first (at least a row), then the labels.
-    let groups = [Group::Mine, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).count();
+    let groups = [Group::Mine, Group::Replied, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).count();
     let spare = r.height() - 32.0 - 8.0 - groups as f32 * SEC_H - CARD_FULL;
     let foot_rows = ((spare - TAG_ROW) / (CHIP_H + 8.0)).floor().clamp(1.0, FOOT_ROWS as f32) as usize;
     let foot = chips(ui, &p, app, &all, r, foot_rows, out);
@@ -139,12 +139,13 @@ fn hidden(shown: &[Card], f: &Fold, g: Group) -> (usize, usize, bool) {
     (first, rows.len() - 1 - last, true)
 }
 
-/// The sections あなたの番, 待っている and 今日済んだ that the status lets
+/// The sections あなたの番, 返信済み, 待っている and 今日済んだ that the status lets
 /// through, with their cards folded to fit; each says under its own header
 /// how many of its cards are hidden.
 fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &mut Out) {
     let c = ito_theme::colors();
-    let groups: Vec<Group> = [Group::Mine, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).collect();
+    let groups: Vec<Group> =
+        [Group::Mine, Group::Replied, Group::Wait, Group::Done].into_iter().filter(|g| app.inbox.status.takes(*g)).collect();
     let empties = groups.iter().filter(|g| !shown.iter().any(|card| card.group == **g)).count();
     let room = body.height() - groups.len() as f32 * SEC_H - empties as f32 * EMPTY_H;
     let sel = app.inbox.sel.min(shown.len().saturating_sub(1));
@@ -169,6 +170,7 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
     for g in groups {
         let (name, hint) = match g {
             Group::Mine => ("inbox.mine", "inbox.mine_hint"),
+            Group::Replied => ("inbox.replied", "inbox.replied_hint"),
             Group::Wait => ("inbox.wait", "inbox.wait_hint"),
             Group::Done => ("inbox.done", ""),
         };
@@ -228,7 +230,7 @@ fn sections(ui: &Ui, p: &Painter, app: &App, shown: &[Card], body: Rect, out: &m
 pub fn card_tone(card: &Card) -> Color32 {
     match (card.group, card.rule) {
         (Group::Mine, Some(rule)) => style::tone(rule.tone()),
-        (Group::Wait, _) => style::RUN,
+        (Group::Replied | Group::Wait, _) => style::RUN,
         (Group::Done, _) => style::OK,
         _ => style::IDLE,
     }
@@ -330,6 +332,7 @@ fn chips(ui: &Ui, p: &Painter, app: &App, all: &[Card], r: Rect, rows: usize, ou
     let sts = [
         (Status::All, "inbox.all", None),
         (Status::Mine, "inbox.mine", Some(ACCENT)),
+        (Status::Replied, "inbox.replied", Some(style::RUN)),
         (Status::Wait, "inbox.wait", Some(style::RUN)),
         (Status::Done, "inbox.done_chip", Some(style::OK)),
     ];

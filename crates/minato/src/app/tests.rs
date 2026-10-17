@@ -1026,6 +1026,7 @@ fn pr(id: &str) -> Item {
         milestone: String::new(),
         reviewers: Vec::new(),
         comments: 0,
+        last_by: String::new(),
         created_at: String::new(),
         updated_at: String::new(),
         draft: false,
