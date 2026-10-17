@@ -71,7 +71,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 6.10 | Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh | The selection stays on the same item, which moves down a row; the detail does not change |
 | 6.11 | Move to the filter column (`h`) and pick a label, an assignee, then "Draft" under State | The list narrows to the items carrying that label, assigned to that person, and (State) the drafts; "All" in each group clears it |
 | 6.12 | Pick "Most comments", "Newest", "Title" and "Repository" under Sort | The rows reorder at once (latest activity first is the default); the choice stays while you move between filters |
-| 6.13 | Look at the rows of the list: a PR with a red CI, a draft, one with a conflict, a merged one, and an item that is also a card in the inbox | The third line starts with coloured words: the inbox reason (accent, or amber when replied / waiting), then Draft, Conflict, CI red / CI running / CI green, Merged or Closed; the rest of the line (repository, number, who and when) follows and is cut first when the row is narrow |
+| 6.13 | Look at the rows of the list: a PR with a red CI, a draft, one with a conflict, a merged one, and an item that is also a card in the inbox | The third line starts with coloured words: for a Your turn card the next step as `[key] name` (e.g. `[m] Merge`), then the inbox reason (accent, or amber when replied / waiting), then Draft, Conflict, CI red / CI running / CI green, Merged or Closed; the rest of the line (repository, number, who and when) follows and is cut first when the row is narrow |
 
 ## 7. Inbox view
 
@@ -86,6 +86,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 7.6 | Shrink the window height | As many whole cards as fit show around the selected one; the rest hide behind a "⋯" line inside their own section, under its header ("⋯ 下に N 件", or "⋯ N 件" for a section with none shown); no card is folded to its title and no scrollbar |
 | 7.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 7.8 | Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) | The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room |
+| 7.9 | Look at the cards of Your turn (a PR to merge, a red CI, a question) | The third line of each card starts with `[key] name` in the card's colour (`[m] Merge`, `[o] Open it`, `[r] Reply`), then the reason dimmed after a dot; Replied, Waiting and Done cards show no key |
 
 ## 8. Writing box and fields
 

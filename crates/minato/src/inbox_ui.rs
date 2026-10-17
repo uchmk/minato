@@ -299,9 +299,20 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
     let g = style::truncated(&p, place, FontId::monospace(12.0), c.dim, right - x);
     p.galley(pos2(x, y2 - g.size().y / 2.0), g, c.dim);
     let y3 = y2 + 19.0;
-    let d = p.text(pos2(x, y3), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), tone);
-    let g = style::truncated(&p, card_why(app, card).to_owned(), FontId::proportional(12.5), tone, right - d.right() - 6.0);
-    p.galley(pos2(d.right() + 6.0, y3 - g.size().y / 2.0), g, tone);
+    let mut wx = x;
+    // What to do first (key and name, in the tone), so the card says what to
+    // press before it says why; only your turn has a next step.
+    if let (Group::Mine, Some(rule)) = (card.group, card.rule) {
+        let (key, name) = rule.next();
+        let k = p.text(pos2(wx, y3), Align2::LEFT_CENTER, format!("[{key}]"), FontId::monospace(12.0), tone);
+        let n = p.text(pos2(k.right() + 5.0, y3), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.5), tone);
+        p.text(pos2(n.right() + 0.45, y3), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.5), tone);
+        wx = n.right() + 8.0;
+    }
+    let d = p.text(pos2(wx, y3), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), if wx > x { c.dim } else { tone });
+    let why_color = if wx > x { c.dim } else { tone };
+    let g = style::truncated(&p, card_why(app, card).to_owned(), FontId::proportional(12.5), why_color, right - d.right() - 6.0);
+    p.galley(pos2(d.right() + 6.0, y3 - g.size().y / 2.0), g, why_color);
     let y4 = y3 + 23.0;
     let lx = style::tag(&p, x, y4, &item.repo, item.repo_name()) + 4.0;
     style::labels(&p, lx, y4, &item.labels, right);

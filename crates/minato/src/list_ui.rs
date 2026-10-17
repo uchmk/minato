@@ -366,7 +366,14 @@ fn status_chips(app: &App, item: &Item, card: Option<&minato_core::inbox::Card>)
     if let Some(card) = card {
         let color = if card.group == Group::Mine { ACCENT } else { style::RUN };
         match card.rule {
-            Some(rule) => v.push((app.tr(rule.why()).to_string(), color)),
+            Some(rule) => {
+                // The step first, so a row says what to press, then why.
+                if card.group == Group::Mine {
+                    let (key, name) = rule.next();
+                    v.push((format!("[{key}] {}", app.tr(name)), style::tone(rule.tone())));
+                }
+                v.push((app.tr(rule.why()).to_string(), color));
+            }
             None => v.push((app.tr("inbox.wait").to_string(), color)),
         }
     }
