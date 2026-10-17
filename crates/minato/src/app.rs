@@ -865,6 +865,15 @@ impl App {
         crate::i18n::tr(&self.lang, key)
     }
 
+    /// F12: the bug report form in the system's browser, with the version, the
+    /// OS and what minato knew filled in (by name, never by path).
+    pub fn bug_report(&mut self) {
+        self.open_url = Some(crate::bugreport::url(self.prefs.base.as_deref(), self.prefs.common.scale_or_one()));
+        self.open_outside = true;
+        let text = self.tr("bugreport.opened");
+        self.say(text);
+    }
+
     pub fn say(&mut self, text: impl Into<String>) {
         self.toast = Some((text.into(), Instant::now() + Duration::from_secs(4)));
     }

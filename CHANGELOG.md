@@ -2,6 +2,18 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.57.0] - 2026-10-17
+
+### 追加
+
+- `F12` で不具合の報告の画面をブラウザで開く（`ito-bugreport`）。版・OS・設定の文脈を埋めた GitHub の issue フォームで、ブラウザで送るまで何も送られない。フォームは `.github/ISSUE_TEMPLATE/bug_report.yml`（テストで生成物と一致を確かめる）。
+- `--keys SCRIPT` と `MINATO_KEYS_DONE`（`ito-keyscript`）。キーを窓に流して状態を `<State:name>` で書き出す。パニックや窓が閉じたときも完了ファイルに理由が残る。
+- TESTING-CHECKS.md を `ito-testcheck` で生成するようにした（`scripts/testcheck-ja.toml`）。
+
+### 変更
+
+- ito のクレートを `f274b41` にそろえた。
+
 ## [0.56.0] - 2026-10-16
 
 ### 変更

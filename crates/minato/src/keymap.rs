@@ -32,7 +32,7 @@ pub const SPEC: Spec = Spec { layers: &LAYERS, ignored: &[], defaults: DEFAULTS 
 pub const NOOP: &str = "none";
 
 /// Keys read before the keymap is (`main.rs`): bound in it, they never run.
-const FIXED: [&str; 8] = ["<Esc>", "<F1>", "<F5>", "<C-,>", "<C-S-p>", "<C-=>", "<C-->", "<C-0>"];
+const FIXED: [&str; 9] = ["<Esc>", "<F1>", "<F5>", "<F12>", "<C-,>", "<C-S-p>", "<C-=>", "<C-->", "<C-0>"];
 
 /// What an action does: the character it was, Enter, Tab (Shift+Tab with
 /// `true`), or `gg`.

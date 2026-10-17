@@ -8,6 +8,7 @@
 mod actions_ui;
 mod app;
 mod board_ui;
+mod bugreport;
 mod compose_ui;
 mod detail_ui;
 mod fonts;
@@ -22,6 +23,7 @@ mod notes_ui;
 mod overlay;
 mod overlay_ui;
 mod prefs;
+mod script;
 mod security_ui;
 mod select;
 mod settings;
@@ -31,6 +33,8 @@ mod style;
 mod ui;
 
 use app::{App, Mode};
+use ito_keyscript::{Do, Runner, Step};
+use std::ffi::OsString;
 
 /// The window's icon, in pixels square.
 const ICON_PX: u32 = 128;
@@ -41,7 +45,11 @@ const BROWSER_W: f32 = 560.0;
 const USAGE: &str = "\
 minato — a keyboard-driven GitHub client
 
-usage: minato [--version | --help]
+usage: minato [--keys SCRIPT] [--version | --help]
+
+  --keys SCRIPT  press these keys once the window is up, as kura's --keys
+                 (`jj<Enter>`, `<C-S-p>`, `<Wait:200>`, `<State:name>`, `<Quit>`);
+                 MINATO_KEYS_DONE names the file that says how it ended
 ";
 
 struct Minato {
@@ -52,6 +60,10 @@ struct Minato {
     /// cookies, so the sign-in to GitHub lasts.
     browser: Option<ito_browser::Browser>,
     web_dir: Option<std::path::PathBuf>,
+    /// The `--keys` script being played, if any.
+    script: Option<Runner>,
+    /// What the script asked for in `raw_input_hook`, done in the frame.
+    todo: Vec<Do>,
 }
 
 impl Minato {
@@ -67,6 +79,46 @@ impl Minato {
             self.app.mode = Mode::Main;
         }
         ctx.request_repaint();
+    }
+
+    fn write_state(&self, path: std::path::PathBuf, tail: &str) {
+        let text = format!("{}{tail}", self.app.report());
+        if let Err(e) = std::fs::write(&path, text) {
+            ito_console::err(&format!(
+                "minato --keys: {}: {e}
+",
+                path.display()
+            ));
+        }
+    }
+
+    /// The script's shots and states, and its end.
+    fn script(&mut self, ctx: &egui::Context) {
+        let Some(script) = &mut self.script else { return };
+        if let Some(err) = script.shot(ctx) {
+            self.app.say(err);
+        }
+        for d in std::mem::take(&mut self.todo) {
+            let Some(script) = &self.script else { return };
+            match d {
+                Do::State(name) => self.write_state(script.dir.join(format!("{name}.txt")), ""),
+                Do::Quit => self.app.quit = true,
+                // minato defines no readings of its own.
+                Do::Read { .. } => {}
+                Do::Done => {
+                    if let Some(done) = script.done.clone() {
+                        self.write_state(
+                            done,
+                            "keys: done
+",
+                        );
+                    }
+                }
+            }
+        }
+        if let Some(due) = self.script.as_ref().and_then(Runner::due) {
+            ctx.request_repaint_after(due);
+        }
     }
 
     fn close_browser(&mut self) {
@@ -229,6 +281,28 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
 }
 
 impl eframe::App for Minato {
+    /// A window that closes while a script runs says so in the done file
+    /// (`<Quit>` and a last key that quits both come here).
+    fn on_exit(&mut self) {
+        let Some(script) = &mut self.script else { return };
+        if !script.running() {
+            return;
+        }
+        let left = script.left();
+        script.finish();
+        let Some(done) = script.done.clone() else { return };
+        let tail = if self.app.quit { ito_keyscript::quit_report(left) } else { ito_keyscript::closed_report(left) };
+        self.write_state(done, &tail);
+    }
+
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if let Some(script) = &mut self.script {
+            if let Some(d) = script.input(ctx, raw) {
+                self.todo.push(d);
+            }
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         // While the Keys page takes a key, every key goes to it.
@@ -239,12 +313,16 @@ impl eframe::App for Minato {
         if !taking && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
             self.app.toggle_help();
         }
+        if !taking && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F12)) {
+            self.app.bug_report();
+        }
         if !taking && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F5)) {
             self.app.sync_now();
         }
         if self.app.mode != Mode::Settings {
             self.keys(&ctx);
         }
+        self.script(&ctx);
         self.app.prefs.pump();
         match self.app.prefs.keymap_new.take() {
             Some(None) => self.app.load_keys(),
@@ -437,18 +515,59 @@ fn say(text: &str, err: bool) {
     }
 }
 
-fn main() -> eframe::Result {
-    let mut args = std::env::args().skip(1);
-    if let Some(a) = args.next() {
-        match a.as_str() {
-            "--version" | "-V" => say(&format!("minato {}", env!("CARGO_PKG_VERSION")), false),
-            "--help" | "-h" => say(USAGE, false),
-            other => {
-                say(&format!("minato: unknown argument `{other}`\n\n{USAGE}"), true);
-                std::process::exit(2);
+/// What the command line asks for.
+#[derive(Debug, PartialEq, Eq)]
+enum Cli {
+    Version,
+    Help,
+    /// Open the window, playing this script if there is one.
+    Open(Option<Vec<Step>>),
+}
+
+fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Cli, String> {
+    let mut script = None;
+    let mut args = args.into_iter();
+    while let Some(a) = args.next() {
+        match a.to_str() {
+            Some("--keys") => {
+                let s = args.next().ok_or("--keys needs a script")?;
+                let s = s.to_str().ok_or("--keys: the script is not text")?;
+                script = Some(ito_keyscript::parse(s).map_err(|e| format!("--keys: {e}"))?);
             }
+            Some("--version" | "-V") => return Ok(Cli::Version),
+            Some("--help" | "-h") => return Ok(Cli::Help),
+            _ => return Err(format!("unknown argument `{}`", a.to_string_lossy())),
         }
-        return Ok(());
+    }
+    Ok(Cli::Open(script))
+}
+
+fn main() -> eframe::Result {
+    let script = match parse_args(std::env::args_os().skip(1)) {
+        Ok(Cli::Version) => {
+            say(&format!("minato {}", env!("CARGO_PKG_VERSION")), false);
+            return Ok(());
+        }
+        Ok(Cli::Help) => {
+            say(USAGE, false);
+            return Ok(());
+        }
+        Ok(Cli::Open(script)) => script,
+        Err(e) => {
+            say(
+                &format!(
+                    "minato: {e}
+
+{USAGE}"
+                ),
+                true,
+            );
+            std::process::exit(2);
+        }
+    };
+    let done = std::env::var_os("MINATO_KEYS_DONE").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    if let (Some(_), Some(done)) = (&script, &done) {
+        ito_keyscript::install_panic_report(done.clone());
     }
     let viewport = egui::ViewportBuilder::default()
         .with_title("minato")
@@ -463,7 +582,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "minato",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             fonts::load_in_background(cc.egui_ctx.clone());
             let mut prefs = prefs::Prefs::load(ito_common::base_dir());
             prefs.watch(&cc.egui_ctx);
@@ -493,7 +612,13 @@ fn main() -> eframe::Result {
                 app.keep_seen(f);
             }
             let net = net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache")));
-            Ok(Box::new(Minato { app, net, browser: None, web_dir: ito_common::state_dir("minato").map(|d| d.join("webview")) }))
+            let script = script.map(|steps| {
+                let mut r = Runner::new(steps, done);
+                r.watch(cc.egui_ctx.clone());
+                r
+            });
+            let web_dir = ito_common::state_dir("minato").map(|d| d.join("webview"));
+            Ok(Box::new(Minato { app, net, browser: None, web_dir, script, todo: Vec::new() }))
         }),
     )
 }
@@ -501,6 +626,23 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, String> {
+        parse_args(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn the_command_line() {
+        assert_eq!(parse(&[]), Ok(Cli::Open(None)));
+        assert_eq!(parse(&["--version"]), Ok(Cli::Version));
+        assert_eq!(parse(&["-V"]), Ok(Cli::Version));
+        assert_eq!(parse(&["x", "-h"]), Err("unknown argument `x`".to_owned()));
+        assert_eq!(parse(&["-h"]), Ok(Cli::Help));
+        assert!(matches!(parse(&["--keys", "j<Enter>"]), Ok(Cli::Open(Some(s))) if !s.is_empty()));
+        assert!(parse(&["--keys"]).is_err());
+        assert!(parse(&["--keys", "<Bogus>"]).is_err());
+        assert!(parse(&["--bogus"]).is_err());
+    }
 
     #[test]
     fn an_alt_key_does_not_type_its_letter() {

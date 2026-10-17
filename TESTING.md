@@ -283,7 +283,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 23.1 | In the settings (`,`), Views page, type `is:open label:bug` in "Saved searches" | It stays after closing and reopening the settings and the app (`minato-searches.txt`) |
 | 23.2 | In the list move to the filter column and choose that search under saved | The header shows `user:<you> is:open label:bug sort:updated-desc` and the list soon shows what GitHub finds |
 | 23.3 | Choose "All" under saved, or switch to the inbox | The ordinary list comes back |
-| 23.5 | In the list narrow with `/` (or choose a saved search), then press `W` | A toast says the search was saved; it is added to the saved group (and to `minato-searches.txt`) as the GitHub search, with ` | words` when the box had words; `W` again says it is already saved |
+| 23.5 | In the list narrow with `/` (or choose a saved search), then press `W` | A toast says the search was saved; it is added to the saved group (and to `minato-searches.txt`) as the GitHub search, with a vertical bar and words when the box had words; `W` again says it is already saved |
 | 23.4 | Write a saved search `is:pr`, a space, a vertical bar and `flaky` (`is:pr` + bar + `flaky`), and choose it | The header shows only the GitHub part; the rows are the answer narrowed to those with `flaky` (title, label, author, …) like the `/` box; the `/` box still narrows further |
 | 23.6 | In the list choose a saved search (so it is in force), then press `Z`; press `Z` again with none chosen | The search is gone from the saved group and from `minato-searches.txt` (the first matching line), the filter returns to the ordinary list and a toast says it was forgotten; with none in force a toast says so and nothing changes |
 | 23.7 | In the settings (`,`) Views page, switch "Done after a comment" on, comment on an inbox card with `r` and `Ctrl+Enter`; quit and start again | The card moves to "Done today" at once (GitHub is not changed besides the comment; `u` undoes the mark); with the switch off the card stays; the switch stays after the restart |
@@ -525,3 +525,12 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 40.15 | In `6`, put the cursor on a code scanning, a Dependabot and a secret alert | The scanner's own words (rule description, message), the tool/branch/commit, or advisory/ecosystem/vulnerable range/patched version/score/scope, or validity/leaked/bypassed; the secret's value is never shown; the next box offers dismiss |
 | 40.16 | Drag the divider in `5` and in `6`, quit and start again | Both dividers are where they were left (state.toml `security`, `status`) |
 | 40.12 | In `6`, double-click an alert and press `o` on another | Both open the alert's GitHub page in the built-in browser. If it shows 404 for a private repository, sign in to GitHub once in that browser (or use `O` for the system browser) |
+
+## 41. Bug report and `--keys`
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 41.1 | Press `F12` | The browser opens a new-issue form for uchmk/minato with the version, the OS and the settings context filled in; a toast says nothing is sent until you submit it there; no path of yours is in the link |
+| 41.2 | Open the Keys page of the settings | `F12` is listed among the fixed keys and cannot be rebound |
+| 41.3 | Run `$env:MINATO_KEYS_DONE="$env:TEMP\k.txt"; minato --keys '2<State:a><Quit>'` | The window opens on the list, quits by itself, `a.txt` is next to the script's folder with `focus:` first, and `k.txt` ends with `keys: quit` lines; the window's place is not changed |
+| 41.4 | Run `minato --keys` and `minato --keys '<Bogus>'` | Each prints the error and the usage and exits with 2; no window opens |
