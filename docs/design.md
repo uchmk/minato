@@ -71,6 +71,7 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
 - 受信箱に入れる規則（設定で付け外し、既定はモックのとおり）:
   1. 赤い CI（自分の PR・main）
   2. マージできる PR
+  2b. レビューを頼まれた他人の PR（v0.66.0 から。GitHub の requested reviewers に自分がいる間。レビューを出すと外れる。既定の優先は 3 の前、キー `o`）
   3. 自分への質問・メンション
   4. needs-owner の質問
   5. 誰にも振っていない finding

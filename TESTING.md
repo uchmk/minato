@@ -87,6 +87,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 7.7 | Press `o` | The item opens in the built-in browser at the window's right (Windows, macOS; Linux: the system's browser) |
 | 7.8 | Narrow the inbox column (drag the divider left, or zoom in with `Ctrl+=`) | The chips at the lower left wrap to more rows instead of running off the right edge; every one stays clickable and the cards above make room |
 | 7.9 | Look at the cards of Your turn (a PR to merge, a red CI, a question) | The third line of each card starts with `[key] name` in the card's colour (`[m] Merge`, `[o] Open it`, `[r] Reply`), then the reason dimmed after a dot; Replied, Waiting and Done cards show no key |
+| 7.10 | Have someone request your review on their open PR in one of your owners' repositories, then wait for the refresh | The PR is a Your turn card "Asked to review this PR" (Japanese: レビューを頼まれています) with `[o] Review`; after you submit a review it leaves the inbox; Settings > rules has the new row and the help lists it with `o` |
 
 ## 8. Writing box and fields
 

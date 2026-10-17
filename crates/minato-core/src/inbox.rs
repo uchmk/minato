@@ -1,4 +1,4 @@
-//! The inbox (docs/design.md, 「1 受信箱」): what is your turn. Ten rules
+//! The inbox (docs/design.md, 「1 受信箱」): what is your turn. Eleven rules
 //! pick items out of the list's data, three groups sort them, and `d` `s`
 //! `u` are local marks that never touch GitHub. No egui; tested on its own.
 
@@ -30,9 +30,11 @@ pub enum Rule {
     MainRed,
     /// A critical or high security alert (a stub item, id `sec:...`).
     Security,
+    /// Someone else's PR that asks me to review it (GitHub drops me from the requested reviewers once I have).
+    ReviewRequested,
 }
 
-pub const RULES: [Rule; 10] = [
+pub const RULES: [Rule; 11] = [
     Rule::RedCi,
     Rule::Mergeable,
     Rule::Question,
@@ -43,6 +45,7 @@ pub const RULES: [Rule; 10] = [
     Rule::Mention,
     Rule::MainRed,
     Rule::Security,
+    Rule::ReviewRequested,
 ];
 
 impl Rule {
@@ -63,6 +66,7 @@ impl Rule {
             Rule::Mention => "why.mention",
             Rule::MainRed => "why.main_red",
             Rule::Security => "why.security",
+            Rule::ReviewRequested => "why.review",
         }
     }
 
@@ -79,6 +83,7 @@ impl Rule {
             Rule::Mention => "do.mention",
             Rule::MainRed => "do.main_red",
             Rule::Security => "do.security",
+            Rule::ReviewRequested => "do.review",
         }
     }
 
@@ -95,6 +100,7 @@ impl Rule {
             Rule::Mention => "ask.mention",
             Rule::MainRed => "ask.main_red",
             Rule::Security => "ask.security",
+            Rule::ReviewRequested => "ask.review",
         }
     }
 
@@ -111,6 +117,7 @@ impl Rule {
             Rule::Mention => ("r", "next.reply"),
             Rule::MainRed => ("o", "next.open"),
             Rule::Security => ("o", "next.open"),
+            Rule::ReviewRequested => ("o", "next.review"),
         }
     }
 
@@ -127,6 +134,7 @@ impl Rule {
             Rule::Mention => "note.mention",
             Rule::MainRed => "note.main_red",
             Rule::Security => "note.security",
+            Rule::ReviewRequested => "note.review",
         }
     }
 
@@ -141,7 +149,7 @@ impl Rule {
         match self {
             Rule::RedCi | Rule::MainRed | Rule::Security => Tone::Bad,
             Rule::Mergeable => Tone::Ok,
-            Rule::Question | Rule::NeedsOwner => Tone::Ask,
+            Rule::Question | Rule::NeedsOwner | Rule::ReviewRequested => Tone::Ask,
             Rule::LaneStalled => Tone::Run,
             Rule::Dependabot => Tone::Idle,
             Rule::Finding | Rule::Mention => Tone::Accent,
@@ -152,11 +160,12 @@ impl Rule {
 /// Which rules are on (`.0`) and their priority (`.1`: rule indexes, the
 /// first that fits an item is its reason).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rules(pub [bool; 10], pub [usize; 10]);
+pub struct Rules(pub [bool; 11], pub [usize; 11]);
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules([true, true, true, true, true, true, false, true, true, true], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        // The review request goes third: it is asked of me, ahead of the conversations.
+        Rules([true, true, true, true, true, true, false, true, true, true, true], [0, 1, 10, 2, 3, 4, 5, 6, 7, 8, 9])
     }
 }
 
@@ -200,6 +209,7 @@ pub fn why(item: &Item, me: &str, rules: &Rules) -> Option<Rule> {
         Rule::Mention => item.mentioned && !mine && item.kind != Kind::Discussion,
         Rule::MainRed => item.id.starts_with("main:"),
         Rule::Security => item.id.starts_with("sec:"),
+        Rule::ReviewRequested => pr && !mine && !item.closed && !item.merged && item.reviewers.iter().any(|r| r == me),
     })
 }
 
@@ -578,11 +588,32 @@ mod tests {
         both.mentioned = true;
         assert_eq!(why(&both, "me", &r), Some(Rule::Finding));
         let mut up = r;
-        for at in (1..=7).rev() {
+        let at = up.1.iter().position(|&k| k == Rule::Mention.index()).unwrap();
+        for at in (1..=at).rev() {
             up.shift(at, -1);
         }
-        assert_eq!(up.1[0], 7);
+        assert_eq!(up.1[0], Rule::Mention.index());
         assert_eq!(why(&both, "me", &up), Some(Rule::Mention));
+    }
+
+    #[test]
+    fn a_review_asked_of_me_is_my_turn_until_i_have_reviewed() {
+        let r = Rules::default();
+        let mut pr = item("r", Kind::Pr, "amy");
+        assert_eq!(why(&pr, "me", &r), None);
+        pr.reviewers = vec!["bob".into(), "me".into()];
+        assert_eq!(why(&pr, "me", &r), Some(Rule::ReviewRequested));
+        assert_eq!(Rule::ReviewRequested.next(), ("o", "next.review"));
+        pr.mentioned = true;
+        assert_eq!(why(&pr, "me", &r), Some(Rule::ReviewRequested), "it comes before a mention");
+        pr.reviewers = vec!["bob".into()];
+        assert_eq!(why(&pr, "me", &r), Some(Rule::Mention), "GitHub drops me once I have reviewed");
+        let mut mine = item("m", Kind::Pr, "me");
+        mine.reviewers = vec!["me".into()];
+        assert_eq!(why(&mine, "me", &r), None, "not my own PR");
+        let mut issue = item("i", Kind::Issue, "amy");
+        issue.reviewers = vec!["me".into()];
+        assert_eq!(why(&issue, "me", &r), None, "PRs only");
     }
 
     #[test]

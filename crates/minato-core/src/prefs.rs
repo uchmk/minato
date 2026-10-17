@@ -487,10 +487,10 @@ mod tests {
         assert_eq!(Settings::parse(&s.to_json()).rules.1[0], 1);
         assert_eq!(Settings::parse(r#"{"order":[0,0,1,2,3,4]}"#).order, [0, 1, 2, 3, 4, 5]);
         assert_eq!(Settings::parse(r#"{"order":[0,1,2]}"#).order, [0, 1, 2, 3, 4, 5]);
-        // A rule order saved with nine rules keeps its places; the tenth goes last.
+        // A rule order saved with nine rules keeps its places; the newer ones go last.
         let old = Settings::parse(r#"{"rule_order":[1,0,2,3,4,5,6,7,8],"rules":[true,true,true,true,true,true,false,true,true]}"#);
-        assert_eq!(old.rules.1, [1, 0, 2, 3, 4, 5, 6, 7, 8, 9]);
-        assert!(old.rules.0[9] && !old.rules.0[6]);
+        assert_eq!(old.rules.1, [1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert!(old.rules.0[9] && old.rules.0[10] && !old.rules.0[6]);
     }
 
     #[test]
