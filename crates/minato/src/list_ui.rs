@@ -254,7 +254,8 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
     let f = fold(&heights, MORE_H, body.height(), sel);
     let now = now_epoch();
     let all = app.inbox_all();
-    let marked: Vec<&str> = all.iter().filter(|card| card.group != Group::Done).map(|card| app.items[card.at].id.as_str()).collect();
+    let marked: Vec<(&str, &minato_core::inbox::Card)> =
+        all.iter().filter(|card| card.group != Group::Done).map(|card| (app.items[card.at].id.as_str(), card)).collect();
     let mut y = body.top();
     if f.above > 0 {
         more(&p, app, body, y, f.above, "list.above");
@@ -270,7 +271,7 @@ fn items_col(ui: &Ui, app: &App, r: Rect, out: &mut Out) {
         if resp.clicked() {
             out.click = Some(Click::ListItem(k));
         }
-        item_row(&p, app, item, row, k == sel, resp.hovered(), marked.contains(&item.id.as_str()), now);
+        item_row(&p, app, item, row, k == sel, resp.hovered(), marked.iter().find(|(id, _)| *id == item.id).map(|(_, c)| *c), now);
         ui::peek(&resp, &item.peek);
         y += h;
     }
@@ -286,7 +287,7 @@ fn more(p: &Painter, app: &App, body: Rect, y: f32, n: usize, side: &'static str
 /// One item: its kind's mark; the title, the labels, and where and who;
 /// at the right the CI, the comments and the 受信箱 badge.
 #[allow(clippy::too_many_arguments)]
-fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: bool, inbox: bool, now: i64) {
+fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: bool, inbox: Option<&minato_core::inbox::Card>, now: i64) {
     let c = ito_theme::colors();
     if on {
         p.rect_filled(row, 0.0, style::sel());
@@ -310,7 +311,7 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: boo
     // comments, the CI (so they read CI, comments, badge, and a short row
     // has room for them all).
     let mut rx = right;
-    if inbox {
+    if inbox.is_some() {
         let words = app.tr("notes.inbox");
         let w = style::badge_w(&p, words);
         style::badge(&p, rx - w, y1, words);
@@ -348,8 +349,46 @@ fn item_row(p: &Painter, app: &App, item: &Item, row: Rect, on: bool, hover: boo
     if !item.assignees.is_empty() {
         line.push_str(&format!(" · 👤 {}", item.assignees.join(", ")));
     }
-    let g = style::truncated(&p, line, FontId::proportional(12.0), c.dim, rx - x);
-    p.galley(pos2(x, y + 3.0), g, c.dim);
+    // The state in words first, so a row says what to do or where it stands.
+    let mut sx = x;
+    for (word, color) in status_chips(app, item, inbox) {
+        let t = p.text(pos2(sx, y + 3.0 + 7.5), Align2::LEFT_CENTER, &word, FontId::proportional(12.0), color);
+        sx = t.right() + 8.0;
+    }
+    let g = style::truncated(&p, line, FontId::proportional(12.0), c.dim, (rx - sx).max(0.0));
+    p.galley(pos2(sx, y + 3.0), g, c.dim);
+}
+
+/// The words that say where an item stands, with their colours: why it is
+/// in the inbox (when it is), then its draft / conflict / CI / merged state.
+fn status_chips(app: &App, item: &Item, card: Option<&minato_core::inbox::Card>) -> Vec<(String, Color32)> {
+    let mut v = Vec::new();
+    if let Some(card) = card {
+        let color = if card.group == Group::Mine { ACCENT } else { style::RUN };
+        match card.rule {
+            Some(rule) => v.push((app.tr(rule.why()).to_string(), color)),
+            None => v.push((app.tr("inbox.wait").to_string(), color)),
+        }
+    }
+    if item.merged {
+        v.push((app.tr("status.merged").into(), MERGED));
+    } else if item.closed {
+        v.push((app.tr("status.closed").into(), MERGED));
+    } else if item.kind == Kind::Pr {
+        if item.draft {
+            v.push((app.tr("stage.draft").into(), ito_theme::colors().dim));
+        }
+        if item.conflict {
+            v.push((app.tr("stage.conflict").into(), style::BAD));
+        }
+        match item.ci {
+            Some(Ci::Bad) => v.push((app.tr("stage.ci_red").into(), style::BAD)),
+            Some(Ci::Pending) => v.push((app.tr("status.ci_pending").into(), style::RUN)),
+            Some(Ci::Ok) => v.push((app.tr("stage.ci_green").into(), style::OK)),
+            None => {}
+        }
+    }
+    v
 }
 
 pub fn parse_hex(s: &str) -> Option<Color32> {

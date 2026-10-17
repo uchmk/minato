@@ -62,6 +62,7 @@
 - [x] **6.10** Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh → The selection stays on the same item, which moves down a row; the detail does not change
 - [ ] **6.11** Move to the filter column (`h`) and pick a label, an assignee, then "Draft" under State → The list narrows to the items carrying that label, assigned to that person, and (State) the drafts; "All" in each group clears it
 - [ ] **6.12** Pick "Most comments", "Newest", "Title" and "Repository" under Sort → The rows reorder at once (latest activity first is the default); the choice stays while you move between filters
+- [ ] **6.13** Look at the rows of the list: a PR with a red CI, a draft, one with a conflict, a merged one, and an item that is also a card in the inbox → The third line starts with coloured words: the inbox reason (accent, or amber when replied / waiting), then Draft, Conflict, CI red / CI running / CI green, Merged or Closed; the rest of the line (repository, number, who and when) follows and is cut first when the row is narrow
 
 ## 7. Inbox view
 
