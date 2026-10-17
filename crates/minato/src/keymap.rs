@@ -78,6 +78,7 @@ const ACTIONS: &[(&str, &str, Fire)] = &[
     ("done", "inbox", Fire::Char('d')),
     ("later", "inbox", Fire::Char('s')),
     ("merge", "inbox", Fire::Char('m')),
+    ("rerun_ci", "inbox", Fire::Char('R')),
     ("close", "inbox", Fire::Char('x')),
     ("assign", "inbox", Fire::Char('a')),
     ("prompt", "inbox", Fire::Char('c')),

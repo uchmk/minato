@@ -72,6 +72,7 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
   1. 赤い CI（自分の PR・main）
   2. マージできる PR
   2b. レビューを頼まれた他人の PR（v0.66.0 から。GitHub の requested reviewers に自分がいる間。レビューを出すと外れる。既定の優先は 3 の前、キー `o`）
+  （赤い CI の動作は v0.67.0 から `R`＝失敗した実行の再実行。直っていないものだけ）
   3. 自分への質問・メンション
   4. needs-owner の質問
   5. 誰にも振っていない finding

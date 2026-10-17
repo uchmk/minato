@@ -58,6 +58,7 @@ keymap = [
     { on = "d", run = "done", desc = "Done" },
     { on = "s", run = "later", desc = "Later" },
     { on = "m", run = "merge", desc = "Merge" },
+    { on = "R", run = "rerun_ci", desc = "Re-run the failed CI" },
     { on = "x", run = "close", desc = "Close" },
     { on = "a", run = "assign", desc = "Assign to me" },
     { on = "c", run = "prompt", desc = "Copy a prompt for Claude" },

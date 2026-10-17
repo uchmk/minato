@@ -1600,3 +1600,30 @@ fn the_wheel_moves_a_list_and_scrolls_a_detail() {
     a.wheel(Wheel::Detail, 9.0, Some(10.0));
     assert_eq!(a.list.scroll, 0.0);
 }
+
+#[test]
+fn r_in_the_inbox_reruns_the_failed_runs_of_the_selected_pr() {
+    let mut a = with_pr();
+    a.view = View::Inbox;
+    a.items[0].ci = Some(minato_core::list::Ci::Bad);
+    let mut other_workflow = run(4, actions::Status::Bad, Some(3));
+    other_workflow.workflow_id = 6;
+    a.runs = vec![
+        run(1, actions::Status::Bad, Some(3)),
+        run(2, actions::Status::Bad, Some(3)),
+        other_workflow,
+        run(5, actions::Status::Bad, Some(9)),
+        run(6, actions::Status::Ok, Some(3)),
+    ];
+    a.runs[4].started_at = "2026-10-12T10:00:00Z".into();
+    // Run 6 passed after runs 1 and 2 (the same workflow) failed: only the other workflow is left.
+    assert!(a.feed('R'));
+    assert_eq!(a.outbox.iter().map(|o| o.key.as_str()).collect::<Vec<_>>(), ["write:4:rerun"]);
+    a.outbox.clear();
+    a.runs.pop();
+    assert!(a.feed('R'));
+    let keys: Vec<&str> = a.outbox.iter().map(|o| o.key.as_str()).collect();
+    assert_eq!(keys, ["write:2:rerun", "write:4:rerun"], "the newest of each workflow, not the other PR's");
+    // The next box says the same key.
+    assert_eq!(minato_core::inbox::Rule::RedCi.next().0, "R");
+}

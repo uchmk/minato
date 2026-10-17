@@ -107,7 +107,7 @@ impl Rule {
     /// The key to press next and the i18n key of its name.
     pub fn next(self) -> (&'static str, &'static str) {
         match self {
-            Rule::RedCi => ("o", "next.open"),
+            Rule::RedCi => ("R", "next.rerun"),
             Rule::Mergeable => ("m", "next.merge"),
             Rule::Question => ("r", "next.reply"),
             Rule::NeedsOwner => ("r", "next.answer"),

@@ -2122,6 +2122,7 @@ impl App {
         match c {
             'r' => self.open_compose(),
             'm' => self.ask_merge(),
+            'R' => self.rerun_ci(),
             'x' => self.ask_close(),
             'a' => self.assign_self(),
             'c' => {
@@ -2696,6 +2697,39 @@ impl App {
         if let Some(item) = self.item(id) {
             let n = self.outbox.len();
             self.queue(&format!("write:{n}:merge"), write::merge(&item), Some("write.merged"));
+        }
+    }
+
+    /// `R` in the inbox: run the failed jobs of the selected PR's CI again.
+    /// Its failed runs come from the Actions data (same repository, the PR's
+    /// number or branch), the newest of each workflow, the mended ones left out.
+    fn rerun_ci(&mut self) {
+        let all = self.inbox_all();
+        let Some(card) = self.inbox.selected(&all, &self.items) else { return };
+        let item = &self.items[card.at];
+        if item.kind != Kind::Pr {
+            return self.say_key("run.not_pr");
+        }
+        let mended = actions::mended(&self.runs);
+        let mut newest: std::collections::HashMap<u64, &Run> = std::collections::HashMap::new();
+        for r in self.runs.iter().filter(|r| {
+            r.status == actions::Status::Bad
+                && !mended.contains(&r.id)
+                && r.repo == item.repo
+                && (r.pr == Some(item.number) || (!item.head.is_empty() && r.branch == item.head))
+        }) {
+            let e = newest.entry(r.workflow_id).or_insert(r);
+            if r.id > e.id {
+                *e = r;
+            }
+        }
+        let mut runs: Vec<Run> = newest.into_values().cloned().collect();
+        runs.sort_by_key(|r| r.id);
+        if runs.is_empty() {
+            return self.say_key("run.none_failed");
+        }
+        for run in runs {
+            self.queue(&format!("write:{}:rerun", run.id), actions::rerun_failed(&run), Some("run.reran"));
         }
     }
 
