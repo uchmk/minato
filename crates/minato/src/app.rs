@@ -415,10 +415,9 @@ pub struct App {
     /// (`None` until it answers) and the answer on its way.
     pub startup: Option<bool>,
     pub startup_rx: Option<std::sync::mpsc::Receiver<bool>>,
-    settings_tx: Option<std::sync::mpsc::Sender<String>>,
+    settings_tx: Option<std::sync::mpsc::Sender<Settings>>,
     /// The text box of the saved searches in the settings (one per line).
     pub searches_text: String,
-    searches_tx: Option<std::sync::mpsc::Sender<String>>,
     seen_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The list shows closed issues and PRs (`C`), so `x` opens them again.
     pub show_closed: bool,
@@ -709,7 +708,6 @@ impl App {
             startup_rx: None,
             settings_tx: None,
             searches_text: String::new(),
-            searches_tx: None,
             seen_tx: None,
             show_closed: false,
             fetched: Vec::new(),
@@ -2234,44 +2232,48 @@ impl App {
         self.state_tx = Some(writer(path));
     }
 
-    /// Keep minato's settings in `path`, the same way.
+    /// Keep minato's settings and the saved searches in config.toml at
+    /// `path`: read them now, and write every change on a thread of its own.
     pub fn keep_settings(&mut self, path: std::path::PathBuf) {
         if let Ok(text) = std::fs::read_to_string(&path) {
-            self.settings = Settings::parse(&text);
+            self.settings = Settings::parse_toml(&text);
             self.scope_text = [self.settings.owners_line(), self.settings.project.clone()];
-        }
-        self.settings_tx = Some(writer(path));
-    }
-
-    /// Keep the saved searches (one per line) in `path`, the same way.
-    pub fn keep_searches(&mut self, path: std::path::PathBuf) {
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            self.searches_text = text;
+            self.searches_text = self
+                .settings
+                .searches
+                .iter()
+                .map(|l| {
+                    format!(
+                        "{l}
+"
+                    )
+                })
+                .collect();
             self.sync_searches();
         }
-        self.searches_tx = Some(writer(path));
+        self.settings_tx = Some(crate::config::writer(path));
     }
 
     /// Take the saved searches from the text box; a search that is gone
     /// stops being the list's filter.
     pub fn sync_searches(&mut self) {
         self.list.searches = self.searches_text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+        self.settings.searches = self.list.searches.clone();
         if self.list.filter.search.is_some_and(|i| i >= self.list.searches.len()) {
             self.list.filter.search = None;
         }
     }
 
-    /// Write the saved searches after the screen changed them.
+    /// Write the saved searches after the screen changed them (they are
+    /// kept in config.toml with the settings).
     pub fn save_searches(&self) {
-        if let Some(tx) = &self.searches_tx {
-            let _ = tx.send(self.searches_text.clone());
-        }
+        self.save_settings();
     }
 
     /// Write the settings after the screen changed them.
     pub fn save_settings(&self) {
         if let Some(tx) = &self.settings_tx {
-            let _ = tx.send(self.settings.to_json());
+            let _ = tx.send(self.settings.clone());
         }
     }
 

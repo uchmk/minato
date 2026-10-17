@@ -183,7 +183,7 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
     （ntfy・Slack・Discord・JSON、`ito_notify::FORMATS`。Discord は v0.47.0 から）。送るのは `ito_notify::webhook::send`
     （`curl -f`、別のスレッド。届かなかったときと、相手が HTTP のエラーで断ったときは 30 秒後にもう 1 回）。
     状態は失敗が `error`（ntfy は ❌・優先度 high）、成功と取り消しが `done`。JSON の `folder` はリポジトリ。
-  - `minato-settings.json` の `notify`（`system`・`sound`・`sounds`・`focus`・`webhooks`＝`url`・`format`・`on` の並び。前の `webhook`・`webhook_url`・`webhook_format` は最初の 1 つとして読む）に残る。
+  - `config.toml` の `[notify]`（`system`・`sound`＝鳴らす出来事の名前 `passed`・`failed`・`cancelled` の並び、`sound_<出来事>`、`focus_mode`、`[[notify.webhooks]]`＝`url`・`format`・`states`。前の `webhook`・`webhook_format`・`webhook_states` は最初の 1 つとして読む）に残る。
     知らない音・形式の名前は既定に戻す。
 - ito の共通の設定の画面（`ito-prefs`）に、minato の「ビュー」のページ（英語は Views）を足す（v0.39.13 まで名前は「minato」だった）:
   - 書く欄に出す項目（`Space` 出す・出さない、`J` `K` 並びを変える）。Project の独自の項目は GitHub から読んで足される。

@@ -480,9 +480,13 @@ fn hidden_fields_say_so_and_settings_are_read_back() {
     assert!(a.field_shown(0));
     assert!(!a.field_shown(3) && a.toast.is_some());
     let dir = std::env::temp_dir().join(format!("minato-settings-{}", std::process::id()));
-    let file = dir.join("s.json");
+    let file = dir.join("config.toml");
     a.keep_settings(file.clone());
     a.settings.fields[3] = true;
+    a.searches_text = "is:open
+"
+    .into();
+    a.sync_searches();
     a.settings.rules.0[6] = true;
     a.save_settings();
     for _ in 0..100 {
@@ -494,6 +498,7 @@ fn hidden_fields_say_so_and_settings_are_read_back() {
     let mut b = app();
     b.keep_settings(file);
     assert_eq!(b.settings, a.settings);
+    assert_eq!(b.list.searches, ["is:open"]);
     let _ = std::fs::remove_dir_all(dir);
 }
 

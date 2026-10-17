@@ -10,6 +10,7 @@ mod app;
 mod board_ui;
 mod bugreport;
 mod compose_ui;
+mod config;
 mod detail_ui;
 mod fonts;
 mod i18n;
@@ -621,11 +622,16 @@ fn main() -> eframe::Result {
             // The scale is common.toml's, so egui's own Ctrl+= / Ctrl+- stay out of it.
             cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());
-            let marks_file = prefs.base.as_ref().map(|b| b.join("minato-marks.json"));
-            let settings_file = prefs.base.as_ref().map(|b| b.join("minato-settings.json"));
-            let searches_file = prefs.base.as_ref().map(|b| b.join("minato-searches.txt"));
-            let state_file = ito_common::state_dir("minato").map(|d| d.join("state.toml"));
-            let seen_file = ito_common::state_dir("minato").map(|d| d.join("seen-runs.txt"));
+            let (app_dir, state) = (ito_common::app_dir("minato"), ito_common::state_dir("minato"));
+            // The files of before v0.61.0 move to config.toml and the state folder first.
+            let moved = match (&prefs.base, &app_dir) {
+                (Some(b), Some(a)) => config::migrate(b, a, state.as_deref()),
+                _ => None,
+            };
+            let marks_file = state.as_ref().map(|d| config::marks_path(d));
+            let settings_file = app_dir.as_ref().map(|d| config::path(d));
+            let state_file = state.as_ref().map(|d| d.join("state.toml"));
+            let seen_file = state.as_ref().map(|d| d.join("seen-runs.txt"));
             let mut app = App::new(prefs);
             if let Some(f) = marks_file {
                 app.keep_marks(f);
@@ -633,14 +639,15 @@ fn main() -> eframe::Result {
             if let Some(f) = settings_file {
                 app.keep_settings(f);
             }
-            if let Some(f) = searches_file {
-                app.keep_searches(f);
-            }
             if let Some(f) = state_file {
                 app.keep_state(f);
             }
             if let Some(f) = seen_file {
                 app.keep_seen(f);
+            }
+            if let Some(files) = moved {
+                let line = app.tr("settings.moved").replacen("{}", &files, 1);
+                app.say(line);
             }
             let net = net::Net::start(&cc.egui_ctx, ito_common::state_dir("minato").map(|d| d.join("cache")));
             let script = script.map(|steps| {

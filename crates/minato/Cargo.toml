@@ -20,6 +20,8 @@ ito-winres = { git = "https://github.com/uchmk/ito", rev = "a9fda255749827fb94d7
 
 [dependencies]
 minato-core = { path = "../minato-core" }
+# Reads config.toml (writing goes through ito-common, which keeps comments).
+toml = "1.1"
 # Every ito crate at the same rev as tsumugi and kura.
 ito-i18n = { git = "https://github.com/uchmk/ito", rev = "a9fda255749827fb94d7c70ffce13e994c4719ae", features = ["edit"] }
 ito-common = { git = "https://github.com/uchmk/ito", rev = "a9fda255749827fb94d7c70ffce13e994c4719ae", features = ["clock", "egui"] }

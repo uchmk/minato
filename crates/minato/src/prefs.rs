@@ -303,10 +303,9 @@ impl Prefs {
         });
     }
 
-    /// Settings back to how minato starts: common.toml and keymap.toml are
-    /// moved aside (`<name>.bak-<time>`) and minato-settings.json is copied
-    /// there, on a thread. The watcher then reads the missing files as
-    /// defaults.
+    /// Settings back to how minato starts: common.toml, keymap.toml and
+    /// config.toml are moved aside (`<name>.bak-<time>`), on a thread. The
+    /// watcher then reads the missing files as defaults.
     pub fn reset(&self, no_folder: &str) {
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         let Some(base) = self.base.clone() else {
@@ -314,24 +313,14 @@ impl Prefs {
             return;
         };
         std::thread::spawn(move || {
-            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-            let aside = |p: &Path| {
-                let mut name = p.file_name().map(|n| n.to_os_string()).unwrap_or_default();
-                name.push(format!(".bak-{stamp}"));
-                p.with_file_name(name)
-            };
+            let stamp = crate::config::stamp();
             let mut failed = Vec::new();
-            for path in [common_path(&base), keymap_path(&base)] {
+            let config = ito_common::app_dir("minato").map(|d| crate::config::path(&d));
+            for path in [common_path(&base), keymap_path(&base)].into_iter().chain(config) {
                 if path.exists() {
-                    if let Err(e) = std::fs::rename(&path, aside(&path)) {
+                    if let Err(e) = std::fs::rename(&path, crate::config::aside(&path, stamp)) {
                         failed.push(format!("{}: {e}", path.display()));
                     }
-                }
-            }
-            let json = base.join("minato-settings.json");
-            if json.exists() {
-                if let Err(e) = std::fs::copy(&json, aside(&json)) {
-                    failed.push(format!("{}: {e}", json.display()));
                 }
             }
             let r = match failed.first() {
@@ -353,18 +342,29 @@ impl Prefs {
         std::thread::spawn(move || {
             let [exported, imported] = said;
             let said = match b {
-                ito_prefs::Backup::Export(file) => {
-                    ito_common::bundle::export(&file, &base, &app_dir, "minato", env!("CARGO_PKG_VERSION"), &ito_common::bundle::all)
-                        .map(|n| exported.replacen("{}", &n.to_string(), 1).replacen("{}", &file.display().to_string(), 1))
-                }
-                ito_prefs::Backup::Import(file) => ito_common::bundle::import(&file, &base, &app_dir, "minato", &ito_common::bundle::all)
-                    .map(|r| {
+                ito_prefs::Backup::Export(file) => export_without_urls(&file, &base, &app_dir)
+                    .map(|n| exported.replacen("{}", &n.to_string(), 1).replacen("{}", &file.display().to_string(), 1)),
+                ito_prefs::Backup::Import(file) => {
+                    // The webhook addresses are not in a bundle: the ones here stay.
+                    let config = crate::config::path(&app_dir);
+                    let here = std::fs::read_to_string(&config).unwrap_or_default();
+                    let r = ito_common::bundle::import(&file, &base, &app_dir, "minato", &ito_common::bundle::all);
+                    if r.is_ok() {
+                        if let Ok(now) = std::fs::read_to_string(&config) {
+                            let back = crate::config::restore_urls(&now, &here);
+                            if back != now {
+                                let _ = ito_common::write_atomic(&config, back);
+                            }
+                        }
+                    }
+                    r.map(|r| {
                         imported.replacen("{}", &r.written.len().to_string(), 1).replacen("{}", &r.skipped.len().to_string(), 1).replacen(
                             "{}",
                             &r.unchanged.to_string(),
                             1,
                         )
-                    }),
+                    })
+                }
             };
             Self::send_back(&tx, &wake, Reload::Failed(said.unwrap_or_else(|e| e)));
         });
@@ -390,6 +390,38 @@ impl Prefs {
             ctx.set_visuals(colors.visuals());
         }
     }
+}
+
+/// `ito_common::bundle::export` of the settings folder, but from a copy
+/// whose config.toml has no webhook addresses (they post to a channel for
+/// whoever holds them, so they stay out of a file that gets passed around).
+fn export_without_urls(file: &Path, base: &Path, app_dir: &Path) -> Result<usize, String> {
+    let stage = std::env::temp_dir().join(format!("minato-export-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&stage);
+    let done = (|| {
+        copy_dir(app_dir, &stage)?;
+        let config = crate::config::path(&stage);
+        if let Ok(text) = std::fs::read_to_string(&config) {
+            ito_common::write_atomic(&config, crate::config::blank_urls(&text))?;
+        }
+        ito_common::bundle::export(file, base, &stage, "minato", env!("CARGO_PKG_VERSION"), &ito_common::bundle::all)
+    })();
+    let _ = std::fs::remove_dir_all(&stage);
+    done
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    let Ok(entries) = std::fs::read_dir(from) else { return Ok(()) };
+    for e in entries.flatten() {
+        let (src, dst) = (e.path(), to.join(e.file_name()));
+        if src.is_dir() {
+            copy_dir(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]

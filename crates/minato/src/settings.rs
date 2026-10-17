@@ -325,10 +325,12 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 }
             }
             ito_prefs::Advanced::Reset => {
+                // config.toml is moved aside on a thread, so nothing is written over it here.
                 app.prefs.reset(no_folder);
                 app.settings = Default::default();
                 app.scope_text = [app.settings.owners_line(), app.settings.project.clone()];
-                app.save_settings();
+                app.searches_text.clear();
+                app.sync_searches();
             }
         }
     }

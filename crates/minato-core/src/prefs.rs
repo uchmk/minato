@@ -1,6 +1,7 @@
 //! minato's own settings: whose repositories are shown, which inbox rules
 //! are on, which fields the writing box offers and how a watched run's end
-//! is told. Kept as a small JSON file beside common.toml.
+//! is told. Kept in config.toml beside common.toml (minato-settings.json before
+//! v0.61.0; [`Settings::parse`] still reads that, for the move).
 
 use serde_json::{json, Value};
 
@@ -180,6 +181,8 @@ pub struct Settings {
     /// The fields in the order the writing box lists them (indexes into `fields`).
     pub order: [usize; FIELDS],
     pub notify: Notify,
+    /// The saved searches of the list, one query each.
+    pub searches: Vec<String>,
 }
 
 impl Default for Settings {
@@ -194,19 +197,75 @@ impl Default for Settings {
             fields: [true, true, true, false, false, false],
             order: [0, 1, 2, 3, 4, 5],
             notify: Notify::default(),
+            searches: Vec::new(),
         }
     }
 }
+
+/// The run ends as config.toml names them, in the order of the slots.
+pub const EVENTS: [&str; 3] = ["passed", "failed", "cancelled"];
 
 impl Settings {
     pub fn to_json(&self) -> String {
         json!({ "owner": self.owner, "owners": self.owners, "also": self.also, "project": self.project, "rules": self.rules.0, "rule_order": self.rules.1, "auto_done": self.auto_done, "fields": self.fields, "order": self.order, "notify": self.notify.to_json() }).to_string()
     }
 
-    /// What `text` says; anything missing or unreadable keeps its default.
+    /// What `text` (the old minato-settings.json) says; anything missing or
+    /// unreadable keeps its default.
     pub fn parse(text: &str) -> Settings {
+        match serde_json::from_str::<Value>(text) {
+            Ok(v) => Settings::from_value(&v),
+            Err(_) => Settings::default(),
+        }
+    }
+
+    /// What `text` (config.toml) says; anything missing or unreadable keeps
+    /// its default.
+    pub fn parse_toml(text: &str) -> Settings {
+        let Ok(mut v) = toml::from_str::<Value>(text) else { return Settings::default() };
+        if let Some(n) = v.get("notify") {
+            v["notify"] = notify_from_toml(n);
+        }
+        let mut s = Settings::from_value(&v);
+        if let Some(list) = v.get("searches").and_then(Value::as_array) {
+            s.searches = list.iter().filter_map(Value::as_str).map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+        }
+        s
+    }
+
+    /// The keys of config.toml as `(table, key, value written as TOML)`.
+    pub fn toml_keys(&self) -> Vec<(Option<&'static str>, &'static str, String)> {
+        let n = &self.notify;
+        let names = |on: &[bool; 3]| EVENTS.iter().zip(on).filter(|(_, b)| **b).map(|(e, _)| *e).collect::<Vec<_>>();
+        let mut out = vec![
+            (None, "owner", lit(&self.owner)),
+            (None, "owners", lit(&self.owners)),
+            (None, "also", lit(&self.also)),
+            (None, "project", lit(&self.project)),
+            (None, "rules", lit(self.rules.0)),
+            (None, "rule_order", lit(self.rules.1)),
+            (None, "auto_done", lit(self.auto_done)),
+            (None, "fields", lit(self.fields)),
+            (None, "order", lit(self.order)),
+            (None, "searches", lit(&self.searches)),
+            (Some("notify"), "system", lit(names(&n.system))),
+            (Some("notify"), "sound", lit(names(&n.sound))),
+            (Some("notify"), "focus_mode", lit(n.focus)),
+        ];
+        for (key, sound) in ["sound_passed", "sound_failed", "sound_cancelled"].into_iter().zip(&n.sounds) {
+            out.push((Some("notify"), key, lit(sound)));
+        }
+        out
+    }
+
+    /// The `[[notify.webhooks]]` tables, each as `(key, value written as TOML)`.
+    pub fn toml_hooks(&self) -> Vec<Vec<(&'static str, String)>> {
+        let states = |on: &[bool; 3]| EVENTS.iter().zip(on).filter(|(_, b)| **b).map(|(e, _)| *e).collect::<Vec<_>>();
+        self.notify.hooks.iter().map(|h| vec![("url", lit(&h.url)), ("format", lit(&h.format)), ("states", lit(states(&h.on)))]).collect()
+    }
+
+    fn from_value(v: &Value) -> Settings {
         let mut s = Settings::default();
-        let Ok(v) = serde_json::from_str::<Value>(text) else { return s };
         if let Some(o) = v.get("owner").and_then(Value::as_str) {
             s.owner = login(o);
         }
@@ -303,6 +362,43 @@ impl Settings {
             self.order.swap(at, to as usize);
         }
     }
+}
+
+/// `value` written as TOML.
+fn lit(value: impl serde::Serialize) -> String {
+    toml::Value::try_from(value).map(|v| v.to_string()).unwrap_or_default()
+}
+
+/// The `[notify]` table of config.toml in the shape [`Notify::parse`] reads.
+fn notify_from_toml(n: &Value) -> Value {
+    let on = |v: &Value| match v {
+        Value::Bool(b) => Some(json!([b, b, b])),
+        Value::Array(list) => Some(json!(EVENTS.map(|e| list.iter().any(|x| x.as_str() == Some(e))))),
+        _ => None,
+    };
+    let mut out = serde_json::Map::new();
+    for key in ["system", "sound"] {
+        if let Some(v) = n.get(key).and_then(on) {
+            out.insert(key.into(), v);
+        }
+    }
+    out.insert(
+        "sounds".into(),
+        json!(["sound_passed", "sound_failed", "sound_cancelled"].map(|k| n.get(k).cloned().unwrap_or(Value::Null))),
+    );
+    if let Some(b) = n.get("focus_mode") {
+        out.insert("focus".into(), b.clone());
+    }
+    let mut hooks = Vec::new();
+    // The one address of before (`webhook`, `webhook_format`, `webhook_states`) is the first.
+    if let Some(url) = n.get("webhook").filter(|u| u.as_str().is_some_and(|u| !u.trim().is_empty())) {
+        hooks.push(json!({ "url": url, "format": n.get("webhook_format"), "on": n.get("webhook_states").and_then(on) }));
+    }
+    if let Some(list) = n.get("webhooks").and_then(Value::as_array) {
+        hooks.extend(list.iter().map(|h| json!({ "url": h.get("url"), "format": h.get("format"), "on": h.get("states").and_then(on) })));
+    }
+    out.insert("webhooks".into(), Value::Array(hooks));
+    Value::Object(out)
 }
 
 /// A login from what was typed: `@name`, `name` or the account's URL; what
@@ -453,6 +549,62 @@ mod tests {
         // An old empty address is no hook.
         assert!(Settings::parse(r#"{"notify":{"webhook_url":" "}}"#).notify.hooks.is_empty());
         assert!(is_http(" https://a") && !is_http("ftp://a") && !is_http(""));
+    }
+
+    #[test]
+    fn config_toml_reads_notify_in_the_shared_keys() {
+        let s = Settings::parse_toml(
+            r#"
+owner = "@Foo"
+searches = ["is:open", " ", "label:bug"]
+[notify]
+system = ["failed"]
+sound = false
+sound_failed = "low"
+focus_mode = false
+webhook = "https://old/"
+webhook_states = ["passed"]
+[[notify.webhooks]]
+url = "https://b/"
+format = "slack"
+states = ["failed", "cancelled"]
+[[notify.webhooks]]
+url = "https://c/"
+"#,
+        );
+        assert_eq!((s.owner.as_str(), s.searches.as_slice()), ("Foo", ["is:open".to_string(), "label:bug".to_string()].as_slice()));
+        assert_eq!((s.notify.system, s.notify.sound, s.notify.focus), ([false, true, false], [false; 3], false));
+        assert_eq!(s.notify.sounds, ["chime", "low", "chime"]);
+        let h = &s.notify.hooks;
+        assert_eq!((h[0].url.as_str(), h[0].format.as_str(), h[0].on), ("https://old/", "ntfy", [true, false, false]));
+        assert_eq!((h[1].format.as_str(), h[1].on), ("slack", [false, true, true]));
+        assert_eq!(h[2].on, [true; 3]);
+        assert_eq!(Settings::parse_toml("not = [toml"), Settings::default());
+    }
+
+    #[test]
+    fn toml_keys_read_back_as_written() {
+        let mut s = Settings { owner: "foo".into(), searches: vec!["a b".into()], ..Settings::default() };
+        s.notify.system = [true, false, true];
+        s.notify.sounds[1] = "low".into();
+        s.notify.hooks = vec![Hook { url: "https://x/".into(), format: "json".into(), on: [false, true, false] }];
+        let mut text = String::new();
+        for (table, key, value) in s.toml_keys() {
+            text.push_str(&format!(
+                "{}{key} = {value}
+",
+                table.map_or(String::new(), |t| format!(
+                    "# {t}
+"
+                ))
+            ));
+        }
+        // Flat check of the values: each is a TOML value that parses back.
+        for (_, _, value) in s.toml_keys() {
+            assert!(format!("v = {value}").parse::<toml::Table>().is_ok(), "{value}");
+        }
+        assert!(text.contains("system = [\"passed\", \"cancelled\"]"), "{text}");
+        assert_eq!(s.toml_hooks()[0][2], ("states", "[\"failed\"]".to_string()));
     }
 
     #[test]

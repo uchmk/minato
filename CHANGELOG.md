@@ -2,6 +2,20 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.61.0] - 2026-10-17
+
+### 変更
+
+- 設定の形式を TOML にそろえた（ito の「設定の形式は TOML」）。`minato-settings.json` は設定のフォルダの `config.toml` になり、
+  通知は `[notify]`（`system`・`sound`・`sound_<出来事>`・`focus_mode`）と `[[notify.webhooks]]`（`url`・`format`・`states`）に書く。
+  画面から変えたときはそのキーだけを書き換えるので、手で書いたコメントや別のキーは残る。
+- 保存した検索（`minato-searches.txt`）は `config.toml` の `searches` に入れた。印（`minato-marks.json`）は minato が機械的に書く状態なので、状態のフォルダの `marks.json` へ移した。
+- 起動時に、古い `minato-settings.json`・`minato-searches.txt`・`minato-marks.json` があって新しいものが無ければ、自動で移して 1 行の通知を出す
+  （古い 2 つは `.bak-<時刻>` に名前を変えて残す。新しいファイルは決して上書きしない）。
+- 設定のバックアップ（書き出し・読み込み）に `config.toml` が入る。Webhook のアドレスは持っていれば誰でも投稿できるので、書き出しでは空にし、
+  読み込んだときはこの PC のアドレスをそのまま残す。
+- 設定の画面の「既定に戻す」は `config.toml` も `.bak-<時刻>` に移す（前は JSON を写していた）。
+
 ## [0.60.1] - 2026-10-17
 
 ### 変更
