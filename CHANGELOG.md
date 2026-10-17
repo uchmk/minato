@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.59.1] - 2026-10-17
+
+### 変更
+
+- ito のクレートを `c64fb78`（v0.74.0）にそろえた。0.73.0 の `fonts_card` と 0.74.0 の `shell_card` が増えただけで、minato は使わない。
+
 ## [0.59.0] - 2026-10-17
 
 ### 追加
