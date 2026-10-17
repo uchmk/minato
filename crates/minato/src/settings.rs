@@ -81,7 +81,7 @@ fn index(w: &'static Words, more: &'static MoreWords, lang: &str) -> Vec<(usize,
     .chain(keys)
     .chain(layers)
     .chain(ito_prefs::window_index(more).into_iter().chain(ito_prefs::startup_index(more)).map(|t| (GENERAL, t)))
-    .chain(ito_prefs::advanced_index(more).into_iter().map(|t| (ADVANCED, t)))
+    .chain(ito_prefs::advanced_index(more).into_iter().chain(ito_prefs::backup_index(more)).map(|t| (ADVANCED, t)))
     .chain(ito_prefs::about_index(more, w).into_iter().map(|t| (ABOUT, t)))
     .collect()
 }
@@ -124,6 +124,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let mut forget = false;
     let mut startup_toggled = None;
     let mut advanced = Vec::new();
+    let mut backups = Vec::new();
     let startup_now = app.startup;
     let state_dir = ito_common::state_dir("minato");
     let mut test = None;
@@ -142,7 +143,11 @@ pub fn show(ui: &mut Ui, app: &mut App) {
             forget |= out.forget;
             startup_toggled = ito_prefs::startup_card(ui, l, more, startup_now);
         }
-        ADVANCED => advanced.extend(ito_prefs::advanced_card(ui, l, more, state_dir.is_some())),
+        ADVANCED => {
+            advanced.extend(ito_prefs::advanced_card(ui, l, more, state_dir.is_some()));
+            let file = ito_common::home_dir().unwrap_or_default().join("minato-settings.toml");
+            backups.extend(ito_prefs::backup_card(ui, l, more, &file));
+        }
         ABOUT => {
             let system = ito_bugreport::os_line();
             let license = Some(env!("CARGO_PKG_LICENSE")).filter(|x| !x.is_empty());
@@ -303,6 +308,9 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     }
     if let Some(on) = startup_toggled {
         set_startup(ui.ctx(), app, on);
+    }
+    for b in backups {
+        app.prefs.backup(b, [app.tr("backup.exported").to_owned(), app.tr("backup.imported").to_owned()]);
     }
     for a in advanced {
         let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");

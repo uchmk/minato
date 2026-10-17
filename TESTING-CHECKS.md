@@ -467,3 +467,4 @@
 - [ ] **42.5** Settings Advanced: open the config folder and the state folder → Each opens in the file manager
 - [ ] **42.6** Settings Advanced: press reset → `common.toml`, `keymap.toml` and `minato-settings.json` are kept as `.bak-<time>`, the settings return to the defaults and a toast says so
 - [ ] **42.7** Settings About: look at the page and press the report button → Version, commit, system and license show and copy; the button opens the same screen as `F12`
+- [ ] **42.8** Settings Advanced: press export with the default file name, change `common.toml`, then press import twice → A toast says how many files were written; the file has `common.toml` and the `keymap.toml`; after the import the change is undone, `common.toml.bak-<time>` is kept and a toast says how many were restored; searching `export` finds the card

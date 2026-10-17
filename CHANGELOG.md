@@ -2,6 +2,15 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.60.0] - 2026-10-17
+
+### 追加
+
+- ito v0.75.0（`9d7e615`）の設定の書き出し・読み込み（`backup_card`）を「詳細」に置いた。ito のクレートを `9d7e615` にそろえた。
+  - `common.toml`・自分のテーマ・minato の設定のフォルダーの `.toml`（`keymap.toml` など）を 1 つの TOML にまとめる。ファイル名の欄の初期値はホームの `minato-settings.toml`。読み込みは 2 回押す。結果はトーストで出る。
+  - 窓の場所のような実行の間に残すものと、`minato-settings.json`（絞り込みや受信箱の設定）は入らない。
+  - 設定の検索でも見つかる。
+
 ## [0.59.1] - 2026-10-17
 
 ### 変更

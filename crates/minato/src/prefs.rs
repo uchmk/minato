@@ -68,7 +68,7 @@ pub struct Prefs {
     pub theme_err: Option<String>,
     /// The screen's page, search and focus.
     pub state: State,
-    /// The last write that failed, for a toast.
+    /// The last write that failed (or backup that ended), for a toast.
     pub failed: Option<String>,
     /// keymap.toml's text, `None` when there is none.
     pub keymap: Option<String>,
@@ -339,6 +339,31 @@ impl Prefs {
                 Some(e) => Reload::Failed(e.clone()),
             };
             Self::send_back(&tx, &wake, r);
+        });
+    }
+
+    /// Export the settings to a file, or import them from one, on a thread,
+    /// and toast the outcome (`said`: the two templates, `{}` in order). The
+    /// watcher reads what an import wrote.
+    pub fn backup(&self, b: ito_prefs::Backup, said: [String; 2]) {
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        let (Some(base), Some(app_dir)) = (self.base.clone(), ito_common::app_dir("minato")) else {
+            return;
+        };
+        std::thread::spawn(move || {
+            let [exported, imported] = said;
+            let said = match b {
+                ito_prefs::Backup::Export(file) => ito_common::bundle::export(&file, &base, &app_dir, "minato", env!("CARGO_PKG_VERSION"))
+                    .map(|n| exported.replacen("{}", &n.to_string(), 1).replacen("{}", &file.display().to_string(), 1)),
+                ito_prefs::Backup::Import(file) => ito_common::bundle::import(&file, &base, &app_dir, "minato").map(|r| {
+                    imported.replacen("{}", &r.written.len().to_string(), 1).replacen("{}", &r.skipped.len().to_string(), 1).replacen(
+                        "{}",
+                        &r.unchanged.to_string(),
+                        1,
+                    )
+                }),
+            };
+            Self::send_back(&tx, &wake, Reload::Failed(said.unwrap_or_else(|e| e)));
         });
     }
 
