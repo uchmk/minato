@@ -411,6 +411,10 @@ pub struct App {
     /// The text boxes of the owner and the board's Project in the settings
     /// (taken into `settings` on Enter).
     pub scope_text: [String; 2],
+    /// The Startup card: whether minato starts at sign-in as the OS says
+    /// (`None` until it answers) and the answer on its way.
+    pub startup: Option<bool>,
+    pub startup_rx: Option<std::sync::mpsc::Receiver<bool>>,
     settings_tx: Option<std::sync::mpsc::Sender<String>>,
     /// The text box of the saved searches in the settings (one per line).
     pub searches_text: String,
@@ -701,6 +705,8 @@ impl App {
             settings: Settings::default(),
             fields_typed: ito_prefs::Drafts::new(),
             scope_text: [String::new(), board::TITLE.into()],
+            startup: None,
+            startup_rx: None,
             settings_tx: None,
             searches_text: String::new(),
             searches_tx: None,

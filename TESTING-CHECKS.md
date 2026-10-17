@@ -455,5 +455,15 @@
 - [ ] **41.2** Open the Keys page of the settings → `F12` is listed among the fixed keys and cannot be rebound
 - [ ] **41.3** Run `$env:MINATO_KEYS_DONE="$env:TEMP\k.txt"; minato --keys '2<State:a><Quit>'` → The window opens on the list, quits by itself, `a.txt` is next to the script's folder with `focus:` first, and `k.txt` ends with `keys: quit` lines; the window's place is not changed
 - [ ] **41.4** Run `minato --keys` and `minato --keys '<Bogus>'` → Each prints the error and the usage and exits with 2; no window opens
-- [ ] **41.5** Open the settings (`Ctrl+,`) General page, find the Feedback card, press its button; search the settings for `bug` → Same as `F12`: the new-issue form opens in the browser and a toast says nothing is sent yet; the search finds the card
+- [ ] **41.5** Open the settings (`Ctrl+,`) About page, find the Feedback card, press its button; search the settings for `bug` → Same as `F12`: the new-issue form opens in the browser and a toast says nothing is sent yet; the search finds the card on About
 - [ ] **41.6** Open the key list (`F1`) in the inbox on a wide window, a narrow one and a short one → The list is drawn by ito-help: the rules are a table with the key, reason and what-to-do columns (a third column when wide, under the keys when narrow, on the Tab page when short); no scrollbar shows; a column that runs past the card ends in "↓ N more below" and `j` `k` move it
+
+## 42. Window place, always on top, start at sign-in, Advanced and About
+
+- [ ] **42.1** Move and resize the window, wait a second, close it, start it again → The window comes back at the same place and size (and maximized, if it was); `window.toml` is in the state folder
+- [ ] **42.2** Settings General: turn off the remember-place switch, move the window, restart; press the forget button → The window opens at the default place; after the forget button `window.toml` is gone
+- [ ] **42.3** Settings General: turn on always on top → The window stays above others at once, and after a restart; turning it off puts it back
+- [ ] **42.4** Settings General: turn on start-at-sign-in, then off → The switch follows what the OS has (Windows: Run key / Startup) after a moment; the UI does not freeze
+- [ ] **42.5** Settings Advanced: open the config folder and the state folder → Each opens in the file manager
+- [ ] **42.6** Settings Advanced: press reset → `common.toml`, `keymap.toml` and `minato-settings.json` are kept as `.bak-<time>`, the settings return to the defaults and a toast says so
+- [ ] **42.7** Settings About: look at the page and press the report button → Version, commit, system and license show and copy; the button opens the same screen as `F12`

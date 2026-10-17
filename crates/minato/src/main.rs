@@ -64,6 +64,13 @@ struct Minato {
     script: Option<Runner>,
     /// What the script asked for in `raw_input_hook`, done in the frame.
     todo: Vec<Do>,
+    /// Writes the window's place for the next start (`None` for a script's
+    /// window, or when the place is not remembered).
+    tracker: Option<ito_common::window::Tracker>,
+    /// The `always_on_top` last sent to the window.
+    on_top: bool,
+    /// What the window looked like in the last frame, for `on_exit`.
+    seen: Option<ito_common::window::Seen>,
 }
 
 impl Minato {
@@ -284,6 +291,9 @@ impl eframe::App for Minato {
     /// A window that closes while a script runs says so in the done file
     /// (`<Quit>` and a last key that quits both come here).
     fn on_exit(&mut self) {
+        if let Some(t) = &mut self.tracker {
+            t.close(self.seen);
+        }
         let Some(script) = &mut self.script else { return };
         if !script.running() {
             return;
@@ -305,6 +315,20 @@ impl eframe::App for Minato {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let place = self.app.prefs.common.window_or_default();
+        if place.remember_place {
+            if let Some(t) = &mut self.tracker {
+                t.follow(&ctx);
+            }
+            self.seen = ito_common::window::Seen::of(&ctx);
+        } else {
+            self.tracker = None;
+        }
+        if place.always_on_top != self.on_top {
+            self.on_top = place.always_on_top;
+            let level = if self.on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+        }
         // While the Keys page takes a key, every key goes to it.
         let taking = self.app.mode == Mode::Settings && self.app.prefs.keys_edit.busy();
         if let Some(to) = (!taking).then(|| ctx.input_mut(scale_key)).flatten() {
@@ -569,6 +593,10 @@ fn main() -> eframe::Result {
     if let (Some(_), Some(done)) = (&script, &done) {
         ito_keyscript::install_panic_report(done.clone());
     }
+    // A window a script drives, or one told not to, keeps no place.
+    let first = ito_common::base_dir().and_then(|b| ito_common::Common::read(&b).ok()).unwrap_or_default().0.window_or_default();
+    let saved =
+        ito_common::window::Saved::load(if script.is_none() && first.remember_place { ito_common::state_dir("minato") } else { None });
     let viewport = egui::ViewportBuilder::default()
         .with_title("minato")
         .with_inner_size([1280.0, 800.0])
@@ -578,11 +606,14 @@ fn main() -> eframe::Result {
         // Alt+Tab and the taskbar; build.rs bakes the same drawing into
         // minato.exe for Explorer.
         .with_icon(std::sync::Arc::new(egui::IconData { rgba: icon::pixels(ICON_PX), width: ICON_PX, height: ICON_PX }));
+    let viewport = saved.viewport(viewport);
+    let viewport = if first.always_on_top { viewport.with_always_on_top() } else { viewport };
     let options = eframe::NativeOptions { viewport, ..Default::default() };
     eframe::run_native(
         "minato",
         options,
         Box::new(move |cc| {
+            saved.put(cc);
             fonts::load_in_background(cc.egui_ctx.clone());
             let mut prefs = prefs::Prefs::load(ito_common::base_dir());
             prefs.watch(&cc.egui_ctx);
@@ -618,7 +649,17 @@ fn main() -> eframe::Result {
                 r
             });
             let web_dir = ito_common::state_dir("minato").map(|d| d.join("webview"));
-            Ok(Box::new(Minato { app, net, browser: None, web_dir, script, todo: Vec::new() }))
+            Ok(Box::new(Minato {
+                app,
+                net,
+                browser: None,
+                web_dir,
+                script,
+                todo: Vec::new(),
+                tracker: saved.tracker(),
+                on_top: first.always_on_top,
+                seen: None,
+            }))
         }),
     )
 }

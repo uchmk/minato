@@ -293,6 +293,55 @@ impl Prefs {
         });
     }
 
+    /// Open a folder in the system's file manager, on a thread.
+    pub fn open_dir(&self, dir: PathBuf) {
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        std::thread::spawn(move || {
+            if let Err(e) = open_path(&dir) {
+                Self::send_back(&tx, &wake, Reload::Failed(e));
+            }
+        });
+    }
+
+    /// Settings back to how minato starts: common.toml and keymap.toml are
+    /// moved aside (`<name>.bak-<time>`) and minato-settings.json is copied
+    /// there, on a thread. The watcher then reads the missing files as
+    /// defaults.
+    pub fn reset(&self, no_folder: &str) {
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        let Some(base) = self.base.clone() else {
+            Self::send_back(&tx, &wake, Reload::Failed(no_folder.into()));
+            return;
+        };
+        std::thread::spawn(move || {
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            let aside = |p: &Path| {
+                let mut name = p.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+                name.push(format!(".bak-{stamp}"));
+                p.with_file_name(name)
+            };
+            let mut failed = Vec::new();
+            for path in [common_path(&base), keymap_path(&base)] {
+                if path.exists() {
+                    if let Err(e) = std::fs::rename(&path, aside(&path)) {
+                        failed.push(format!("{}: {e}", path.display()));
+                    }
+                }
+            }
+            let json = base.join("minato-settings.json");
+            if json.exists() {
+                if let Err(e) = std::fs::copy(&json, aside(&json)) {
+                    failed.push(format!("{}: {e}", json.display()));
+                }
+            }
+            let r = match failed.first() {
+                None => Reload::Common(Common::read(&base)),
+                Some(e) => Reload::Failed(e.clone()),
+            };
+            Self::send_back(&tx, &wake, r);
+        });
+    }
+
     /// The theme common.toml picks, in force from this frame on. Called
     /// every frame (the OS may have gone light or dark).
     pub fn apply_theme(&mut self, ctx: &egui::Context) {

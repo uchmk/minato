@@ -7,7 +7,7 @@
 
 use egui::{vec2, Align2, FontId, Sense, Stroke, StrokeKind, Ui};
 use ito_common::{themes_dir, CommonChange};
-use ito_prefs::{section, Look, Words};
+use ito_prefs::{section, Look, MoreWords, Words};
 use minato_core::prefs::{is_http, Notify, FORMATS, SOUNDS};
 
 use crate::app::{App, Hook, Ring};
@@ -17,6 +17,8 @@ const THEME: usize = 1;
 const VIEWS: usize = 2;
 const KEYS: usize = 3;
 const NOTIFY: usize = 4;
+const ADVANCED: usize = 5;
+const ABOUT: usize = 6;
 
 /// The keymap's layers and the words that name them on the Keys page.
 const LAYERS: [(&str, &str); 8] = [
@@ -48,7 +50,7 @@ const NOTIFY_WORDS: [&str; 13] = [
 ];
 
 /// The rows on each page, for the search.
-fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
+fn index(w: &'static Words, more: &'static MoreWords, lang: &str) -> Vec<(usize, &'static str)> {
     let notify = NOTIFY_WORDS.iter().map(|k| (NOTIFY, crate::i18n::tr(lang, k)));
     let keys = ito_prefs::keys_index(ito_prefs::KeyWords::of(lang)).into_iter().map(|t| (KEYS, t));
     let layers = LAYERS.iter().map(|(_, k)| (KEYS, crate::i18n::tr(lang, k)));
@@ -64,6 +66,7 @@ fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
         (GENERAL, "language"),
         (GENERAL, "scale"),
         (GENERAL, "[clock]"),
+        (GENERAL, "[window]"),
         (THEME, w.mode),
         (THEME, w.themes),
         (THEME, w.preview),
@@ -77,12 +80,16 @@ fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
     .chain(notify)
     .chain(keys)
     .chain(layers)
-    .chain(ito_prefs::bug_index(w).into_iter().map(|t| (GENERAL, t)))
+    .chain(ito_prefs::window_index(more).into_iter().chain(ito_prefs::startup_index(more)).map(|t| (GENERAL, t)))
+    .chain(ito_prefs::advanced_index(more).into_iter().map(|t| (ADVANCED, t)))
+    .chain(ito_prefs::about_index(more, w).into_iter().map(|t| (ABOUT, t)))
     .collect()
 }
 
 pub fn show(ui: &mut Ui, app: &mut App) {
     let w = Words::of(&app.lang);
+    let more = MoreWords::of(&app.lang);
+    poll_startup(ui, app);
     // While a key is being set the page takes every key, Esc included.
     let keys = if app.prefs.keys_edit.busy() { ito_prefs::Keys::default() } else { ito_prefs::Keys::standard(ui, false) };
     let pages = [
@@ -91,8 +98,10 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         (app.tr("settings.views"), app.tr("settings.views_lead")),
         (app.tr("settings.keys"), app.tr("settings.keys_lead")),
         (app.tr("settings.notify"), app.tr("settings.notify_lead")),
+        ito_prefs::Page::Advanced.words(more),
+        ito_prefs::Page::About.words(more),
     ];
-    let index = index(w, &app.lang);
+    let index = index(w, more, &app.lang);
     let nav = ito_prefs::Nav { pages: &pages, index: &index, words: w, file: "common.toml" };
     let mut asked: Vec<CommonChange> = Vec::new();
     let lang = app.lang.clone();
@@ -112,6 +121,11 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let drafts = &mut app.fields_typed;
     let mut searches_changed = false;
     let mut bug = false;
+    let mut forget = false;
+    let mut startup_toggled = None;
+    let mut advanced = Vec::new();
+    let startup_now = app.startup;
+    let state_dir = ito_common::state_dir("minato");
     let mut test = None;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
@@ -123,7 +137,18 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 asked.extend(ito_prefs::scale_row(ui, l, w, common.scale_or_one(), ""));
             });
             asked.extend(ito_prefs::clock_card(ui, l, w, &common.clock_or(None)));
-            bug |= ito_prefs::bug_card(ui, l, w);
+            let out = ito_prefs::window_card(ui, l, more, &common.window_or_default());
+            asked.extend(out.changes);
+            forget |= out.forget;
+            startup_toggled = ito_prefs::startup_card(ui, l, more, startup_now);
+        }
+        ADVANCED => advanced.extend(ito_prefs::advanced_card(ui, l, more, state_dir.is_some())),
+        ABOUT => {
+            let system = ito_bugreport::os_line();
+            let license = Some(env!("CARGO_PKG_LICENSE")).filter(|x| !x.is_empty());
+            let about =
+                ito_prefs::About { version: env!("CARGO_PKG_VERSION"), commit: option_env!("MINATO_COMMIT"), system: &system, license };
+            bug |= !ito_prefs::about_page(ui, l, more, w, "minato", &about).is_empty();
         }
         THEME => {
             let (t, d, li) = common.theme_choice(None);
@@ -268,6 +293,37 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     if bug {
         app.bug_report();
     }
+    if forget {
+        if let Some(dir) = &state_dir {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                let _ = ito_prefs::forget_place(&dir);
+            });
+        }
+    }
+    if let Some(on) = startup_toggled {
+        set_startup(ui.ctx(), app, on);
+    }
+    for a in advanced {
+        let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
+        match a {
+            ito_prefs::Advanced::OpenConfigDir => match app.prefs.base.clone() {
+                Some(b) => app.prefs.open_dir(b),
+                None => app.say(no_folder),
+            },
+            ito_prefs::Advanced::OpenStateDir => {
+                if let Some(d) = state_dir.clone() {
+                    app.prefs.open_dir(d);
+                }
+            }
+            ito_prefs::Advanced::Reset => {
+                app.prefs.reset(no_folder);
+                app.settings = Default::default();
+                app.scope_text = [app.settings.owners_line(), app.settings.project.clone()];
+                app.save_settings();
+            }
+        }
+    }
     if searches_changed {
         app.sync_searches();
         app.save_searches();
@@ -290,6 +346,39 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
     app.prefs.keymap_edit(key_edits, no_folder);
     app.prefs.common_change(asked, no_folder);
+}
+
+/// Take the OS's answer about starting at sign-in, and ask when nothing is
+/// known yet (once the General page is up). The registry and the autostart
+/// folders are read on a thread.
+fn poll_startup(ui: &Ui, app: &mut App) {
+    if let Some(v) = app.startup_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        app.startup = Some(v);
+        app.startup_rx = None;
+    }
+    if app.startup.is_none() && app.startup_rx.is_none() && app.prefs.state.page == GENERAL {
+        app.startup_rx = Some(startup_task(ui.ctx(), None));
+    }
+}
+
+/// The switch was clicked: set it on a thread, then read what the OS has.
+fn set_startup(ctx: &egui::Context, app: &mut App, on: bool) {
+    app.startup = None;
+    app.startup_rx = Some(startup_task(ctx, Some(on)));
+}
+
+/// Read (and first set, when `set` is given) the sign-in start on a thread.
+fn startup_task(ctx: &egui::Context, set: Option<bool>) -> std::sync::mpsc::Receiver<bool> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ctx = ctx.clone();
+    std::thread::spawn(move || {
+        if let (Some(on), Ok(exe)) = (set, std::env::current_exe()) {
+            let _ = ito_common::startup::set("minato", &exe, &[], on);
+        }
+        let _ = tx.send(ito_common::startup::enabled("minato"));
+        ctx.request_repaint();
+    });
+    rx
 }
 
 /// What the "Send a test" buttons asked for.
@@ -504,6 +593,19 @@ fn preview(ui: &mut Ui, sample: &str, tabs: [&str; 4], runs: [&str; 3]) {
 
 #[cfg(test)]
 mod tests {
+    use ito_prefs::Page;
+
+    #[test]
+    fn pages_follow_ito_default_order() {
+        let ours = [GENERAL, THEME, VIEWS, KEYS, NOTIFY, ADVANCED, ABOUT];
+        assert!(ours.windows(2).all(|w| w[0] < w[1]));
+        let has = [Page::Theme, Page::App, Page::Keys, Page::Notifications, Page::Advanced];
+        assert_eq!(
+            ito_prefs::default_order(&has),
+            [Page::General, Page::Theme, Page::App, Page::Keys, Page::Notifications, Page::Advanced, Page::About]
+        );
+    }
+
     use super::*;
     use egui::{pos2, Rect};
 
@@ -585,7 +687,7 @@ mod tests {
     #[test]
     fn the_search_finds_the_keys_page() {
         let w = Words::of("en");
-        let idx = index(w, "en");
+        let idx = index(w, MoreWords::of("en"), "en");
         assert!(idx.iter().any(|(p, t)| *p == KEYS && *t == "keymap.toml"));
         assert!(idx.iter().any(|(p, t)| *p == KEYS && *t == "Everywhere"));
     }

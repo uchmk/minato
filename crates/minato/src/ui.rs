@@ -691,7 +691,8 @@ fn help(ui: &mut Ui, app: &App, r: Rect) {
     p.rect_stroke(card, CornerRadius::same(10), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
     p.text(pos2(card.left() + 20.0, card.top() + 18.0), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
     let body = Rect::from_min_max(pos2(card.left() + 20.0, card.top() + 50.0), pos2(card.right() - 20.0, card.bottom() - 28.0));
-    let style = Style { font: FontId::proportional(12.5), row_h: ROW, head: ACCENT, keys: c.fg, desc: c.dim, bar: c.dim };
+    let style =
+        Style { font: FontId::proportional(12.5), row_h: ROW, head: ACCENT, keys: c.fg, desc: c.dim, warn: c.wait, dim: c.dim, bar: c.dim };
     let n = |text: &'static str, n: usize| text.replace("{}", &n.to_string());
     let (above, below_words) = (app.tr("help.above"), app.tr("help.below"));
     let (up, down) = (move |k: usize| n(above, k), move |k: usize| n(below_words, k));
