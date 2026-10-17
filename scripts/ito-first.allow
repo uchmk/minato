@@ -1,2 +1,2 @@
 # Known gaps against ito, kept visible on purpose: `<crate> <reason>`. Each line is a migration still to do, not a decision to stay.
-ito-help ito-help is one column with a scrollbar; minato's help is two columns with no scrollbar and the inbox table (design.md); asked of ito, see issue 66
+ito-help ito-help is one column with a scrollbar; minato's help is two columns with no scrollbar and the inbox table (design.md); asked of ito (uchmk/ito#13), see issue 66
