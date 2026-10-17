@@ -1,0 +1,5 @@
+# Known gaps against ito, kept visible on purpose: `<crate> <reason>`. Each line is a migration still to do, not a decision to stay.
+ito-bugreport minato has no F12 issue form from ito-bugreport yet
+ito-help minato has no ? / F1 key help from ito-help yet
+ito-keyscript minato has no --keys script from ito-keyscript yet
+ito-testcheck minato has its own examples/make-testcheck; not yet moved onto ito-testcheck

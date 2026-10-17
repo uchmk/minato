@@ -50,6 +50,9 @@ zigbuild() {
     run env RUSTUP_TOOLCHAIN=stable ZIG_GLOBAL_CACHE_DIR="$dir/zig" cargo-zigbuild "$@"
 }
 
+# the shared scripts are ito's, byte for byte (scripts/lanes.sh)
+run scripts/lanes.sh check
+run python3 scripts/ito-first.py
 run cargo fmt --all --check
 run cargo build -q --locked --workspace --all-features
 run cargo test -q --workspace --all-features
