@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.61.1] - 2026-10-17
+
+### 変更
+
+- ito を rev a37f44e（v0.77.0）に上げた。組み込みのテーマが 13 から 20 に増えた（Campbell・VS Code Dark+/Light+・GitHub Light・One Light・Rosé Pine Dawn・Tokyo Night Day）。
+
 ## [0.61.0] - 2026-10-17
 
 ### 変更
