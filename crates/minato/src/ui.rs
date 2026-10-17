@@ -641,145 +641,82 @@ fn word_for(app: &App, key: &'static str) -> &'static str {
 
 /// The list of every key: the global ones, then the view's; over the inbox,
 /// a table of its cards' reasons beside them, below them on a narrower
-/// window, or on a second page (Tab) when it would not fit.
+/// window, or on a second page (Tab) when it would not fit. The rows are
+/// drawn by `ito-help`; a list too long for the card shows "N more" rows
+/// (`j` `k` scroll) instead of a scrollbar.
 fn help(ui: &mut Ui, app: &App, r: Rect) {
+    use ito_help::{Group, Line, Overflow, Plan, Style};
+    const ROW: f32 = 20.0;
     let c = ito_theme::colors();
     let p = ui.painter().clone();
-    // Two columns: the keys of everywhere and of the notifications at the
-    // left, the view's at the right, so they all fit.
     // The keys in force (keymap.toml), as they are read in the view.
     let view = Ctx::View(app.view);
-    let (global, notes, own) =
-        (app.key_rows(view, &GLOBAL_KEYS), app.key_rows(Ctx::Notes, &NOTES_KEYS), app.key_rows(view, app.view.keys()));
-    let left: [(&str, &[(String, &'static str)]); 2] = [(app.tr("help.global"), &global), (app.tr("help.notes"), &notes)];
-    let right: [(&str, &[(String, &'static str)]); 1] = [(app.tr(app.view.label()), &own)];
-    let tall = |s: &[(&str, &[(String, &'static str)])]| s.iter().map(|(_, rows)| 28.0 + rows.len() as f32 * 20.0).sum::<f32>();
+    let group = |title: &str, rows: Vec<(String, &'static str)>| {
+        Group { title: title.to_string(), rows: rows.into_iter().map(|(k, w)| (k, app.tr(w).to_string())).collect() }.lines()
+    };
+    // Everywhere and the notifications at the left, the view's at the right.
+    let mut left = group(app.tr("help.global"), app.key_rows(view, &GLOBAL_KEYS));
+    left.push(Line::Blank);
+    left.extend(group(app.tr("help.notes"), app.key_rows(Ctx::Notes, &NOTES_KEYS)));
+    let right = group(app.tr(app.view.label()), app.key_rows(view, app.view.keys()));
     let rules = app.view == View::Inbox;
-    let rules_h = 48.0 + (RULES.len() + HELP_MARKS.len()) as f32 * 20.0;
+    // One row per rule (its key, reason and what to do), then the keys for any card.
+    let table: Vec<Line> = if rules {
+        let inbox = Ctx::View(View::Inbox);
+        let words = |w: &'static str| app.tr(w).to_string();
+        let head = Line::Row(vec![words("help.key"), words("help.why"), words("help.do")]);
+        let rows = RULES.iter().map(|rule| (rule.next().0, rule.why(), rule.todo())).chain(HELP_MARKS);
+        [Line::Head(words("help.rules")), head]
+            .into_iter()
+            .chain(rows.map(|(k, why, todo)| Line::Row(vec![app.char_label(inbox, k), words(why), words(todo)])))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let (keys_h, table_h) = (left.len().max(right.len()) as f32 * ROW, table.len() as f32 * ROW);
     // The table stands as a third column when the window is wide enough,
     // else under the two, else on a page of its own.
     let wide = rules && r.width() - 24.0 >= 1180.0;
-    let keys_h = tall(&left).max(tall(&right));
-    let paged = rules && !wide && 50.0 + keys_h + rules_h + 30.0 > r.height() - 24.0;
+    let paged = rules && !wide && 50.0 + keys_h + table_h + 30.0 > r.height() - 24.0;
     let (show_keys, below) = match (paged, app.help_rules) {
         (true, true) => (false, true),
         (true, false) => (true, false),
         _ => (true, rules),
     };
     let cols = if show_keys { keys_h } else { 0.0 };
-    let h = 50.0 + cols.max(if wide { rules_h } else { 0.0 }) + (if below && !wide { rules_h } else { 0.0 }) + 30.0;
+    let h = 50.0 + cols.max(if wide { table_h } else { 0.0 }) + (if below && !wide { table_h } else { 0.0 }) + 30.0;
     let w = (r.width() - 24.0).min(if wide { 1300.0 } else { 860.0 });
     let card = Rect::from_center_size(r.center(), vec2(w, h.min(r.height() - 24.0).max(80.0)));
     p.rect_filled(card, CornerRadius::same(10), c.raised());
     p.rect_stroke(card, CornerRadius::same(10), Stroke::new(1.0, c.border_strong()), StrokeKind::Inside);
     p.text(pos2(card.left() + 20.0, card.top() + 18.0), Align2::LEFT_TOP, app.tr("help.title"), FontId::proportional(16.0), c.fg);
-    let x0 = card.left() + 20.0;
-    // On a short window the rows close up (down to 15) so none is lost.
-    let room = card.bottom() - 28.0 - (card.top() + 50.0);
-    let pitch = [&left[..], &right[..]]
-        .iter()
-        .map(|s| {
-            let rows = s.iter().map(|(_, rows)| rows.len()).sum::<usize>().max(1) as f32;
-            (room - s.len() as f32 * 28.0) / rows
-        })
-        .fold(20.0f32, f32::min)
-        .max(15.0);
-    let (left_w, right_w) = if wide { (330.0, 280.0) } else { ((w - 40.0) / 2.0, (w - 40.0) / 2.0) };
-    // A column from its `top`-th key row (`j` `k` move it when even the
-    // closest rows do not fit): the rows skipped and those left out.
-    let bottom = card.bottom() - 28.0;
-    let column = |x: f32, col_w: f32, sections: &[(&str, &[(String, &'static str)])], top: usize| {
-        let (mut y, mut skip, mut out) = (card.top() + 50.0, top, 0);
-        for (title, rows) in sections {
-            let from = skip.min(rows.len());
-            skip -= from;
-            if from == rows.len() {
-                continue;
-            }
-            if out > 0 || y + 20.0 + pitch.min(18.0) > bottom {
-                out += rows.len() - from;
-                continue;
-            }
-            p.text(pos2(x, y), Align2::LEFT_TOP, *title, FontId::proportional(11.5), ACCENT);
-            y += 20.0;
-            for (key, word) in &rows[from..] {
-                if out > 0 || y + pitch.min(18.0) > bottom {
-                    out += 1;
-                    continue;
-                }
-                // A long key from keymap.toml is cut before the words.
-                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + 114.0, y + 20.0))).text(
-                    pos2(x, y),
-                    Align2::LEFT_TOP,
-                    key,
-                    FontId::monospace(12.0),
-                    c.fg,
-                );
-                p.with_clip_rect(Rect::from_min_max(pos2(x, y), pos2(x + col_w - 12.0, y + 20.0))).text(
-                    pos2(x + 120.0, y),
-                    Align2::LEFT_TOP,
-                    app.tr(word),
-                    FontId::proportional(12.5),
-                    c.dim,
-                );
-                y += pitch;
-            }
-            y += 8.0;
-        }
-        (top - skip, out)
-    };
+    let body = Rect::from_min_max(pos2(card.left() + 20.0, card.top() + 50.0), pos2(card.right() - 20.0, card.bottom() - 28.0));
+    let style = Style { font: FontId::proportional(12.5), row_h: ROW, head: ACCENT, keys: c.fg, desc: c.dim, bar: c.dim };
+    let n = |text: &'static str, n: usize| text.replace("{}", &n.to_string());
+    let (above, below_words) = (app.tr("help.above"), app.tr("help.below"));
+    let (up, down) = (move |k: usize| n(above, k), move |k: usize| n(below_words, k));
+    let overflow = Overflow::Counts { above: &up, below: &down };
     let mut last = 0;
     if show_keys {
-        for (skipped, out) in [column(x0, left_w, &left, app.help_top), column(x0 + left_w, right_w, &right, app.help_top)] {
-            last = last.max(skipped + out);
+        let mut columns = vec![left, right];
+        let keys_body = if wide || !below {
+            body
+        } else {
+            Rect::from_min_size(body.min, vec2(body.width(), (body.height() - table_h).max(ROW * 3.0).min(keys_h)))
+        };
+        if wide {
+            columns.push(table.clone());
         }
+        let plan = Plan { columns, scale: 1.0, scrolls: false };
+        last = ito_help::draw_plan_with(&p, keys_body, &plan, app.help_top, &style, overflow).max;
+        if below && !wide {
+            let rest = Rect::from_min_max(pos2(body.left(), keys_body.bottom()), body.max);
+            ito_help::draw_with(&p, rest, &table, 0, &style, overflow);
+        }
+    } else {
+        ito_help::draw_with(&p, body, &table, 0, &style, overflow);
     }
     app.help_last.set(last);
-    let (x, mut y) = if wide { (x0 + left_w + right_w, card.top() + 50.0) } else { (x0, card.top() + 50.0 + cols) };
-    if below && y + 58.0 <= card.bottom() - 28.0 {
-        // One row per rule (its key, reason and what to do), then the keys
-        // for any card.
-        let end = card.right() - 20.0;
-        let inbox = Ctx::View(View::Inbox);
-        let rows: Vec<_> = RULES
-            .iter()
-            .map(|rule| (rule.next().0, rule.why(), rule.todo()))
-            .chain(HELP_MARKS)
-            .map(|(k, why, todo)| (app.char_label(inbox, k), why, todo))
-            .collect();
-        // The key column is as wide as its widest key (`Ctrl+D` when
-        // keymap.toml moves one), at least 40.
-        let widest = rows.iter().map(|(k, _, _)| p.layout_no_wrap(k.clone(), FontId::monospace(12.0), c.fg).size().x).fold(0.0, f32::max);
-        let key_w = (widest + 12.0).max(40.0);
-        let (why_x, do_x) = (x + key_w, x + key_w + (end - x - key_w) * 0.4);
-        p.text(pos2(x, y), Align2::LEFT_TOP, app.tr("help.rules"), FontId::proportional(11.5), ACCENT);
-        y += 20.0;
-        for (at, word) in [(x, "help.key"), (why_x, "help.why"), (do_x, "help.do")] {
-            p.text(pos2(at, y), Align2::LEFT_TOP, app.tr(word), FontId::proportional(11.0), c.dim);
-        }
-        y += 20.0;
-        for (key, why, todo) in rows {
-            if y + 18.0 > card.bottom() - 28.0 {
-                break;
-            }
-            p.text(pos2(x, y), Align2::LEFT_TOP, key, FontId::monospace(12.0), c.fg);
-            p.with_clip_rect(Rect::from_min_max(pos2(why_x, y), pos2(do_x - 12.0, y + 20.0))).text(
-                pos2(why_x, y),
-                Align2::LEFT_TOP,
-                app.tr(why),
-                FontId::proportional(12.5),
-                c.fg,
-            );
-            p.with_clip_rect(Rect::from_min_max(pos2(do_x, y), pos2(end, y + 20.0))).text(
-                pos2(do_x, y),
-                Align2::LEFT_TOP,
-                app.tr(todo),
-                FontId::proportional(12.5),
-                c.dim,
-            );
-            y += 20.0;
-        }
-    }
     p.text(pos2(card.left() + 20.0, card.bottom() - 22.0), Align2::LEFT_CENTER, app.tr("help.close"), FontId::proportional(11.5), c.dim);
     let hint = match (paged, last > 0) {
         (true, true) => format!("{}  ·  {}", app.tr("help.scroll"), app.tr("help.page")),
