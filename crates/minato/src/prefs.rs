@@ -353,15 +353,18 @@ impl Prefs {
         std::thread::spawn(move || {
             let [exported, imported] = said;
             let said = match b {
-                ito_prefs::Backup::Export(file) => ito_common::bundle::export(&file, &base, &app_dir, "minato", env!("CARGO_PKG_VERSION"))
-                    .map(|n| exported.replacen("{}", &n.to_string(), 1).replacen("{}", &file.display().to_string(), 1)),
-                ito_prefs::Backup::Import(file) => ito_common::bundle::import(&file, &base, &app_dir, "minato").map(|r| {
-                    imported.replacen("{}", &r.written.len().to_string(), 1).replacen("{}", &r.skipped.len().to_string(), 1).replacen(
-                        "{}",
-                        &r.unchanged.to_string(),
-                        1,
-                    )
-                }),
+                ito_prefs::Backup::Export(file) => {
+                    ito_common::bundle::export(&file, &base, &app_dir, "minato", env!("CARGO_PKG_VERSION"), &ito_common::bundle::all)
+                        .map(|n| exported.replacen("{}", &n.to_string(), 1).replacen("{}", &file.display().to_string(), 1))
+                }
+                ito_prefs::Backup::Import(file) => ito_common::bundle::import(&file, &base, &app_dir, "minato", &ito_common::bundle::all)
+                    .map(|r| {
+                        imported.replacen("{}", &r.written.len().to_string(), 1).replacen("{}", &r.skipped.len().to_string(), 1).replacen(
+                            "{}",
+                            &r.unchanged.to_string(),
+                            1,
+                        )
+                    }),
             };
             Self::send_back(&tx, &wake, Reload::Failed(said.unwrap_or_else(|e| e)));
         });
