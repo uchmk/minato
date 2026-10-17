@@ -534,3 +534,4 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 41.2 | Open the Keys page of the settings | `F12` is listed among the fixed keys and cannot be rebound |
 | 41.3 | Run `$env:MINATO_KEYS_DONE="$env:TEMP\k.txt"; minato --keys '2<State:a><Quit>'` | The window opens on the list, quits by itself, `a.txt` is next to the script's folder with `focus:` first, and `k.txt` ends with `keys: quit` lines; the window's place is not changed |
 | 41.4 | Run `minato --keys` and `minato --keys '<Bogus>'` | Each prints the error and the usage and exits with 2; no window opens |
+| 41.5 | Open the settings (`Ctrl+,`) General page, find the Feedback card, press its button; search the settings for `bug` | Same as `F12`: the new-issue form opens in the browser and a toast says nothing is sent yet; the search finds the card |

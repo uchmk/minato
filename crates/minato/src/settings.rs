@@ -77,6 +77,7 @@ fn index(w: &'static Words, lang: &str) -> Vec<(usize, &'static str)> {
     .chain(notify)
     .chain(keys)
     .chain(layers)
+    .chain(ito_prefs::bug_index(w).into_iter().map(|t| (GENERAL, t)))
     .collect()
 }
 
@@ -110,6 +111,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     let searches_text = &mut app.searches_text;
     let drafts = &mut app.fields_typed;
     let mut searches_changed = false;
+    let mut bug = false;
     let mut test = None;
     let (common, themes, base) = (&prefs.common, &prefs.themes, prefs.base.as_deref());
     let out = ito_prefs::show(ui, ito_theme::colors(), &mut prefs.state, &nav, keys, |ui, page, l| match page {
@@ -121,6 +123,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 asked.extend(ito_prefs::scale_row(ui, l, w, common.scale_or_one(), ""));
             });
             asked.extend(ito_prefs::clock_card(ui, l, w, &common.clock_or(None)));
+            bug |= ito_prefs::bug_card(ui, l, w);
         }
         THEME => {
             let (t, d, li) = common.theme_choice(None);
@@ -261,6 +264,9 @@ pub fn show(ui: &mut Ui, app: &mut App) {
         let all = test == Test::All;
         app.rings.push(Ring { title, body, system: all, sound: all.then(|| n.sounds[0].clone()), focus: n.focus, hooks });
         crate::net::ring(app);
+    }
+    if bug {
+        app.bug_report();
     }
     if searches_changed {
         app.sync_searches();
