@@ -215,12 +215,15 @@ fn palette_show(ctx: &egui::Context, app: &mut App) {
         dim: c.dim,
         selected_bg: ui::ACCENT.gamma_multiply(0.22),
         selected_text: c.fg,
+        hit: ui::ACCENT,
+        accent: ui::ACCENT,
     };
-    let words = ito_palette::Words { hint: app.tr("palette.hint"), none: app.tr("palette.none") };
+    let words = ito_palette::Words { hint: app.tr("palette.hint"), none: app.tr("palette.none"), header: "", footer: "" };
     let entries = app.palette_entries(&view.query);
     match ito_palette::show(ctx, &mut view, &entries, &style, &words) {
         None => app.palette = Some(view),
-        Some(ito_palette::Answer::Close) => {}
+        // `View::keys` is empty, so `Key` never comes.
+        Some(ito_palette::Answer::Close | ito_palette::Answer::Key(..)) => {}
         Some(ito_palette::Answer::Pick(cmd)) => app.run_cmd(cmd),
     }
 }
