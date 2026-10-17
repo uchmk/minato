@@ -306,7 +306,7 @@ fn draw_card(p: &Painter, app: &App, card: &Card, r: Rect, on: bool, hover: bool
         let (key, name) = rule.next();
         let k = p.text(pos2(wx, y3), Align2::LEFT_CENTER, format!("[{key}]"), FontId::monospace(12.0), tone);
         let n = p.text(pos2(k.right() + 5.0, y3), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.5), tone);
-        p.text(pos2(n.right() + 0.45, y3), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.5), tone);
+        p.text(pos2(n.left() + 0.45, y3), Align2::LEFT_CENTER, app.tr(name), FontId::proportional(12.5), tone);
         wx = n.right() + 8.0;
     }
     let d = p.text(pos2(wx, y3), Align2::LEFT_CENTER, "●", FontId::proportional(9.0), if wx > x { c.dim } else { tone });
