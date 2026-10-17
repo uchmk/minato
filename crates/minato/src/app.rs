@@ -1661,9 +1661,10 @@ impl App {
         let id = self.runs[k].id;
         // Shown even if seen, as the selected run.
         self.acts.keep = Some(id);
-        if !self.acts.matches(&self.runs[k]) {
+        if !self.acts.matches(&self.runs[k], &self.runs) {
             let seen = std::mem::take(&mut self.acts.seen);
             self.acts = ActState::default();
+            self.acts.state = None;
             self.acts.seen = seen;
             self.acts.keep = Some(id);
         }

@@ -34,7 +34,9 @@ fn tone(s: Status) -> Color32 {
 /// A state filter's mark and colour, as its runs show it.
 fn bucket_mark(b: Bucket) -> (&'static str, Color32) {
     match b {
+        Bucket::Attention => (Status::Bad.mark(), style::BAD),
         Bucket::Bad => (Status::Bad.mark(), style::BAD),
+        Bucket::Fixed => (Status::Ok.mark(), style::IDLE),
         Bucket::Active => (Status::Running.mark(), style::RUN),
         Bucket::Ok => (Status::Ok.mark(), style::OK),
         Bucket::Idle => (Status::Idle.mark(), style::IDLE),

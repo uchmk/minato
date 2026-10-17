@@ -31,6 +31,7 @@ fn the_keybar_shows_the_run_keys_that_apply() {
     let mut a = app();
     a.feed('3');
     a.runs = vec![run(1, actions::Status::Bad, Some(9)), run(2, actions::Status::Running, None), run(3, actions::Status::Ok, None)];
+    a.acts.state = None;
     let words = |a: &App| a.keys_now().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
     let w = words(&a);
     assert!(w.contains(&"key.rerun") && !w.contains(&"key.cancel") && w.contains(&"run.open_pr"));
@@ -548,6 +549,7 @@ fn seen_runs_drop_out_and_are_read_back_after_a_restart() {
     let mut a = app();
     a.keep_seen(file.clone());
     a.view = View::Actions;
+    a.acts.state = None;
     a.runs = vec![run(1, actions::Status::Ok, None), run(2, actions::Status::Bad, None)];
     a.settle_runs(1.0);
     a.settle_runs(2.5);
@@ -745,6 +747,7 @@ fn w_watches_a_run_and_it_rings_when_it_ends() {
     let mut a = app();
     a.feed('3');
     a.runs = vec![run(1, actions::Status::Running, None), run(2, actions::Status::Ok, None)];
+    a.acts.state = None;
     let words = |a: &App| a.keys_now().into_iter().map(|(_, w)| w).collect::<Vec<_>>();
     assert!(words(&a).contains(&"key.watch"));
     assert!(a.feed('w'));
@@ -858,6 +861,7 @@ fn y_copies_the_link_in_every_view() {
     assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/pull/3"));
     a.feed('3');
     a.runs = vec![run(7, actions::Status::Ok, None)];
+    a.acts.state = None;
     a.feed('y');
     assert_eq!(a.copy.take().as_deref(), Some("https://github.com/uchmk/kura/actions/runs/7"));
     // No link, nothing copied.

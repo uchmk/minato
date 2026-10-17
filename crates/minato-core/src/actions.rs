@@ -382,7 +382,14 @@ pub enum Pick {
 /// The state filter's groups.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bucket {
+    /// What needs a look: the failures nothing later has fixed, and the
+    /// runs going on. The view's start.
+    Attention,
+    /// Failed, and no later run of the workflow on the branch has passed.
     Bad,
+    /// Failed, but a later run of the same workflow on the same branch
+    /// passed: the failure is mended.
+    Fixed,
     Active,
     Ok,
     Idle,
@@ -394,7 +401,9 @@ pub enum Bucket {
 impl Bucket {
     pub fn word(self) -> &'static str {
         match self {
+            Bucket::Attention => "run.attention",
             Bucket::Bad => "run.bad",
+            Bucket::Fixed => "run.fixed",
             Bucket::Active => "run.active",
             Bucket::Ok => "run.ok",
             Bucket::Idle => "run.idle",
@@ -402,15 +411,34 @@ impl Bucket {
         }
     }
 
-    fn holds(self, s: Status) -> bool {
+    fn holds(self, s: Status, fixed: bool) -> bool {
         match self {
-            Bucket::Bad => s == Status::Bad,
+            Bucket::Attention => (s == Status::Bad && !fixed) || s.active(),
+            Bucket::Bad => s == Status::Bad && !fixed,
+            Bucket::Fixed => s == Status::Bad && fixed,
             Bucket::Active => s.active(),
             Bucket::Ok => s == Status::Ok,
             Bucket::Idle => s == Status::Idle,
             Bucket::Seen => s.settled(),
         }
     }
+}
+
+/// The ids of the failed runs a later run has mended: one of the same
+/// workflow on the same branch of the repository that passed after it
+/// started.
+pub fn mended(runs: &[Run]) -> HashSet<u64> {
+    let key = |r: &Run| (r.repo.clone(), r.workflow_id, r.branch.clone());
+    let mut passed: std::collections::HashMap<(String, u64, String), (i64, u64)> = std::collections::HashMap::new();
+    for r in runs.iter().filter(|r| r.status == Status::Ok) {
+        let at = (epoch(&r.started_at).unwrap_or(0), r.id);
+        let e = passed.entry(key(r)).or_insert(at);
+        *e = (*e).max(at);
+    }
+    runs.iter()
+        .filter(|r| r.status == Status::Bad && passed.get(&key(r)).is_some_and(|&p| p > (epoch(&r.started_at).unwrap_or(0), r.id)))
+        .map(|r| r.id)
+        .collect()
 }
 
 /// The columns `h` and `l` move between.
@@ -446,7 +474,7 @@ impl Default for ActState {
         ActState {
             col: Col::Runs,
             repo: None,
-            state: None,
+            state: Some(Bucket::Attention),
             workflow: None,
             cursor: 0,
             sel: 0,
@@ -470,39 +498,55 @@ pub fn options(runs: &[Run]) -> Vec<(&'static str, Vec<Pick>)> {
         ("repo", distinct(runs.iter().map(|r| r.repo.clone())).into_iter().map(Pick::Repo).collect()),
         (
             "state",
-            [None, Some(Bucket::Bad), Some(Bucket::Active), Some(Bucket::Ok), Some(Bucket::Idle), Some(Bucket::Seen)]
-                .into_iter()
-                .map(Pick::State)
-                .collect(),
+            [
+                Some(Bucket::Attention),
+                None,
+                Some(Bucket::Bad),
+                Some(Bucket::Active),
+                Some(Bucket::Ok),
+                Some(Bucket::Idle),
+                Some(Bucket::Fixed),
+                Some(Bucket::Seen),
+            ]
+            .into_iter()
+            .map(Pick::State)
+            .collect(),
         ),
         ("workflow", distinct(runs.iter().map(|r| r.workflow.clone())).into_iter().map(Pick::Workflow).collect()),
     ]
 }
 
 impl ActState {
-    pub fn matches(&self, r: &Run) -> bool {
+    /// Whether the filters take `r` (`runs`: all of them, to know a mended
+    /// failure).
+    pub fn matches(&self, r: &Run, runs: &[Run]) -> bool {
+        self.matches_in(r, &mended(runs))
+    }
+
+    fn matches_in(&self, r: &Run, mended: &HashSet<u64>) -> bool {
         self.repo.as_ref().is_none_or(|x| *x == r.repo)
-            && self.in_state(self.state, r)
+            && self.in_state(self.state, r, mended)
             && self.workflow.as_ref().is_none_or(|w| *w == r.workflow)
     }
 
     /// Whether the state choice takes the run: a seen one only under Seen,
     /// or while it is still the selected one.
-    fn in_state(&self, b: Option<Bucket>, r: &Run) -> bool {
+    fn in_state(&self, b: Option<Bucket>, r: &Run, mended: &HashSet<u64>) -> bool {
         let seen = r.status.settled() && self.seen.contains(&r.id);
         match b {
             Some(Bucket::Seen) => seen,
-            b => b.is_none_or(|b| b.holds(r.status)) && (!seen || self.keep == Some(r.id)),
+            b => b.is_none_or(|b| b.holds(r.status, mended.contains(&r.id))) && (!seen || self.keep == Some(r.id)),
         }
     }
 
     /// How many runs a filter choice would show on its own.
     pub fn count(&self, p: &Pick, runs: &[Run]) -> usize {
+        let mended = mended(runs);
         runs.iter()
             .filter(|r| match p {
-                Pick::Repo(x) => x.as_ref().is_none_or(|x| *x == r.repo) && self.in_state(None, r),
-                Pick::State(b) => self.in_state(*b, r),
-                Pick::Workflow(w) => w.as_ref().is_none_or(|w| *w == r.workflow) && self.in_state(None, r),
+                Pick::Repo(x) => x.as_ref().is_none_or(|x| *x == r.repo) && self.in_state(None, r, &mended),
+                Pick::State(b) => self.in_state(*b, r, &mended),
+                Pick::Workflow(w) => w.as_ref().is_none_or(|w| *w == r.workflow) && self.in_state(None, r, &mended),
             })
             .count()
     }
@@ -534,7 +578,8 @@ impl ActState {
     }
 
     pub fn shown<'a>(&self, runs: &'a [Run]) -> Vec<&'a Run> {
-        runs.iter().filter(|r| self.matches(r)).collect()
+        let mended = mended(runs);
+        runs.iter().filter(|r| self.matches_in(r, &mended)).collect()
     }
 
     pub fn selected<'a>(&self, runs: &'a [Run]) -> Option<&'a Run> {
@@ -554,7 +599,8 @@ impl ActState {
                 out.push(shown[sel - d]);
             }
         }
-        out.extend(runs.iter().filter(|r| !self.matches(r)));
+        let mended = mended(runs);
+        out.extend(runs.iter().filter(|r| !self.matches_in(r, &mended)));
         out
     }
 
@@ -737,7 +783,7 @@ mod tests {
     #[test]
     fn filters_narrow_and_keys_move() {
         let runs = runs();
-        let mut s = ActState::default();
+        let mut s = ActState { state: None, ..Default::default() };
         assert_eq!(s.shown(&runs).len(), 3);
         s.apply(Pick::State(Some(Bucket::Active)));
         assert_eq!(s.shown(&runs).len(), 1);
@@ -755,10 +801,50 @@ mod tests {
     }
 
     #[test]
+    fn a_failure_a_later_pass_mended_is_set_aside() {
+        let mut runs = runs();
+        // 11 failed on feat/x; 13 is a pass of the same workflow on main (other branch).
+        assert!(mended(&runs).is_empty());
+        let mut later = runs[0].clone();
+        later.id = 20;
+        later.started_at = "2026-10-12T10:00:00Z".into();
+        later.status = Status::Ok;
+        // Another workflow does not mend it.
+        let mut other = later.clone();
+        other.id = 21;
+        other.workflow_id += 1;
+        runs.push(other);
+        assert!(mended(&runs).is_empty());
+        // Another branch does not either.
+        let mut off = later.clone();
+        off.id = 22;
+        off.branch = "dev".into();
+        runs.push(off);
+        assert!(mended(&runs).is_empty());
+        // The same workflow and branch, later and passed, does.
+        runs.push(later.clone());
+        assert_eq!(mended(&runs), [11].into());
+        let s = ActState::default();
+        let ids = |s: &ActState, runs: &[Run]| s.shown(runs).iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(ids(&s, &runs), [12]); // only the running one: the failure is mended
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Fixed)), &runs), 1);
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Bad)), &runs), 0);
+        assert_eq!(s.count(&Pick::State(Some(Bucket::Attention)), &runs), 1);
+        // A failure after the pass is not mended.
+        let mut again = later;
+        again.id = 30;
+        again.status = Status::Bad;
+        again.started_at = "2026-10-12T11:00:00Z".into();
+        runs.push(again);
+        assert_eq!(mended(&runs), [11].into());
+        assert_eq!(ids(&s, &runs), [12, 30]);
+    }
+
+    #[test]
     fn the_runs_near_the_selected_one_come_first() {
         let runs = runs();
         let ids = |s: &ActState| s.near_first(&runs).iter().map(|r| r.id).collect::<Vec<_>>();
-        let mut s = ActState::default();
+        let mut s = ActState { state: None, ..Default::default() };
         assert_eq!(ids(&s), [11, 12, 13]);
         s.sel = 1;
         assert_eq!(ids(&s), [12, 13, 11]);
@@ -776,7 +862,7 @@ mod tests {
         let runs = runs();
         let ids = |s: &ActState| s.shown(&runs).iter().map(|r| r.id).collect::<Vec<_>>();
         // 13 is the successful one, third.
-        let mut s = ActState { sel: 2, ..Default::default() };
+        let mut s = ActState { sel: 2, state: None, ..Default::default() };
         assert!(!s.settle(&runs, 10.0, true));
         assert!(!s.settle(&runs, 10.5, true));
         assert!(s.settle(&runs, 11.0, true));
@@ -800,7 +886,7 @@ mod tests {
     fn a_cancelled_run_looked_at_is_seen_too() {
         let mut runs = runs();
         runs[2].status = Status::Idle;
-        let mut s = ActState { sel: 2, ..Default::default() };
+        let mut s = ActState { sel: 2, state: None, ..Default::default() };
         s.settle(&runs, 10.0, true);
         assert!(s.settle(&runs, 11.0, true));
         s.key('k', &runs);
@@ -813,7 +899,7 @@ mod tests {
     #[test]
     fn a_run_passed_over_or_failed_stays() {
         let runs = runs();
-        let mut s = ActState { sel: 2, ..Default::default() };
+        let mut s = ActState { sel: 2, state: None, ..Default::default() };
         s.settle(&runs, 10.0, true);
         // Left at once, by the key read before this frame.
         s.key('k', &runs);
@@ -839,7 +925,7 @@ mod tests {
     #[test]
     fn the_selection_stays_on_its_run_when_one_comes_above_it() {
         let runs = runs();
-        let mut s = ActState { sel: 1, ..Default::default() };
+        let mut s = ActState { sel: 1, state: None, ..Default::default() };
         let mut more = runs.clone();
         more.insert(0, Run { id: 99, ..runs[2].clone() });
         s.stay(&runs, &more);
