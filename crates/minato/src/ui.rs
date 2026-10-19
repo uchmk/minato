@@ -2,7 +2,7 @@
 //! with the painter on the rects it lays out itself, so nothing here scrolls
 //! (docs/design.md: no scrollbar anywhere).
 
-use egui::{pos2, vec2, Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, ViewportCommand};
+use egui::{pos2, vec2, Align2, Color32, CornerRadius, CursorIcon, FontId, Rect, Sense, Stroke, StrokeKind, Ui};
 use ito_common::Clock;
 
 use ito_layout::Node;
@@ -161,7 +161,8 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
     let title = Rect::from_min_size(rect.min, vec2(rect.width(), TITLE_H));
     let keybar = Rect::from_min_max(pos2(rect.left(), rect.bottom() - KEYBAR_H), rect.max);
     let mut body = Rect::from_min_max(title.left_bottom(), pos2(rect.right(), keybar.top()));
-    title_bar(ui, app, title, &mut out);
+    let mut bar = ui.new_child(egui::UiBuilder::new().max_rect(title));
+    title_bar(&mut bar, app, &mut out);
     // The built-in browser takes the right of the view.
     let page = app.browser_w.filter(|_| app.mode != Mode::Help).map(|w| {
         let w = browser_width(w, body.width());
@@ -185,7 +186,6 @@ pub fn frame(ui: &mut Ui, app: &App) -> Out {
         browser_edge(ui, page, &mut out);
     }
     key_bar(ui, app, keybar, &mut out);
-    ui.painter().line_segment([title.left_bottom(), title.right_bottom()], Stroke::new(1.0, c.border));
     ui.painter().line_segment([keybar.left_top(), keybar.right_top()], Stroke::new(1.0, c.border));
     // The notifications hang from the bell over the view, as in tsumugi.
     if app.mode == Mode::Notes {
@@ -217,45 +217,41 @@ fn browser_edge(ui: &Ui, page: Rect, out: &mut Out) {
     }
 }
 
-fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
-    let ctx = ui.ctx().clone();
+fn title_bar(ui: &mut Ui, app: &App, out: &mut Out) {
+    let words = ito_titlebar::Words {
+        search: app.tr("palette.hint"),
+        search_key: "Ctrl+Shift+P",
+        bell: app.tr("bell"),
+        minimize: app.tr("win.minimize"),
+        maximize: app.tr("win.maximize"),
+        restore: app.tr("win.restore"),
+        close: app.tr("win.close"),
+    };
+    let spec = ito_titlebar::Spec {
+        own: true,
+        left: 0.0,
+        maximized: ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false)),
+        unread: app.unread as usize,
+        any_error: false,
+        centre: true,
+        words,
+    };
+    let bar = ito_titlebar::show(ui, &spec, |ui, r| title_left(ui, app, r, out), |ui, free| title_right(ui, app, free));
+    if let Some(op) = bar.window {
+        ito_titlebar::apply(ui.ctx(), op, spec.maximized);
+    }
+    out.palette |= bar.search;
+    out.bell |= bar.bell;
+    out.bell_at = bar.bell_rect;
+}
+
+/// The right slot: the account, a round mark that will hold the avatar,
+/// ringed while another's repositories are shown.
+fn title_right(ui: &mut Ui, app: &App, free: Rect) {
     let c = ito_theme::colors();
-    // The whole bar drags the window; what is drawn over it is registered
-    // later, so it takes the pointer first.
-    let drag = ui.interact(r, ui.id().with("title-drag"), Sense::click_and_drag());
-    if drag.drag_started() {
-        ctx.send_viewport_cmd(ViewportCommand::StartDrag);
-    }
-    if drag.double_clicked() {
-        let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-        ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-    }
     let p = ui.painter().clone();
-    let mid = r.center().y;
-    // The window buttons on the right.
-    let mut right = r.right();
-    for (k, kind) in [Caption::Close, Caption::Maximize, Caption::Minimize].into_iter().enumerate() {
-        let b = Rect::from_min_max(pos2(right - 46.0, r.top()), pos2(right, r.bottom() - 1.0));
-        let resp = ui.interact(b, ui.id().with(("caption", k)), Sense::click());
-        if resp.hovered() {
-            let fill = if kind == Caption::Close { Color32::from_rgb(0xC4, 0x2B, 0x1C) } else { c.panel };
-            p.rect_filled(b, 0.0, fill);
-        }
-        let ink = if resp.hovered() && kind == Caption::Close { Color32::WHITE } else { c.fg };
-        caption_glyph(&p, b.center(), kind, ink, ctx.input(|i| i.viewport().maximized.unwrap_or(false)));
-        if resp.clicked() {
-            match kind {
-                Caption::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
-                Caption::Minimize => ctx.send_viewport_cmd(ViewportCommand::Minimized(true)),
-                Caption::Maximize => {
-                    let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                    ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-                }
-            }
-        }
-        right = b.left();
-    }
-    right -= 8.0;
+    let mid = free.center().y;
+    let right = free.right();
     // The account: a round mark that will hold the avatar, ringed while
     // another's repositories are shown.
     let acct = Rect::from_center_size(pos2(right - 12.0, mid), vec2(24.0, 24.0));
@@ -275,7 +271,16 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         );
     }
     resp.on_hover_text(hover);
-    right = acct.left() - 10.0;
+}
+
+/// The left slot: the logo, the name and the tabs. Returns where it ended.
+fn title_left(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) -> f32 {
+    let ctx = ui.ctx().clone();
+    let c = ito_theme::colors();
+    let p = ui.painter().clone();
+    let mid = r.center().y;
+    // Room for the account at the right, the bell and the palette box.
+    let right = r.right() - 34.0 - 34.0;
     // The tabs, each with its digit and label. On a narrow window (or a large
     // zoom) the name goes first, then the labels of the tabs not shown, so
     // the bell always has room right of them.
@@ -343,93 +348,7 @@ fn title_bar(ui: &mut Ui, app: &App, r: Rect, out: &mut Out) {
         }
         x = tab.right() + 2.0;
     }
-    let left_end = x;
-    // The palette field in the middle of what is left, the bell just right
-    // of it as in tsumugi.
-    let free = Rect::from_min_max(pos2(left_end + 12.0, r.top()), pos2(right - 34.0, r.bottom()));
-    let w = (free.width()).clamp(0.0, 420.0);
-    let mut bell_left = (right - 28.0).max(left_end + 6.0);
-    if w > 120.0 {
-        let field = Rect::from_center_size(pos2(r.center().x.clamp(free.left() + w / 2.0, free.right() - w / 2.0), mid), vec2(w, 26.0));
-        let resp = ui.interact(field, ui.id().with("palette"), Sense::click());
-        p.rect_filled(field, CornerRadius::same(7), if resp.hovered() { c.panel } else { c.side });
-        p.rect_stroke(field, CornerRadius::same(7), Stroke::new(1.0, c.border), StrokeKind::Inside);
-        // The key goes first when both do not fit: the name says what it is.
-        let hint = p.layout_no_wrap(app.tr("palette.hint").to_string(), FontId::proportional(12.5), c.dim);
-        let key = p.layout_no_wrap("Ctrl+Shift+P".into(), FontId::monospace(11.0), c.dim);
-        let p = p.with_clip_rect(field.shrink(1.0));
-        p.galley(pos2(field.left() + 10.0, mid - hint.size().y / 2.0), hint.clone(), c.dim);
-        if hint.size().x + key.size().x + 36.0 <= field.width() {
-            p.galley(pos2(field.right() - 10.0 - key.size().x, mid - key.size().y / 2.0), key, c.dim);
-        }
-        if resp.clicked() {
-            out.palette = true;
-        }
-        bell_left = field.right() + 6.0;
-    }
-    // The bell with the unread count, as in tsumugi: 28 by 24, the cup dim
-    // while nothing is unread, a gold badge ("9+" past nine) when something is.
-    let bell = Rect::from_min_size(pos2(bell_left, mid - 12.0), vec2(28.0, 24.0));
-    let resp = ui.interact(bell, ui.id().with("bell"), Sense::click());
-    if resp.hovered() {
-        p.rect_filled(bell, CornerRadius::same(6), c.panel);
-    }
-    draw_bell(&p, bell.center() + vec2(0.0, -1.0), if app.unread == 0 { c.dim } else { c.fg });
-    if app.unread > 0 {
-        let at = bell.right_top() + vec2(-5.0, 5.0);
-        p.circle_filled(at, 7.0, c.wait);
-        let text = if app.unread > 9 { "9+".to_string() } else { app.unread.to_string() };
-        p.text(at, Align2::CENTER_CENTER, text, FontId::proportional(10.0), c.bg);
-    }
-    if resp.clicked() {
-        out.bell = true;
-    }
-    out.bell_at = Some(bell);
-    resp.on_hover_text(app.tr("bell"));
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Caption {
-    Minimize,
-    Maximize,
-    Close,
-}
-
-fn caption_glyph(p: &egui::Painter, at: Pos2, kind: Caption, ink: Color32, maximized: bool) {
-    let s = Stroke::new(1.0, ink);
-    match kind {
-        Caption::Minimize => {
-            p.line_segment([at - vec2(5.0, 0.0), at + vec2(5.0, 0.0)], s);
-        }
-        Caption::Maximize if maximized => {
-            p.rect_stroke(Rect::from_center_size(at + vec2(-1.0, 1.0), vec2(8.0, 8.0)), 0.0, s, StrokeKind::Middle);
-            p.line_segment([at + vec2(-2.0, -4.5), at + vec2(4.5, -4.5)], s);
-            p.line_segment([at + vec2(4.5, -4.5), at + vec2(4.5, 2.0)], s);
-        }
-        Caption::Maximize => {
-            p.rect_stroke(Rect::from_center_size(at, vec2(9.0, 9.0)), 0.0, s, StrokeKind::Middle);
-        }
-        Caption::Close => {
-            p.line_segment([at - vec2(4.5, 4.5), at + vec2(4.5, 4.5)], s);
-            p.line_segment([at + vec2(-4.5, 4.5), at + vec2(4.5, -4.5)], s);
-        }
-    }
-}
-
-fn draw_bell(p: &egui::Painter, c: Pos2, ink: Color32) {
-    let stroke = Stroke::new(1.4, ink);
-    let cup = vec![
-        c + vec2(-5.5, 4.0),
-        c + vec2(-4.5, -1.0),
-        c + vec2(-3.0, -4.5),
-        c + vec2(0.0, -5.5),
-        c + vec2(3.0, -4.5),
-        c + vec2(4.5, -1.0),
-        c + vec2(5.5, 4.0),
-    ];
-    p.add(egui::Shape::line(cup, stroke));
-    p.line_segment([c + vec2(-6.5, 4.0), c + vec2(6.5, 4.0)], stroke);
-    p.circle_filled(c + vec2(0.0, 6.2), 1.4, ink);
+    x
 }
 
 /// The logo as a texture, made once from the icon's own drawing.
@@ -764,73 +683,9 @@ pub fn toast(ctx: &egui::Context, app: &App, page: Option<Rect>) {
     ctx.request_repaint_after(left);
 }
 
-/// A window without the system's frame is resized by its edges: a strip
-/// along each, and the corners, set the pointer and start the system's
-/// resizing on the press. Called last in a frame, so its pointer is the one
-/// shown. Not while maximized.
-pub fn resize_edges(ctx: &egui::Context) {
-    use egui::{CursorIcon as C, ResizeDirection as D};
-    if ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
-        return;
-    }
-    let (pos, pressed) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.primary_pressed()));
-    let Some(p) = pos else { return };
-    let Some(dir) = edge_at(ctx.content_rect(), p) else { return };
-    ctx.set_cursor_icon(match dir {
-        D::North | D::South => C::ResizeVertical,
-        D::East | D::West => C::ResizeHorizontal,
-        D::NorthWest | D::SouthEast => C::ResizeNwSe,
-        D::NorthEast | D::SouthWest => C::ResizeNeSw,
-    });
-    if pressed {
-        ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
-    }
-}
-
-/// Which edge or corner of `r` the point `p` is on, if any. The top edge is
-/// thinner: the band under it is the title bar to drag by.
-fn edge_at(r: Rect, p: Pos2) -> Option<egui::ResizeDirection> {
-    use egui::ResizeDirection as D;
-    const EDGE: f32 = 6.0;
-    const CORNER: f32 = 12.0;
-    if !r.contains(p) {
-        return None;
-    }
-    let (left, right) = (p.x - r.left() < EDGE, r.right() - p.x < EDGE);
-    let (top, bottom) = (p.y - r.top() < EDGE / 2.0, r.bottom() - p.y < EDGE);
-    let (near_left, near_right) = (p.x - r.left() < CORNER, r.right() - p.x < CORNER);
-    let (near_top, near_bottom) = (p.y - r.top() < CORNER, r.bottom() - p.y < CORNER);
-    let dir = match () {
-        _ if (top && near_left) || (left && near_top) => D::NorthWest,
-        _ if (top && near_right) || (right && near_top) => D::NorthEast,
-        _ if (bottom && near_left) || (left && near_bottom) => D::SouthWest,
-        _ if (bottom && near_right) || (right && near_bottom) => D::SouthEast,
-        _ if top => D::North,
-        _ if bottom => D::South,
-        _ if left => D::West,
-        _ if right => D::East,
-        _ => return None,
-    };
-    Some(dir)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui::ResizeDirection as D;
-
-    #[test]
-    fn edges_and_corners() {
-        let r = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
-        assert_eq!(edge_at(r, pos2(400.0, 300.0)), None);
-        assert_eq!(edge_at(r, pos2(400.0, 599.0)), Some(D::South));
-        assert_eq!(edge_at(r, pos2(1.0, 300.0)), Some(D::West));
-        assert_eq!(edge_at(r, pos2(799.0, 599.0)), Some(D::SouthEast));
-        assert_eq!(edge_at(r, pos2(1.0, 1.0)), Some(D::NorthWest));
-        // Under the thin top edge is the title bar.
-        assert_eq!(edge_at(r, pos2(400.0, 5.0)), None);
-        assert_eq!(edge_at(r, pos2(900.0, 5.0)), None);
-    }
 
     #[test]
     fn the_browser_keeps_room_for_the_view() {

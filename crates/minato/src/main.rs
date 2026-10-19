@@ -465,7 +465,9 @@ impl eframe::App for Minato {
         if self.app.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        ui::resize_edges(&ctx);
+        if !ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
+            ito_titlebar::resize_edges(&ctx);
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -602,11 +604,11 @@ fn main() -> eframe::Result {
         .with_title("minato")
         .with_inner_size([1280.0, 800.0])
         .with_min_inner_size([720.0, 420.0])
-        // The frame is drawn by ui.rs: the title bar, the buttons, the edges.
-        .with_decorations(false)
         // Alt+Tab and the taskbar; build.rs bakes the same drawing into
         // minato.exe for Explorer.
         .with_icon(std::sync::Arc::new(egui::IconData { rgba: icon::pixels(ICON_PX), width: ICON_PX, height: ICON_PX }));
+    // The frame is drawn by ito-titlebar: the bar, the buttons, the edges.
+    let viewport = ito_titlebar::frameless(viewport);
     let viewport = saved.viewport(viewport);
     let viewport = if first.always_on_top { viewport.with_always_on_top() } else { viewport };
     let options = eframe::NativeOptions { viewport, ..Default::default() };

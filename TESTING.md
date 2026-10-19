@@ -16,6 +16,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 1.4 | Drag each edge and corner | The window resizes with the matching pointer; nothing resizes while maximised |
 | 1.5 | Shrink the window | It stops at 720x420; nothing scrolls and no scrollbar appears anywhere; each view still fits (section 30) |
 | 1.6 | Look at the exe in Explorer and the taskbar | The same logo as in the title bar (tile, cyan and gold walls, blue wave, two lights) |
+| 1.7 | Look at the title bar (drawn by `ito-titlebar`, as in tsumugi) | 40 high; the palette box (panel fill, border, 6 corners) sits in the middle of the window, lighter under the pointer, with `Ctrl+Shift+P` at its right; the bell is right of it, with a gold badge for unread notices (`9+` past nine); the three window buttons are 46 wide, close red under the pointer; narrow, the box shrinks to the magnifier alone |
 
 ## 2. Views and keys
 
