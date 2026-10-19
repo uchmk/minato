@@ -137,7 +137,13 @@ impl Minato {
         let Some(rx) = &self.door else { return };
         let me = self.app.viewer.clone().unwrap_or_default();
         while let Ok(ask) = rx.try_recv() {
-            let reply = minato_core::door::answer(&self.app.items, &me, &ask.request);
+            let minato_core::door::Rq::PrState { repo } = &ask.request;
+            let key = repo.to_ascii_lowercase();
+            let reply = minato_core::door::answer(&self.app.items, self.app.past.get(&key).map(Vec::as_slice), &me, &ask.request);
+            // A repository minato lists gets its merged and closed PRs read.
+            if reply.is_ok() {
+                self.app.past_wanted.insert(key);
+            }
             ask.answer(reply);
         }
     }

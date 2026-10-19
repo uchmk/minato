@@ -50,6 +50,9 @@ use crate::overlay::Overlay;
 /// How often the rate limit is asked while plenty is left.
 const POLL: Duration = Duration::from_secs(60);
 
+/// How seldom the merged and closed PRs of a repository the door asks about are read again.
+const PAST_EVERY: Duration = Duration::from_secs(300);
+
 /// How many repositories' runs are asked at once.
 const RUN_LANES: usize = 4;
 
@@ -140,6 +143,9 @@ pub struct Net {
     search_round: u64,
     /// The card whose body was last asked for.
     peek_asked: Option<String>,
+    /// When the merged and closed PRs of a repository the door was asked
+    /// about were last read (by lower-case `owner/name`).
+    past_asked: HashMap<String, Instant>,
     /// The kept answers, until the thread has read them; where to write.
     cache_rx: Option<Receiver<Vec<cache::Entry>>>,
     cache_tx: Option<mpsc::Sender<cache::Entry>>,
@@ -327,6 +333,7 @@ impl Net {
             shown_q: HashMap::new(),
             search_round: 0,
             peek_asked: None,
+            past_asked: HashMap::new(),
             cache_rx,
             cache_tx,
             kept: Default::default(),
@@ -631,6 +638,13 @@ impl Net {
             },
             k @ ("board" | "board-more") if live => self.board_page(app, k, body),
             "board" => self.show_board(app, body, false),
+            k if k.starts_with("past:") => match parse_items(body) {
+                Ok(v) => {
+                    let gone = v.into_iter().filter(|i| i.merged || i.closed).collect();
+                    app.past.insert(k["past:".len()..].to_string(), gone);
+                }
+                Err(e) => app.say(e),
+            },
             k if k.starts_with("peek:") => {
                 app.peeks.insert(k["peek:".len()..].to_string(), board::parse_peek(body));
             }
@@ -1174,6 +1188,19 @@ impl Net {
                 self.pending.insert(o.key.clone(), done);
             }
             quick.send(Job { key: o.key, call: o.call });
+        }
+        // The merged and closed PRs of the repositories the door was asked
+        // about: read when asked and not read for a few minutes.
+        for repo in std::mem::take(&mut app.past_wanted) {
+            let stale = self.past_asked.get(&repo).is_none_or(|t| t.elapsed() >= PAST_EVERY);
+            if stale && !Rate::tighter(&self.rates).is_some_and(|r| r.remaining < BACK_FLOOR) {
+                let q = format!("repo:{repo} is:pr sort:updated-desc");
+                quick.send(Job {
+                    key: format!("past:{repo}"),
+                    call: Call::Graphql { query: items_query(), variables: search_vars(&q, None) },
+                });
+                self.past_asked.insert(repo, Instant::now());
+            }
         }
         // The body of the card under the mouse; only the last one waits.
         if let Some(id) = app.peek_wanted.take() {

@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.70.2] - 2026-10-19
+
+### 追加
+
+- 扉の `PrState` が、最近マージ済み・閉じた PR も返す（minato#68 の後半）。`prs` の開いている PR のあとに `state` が `merged` / `closed` のものが続く（新しい順）。答えの最上位に `past`（それらを取ってあったか）を足した。既存の欄は変えず、PROTO は 1 のまま。
+- 扉に尋ねられたリポジトリだけ、バックグラウンドで検索して（`repo:… is:pr sort:updated-desc`、5 分に 1 回まで、レート制限が `BACK_FLOOR` を切っていれば取らない）メモリに持つ。最初の尋ねは `past: false` で、開いている PR だけを返す。`repo` が `owner/name` の形でなければエラー。
+
 ## [0.70.1] - 2026-10-19
 
 ### 追加

@@ -29,21 +29,28 @@ pub enum Rq {
 ///   "conflict":false,"review":"requested","reviewers":["me"],"ci":"failure"}]}
 /// ```
 ///
-/// Added at the end since v0.70.1: `state` (`open`; merged and closed PRs are
-/// not fetched) and `decision` (`approved`, `changes_requested`, `none`: GitHub's
-/// `reviewDecision`). `review` is `requested` when `viewer` is among the people asked, `waiting`
+/// Added at the end since v0.70.1: `state` (`open`, `merged` or `closed`) and
+/// `decision` (`approved`, `changes_requested`, `none`: GitHub's
+/// `reviewDecision`). The open PRs come first, then the recent merged and
+/// closed ones (`past`, newest first; the net's `past:` job reads them).
+/// `past` at the top is whether those were known when this was answered
+/// (the first ask of a repository starts reading them). `review` is
+/// `requested` when `viewer` is among the people asked, `waiting`
 /// when others are asked, and `none` when nobody is. `ci` is `pending`,
 /// `success`, `failure`, or `none` (no checks).
-pub fn answer(items: &[Item], viewer: &str, rq: &Rq) -> Result<String, String> {
+pub fn answer(items: &[Item], past: Option<&[Item]>, viewer: &str, rq: &Rq) -> Result<String, String> {
     let Rq::PrState { repo } = rq;
+    if !valid(repo) {
+        return Err(format!("{repo} is not owner/name"));
+    }
     let here = |i: &&Item| i.repo.eq_ignore_ascii_case(repo);
     if !items.iter().any(|i| here(&i)) {
         return Err(format!("minato has no items of {repo}"));
     }
-    let prs: Vec<_> = items
-        .iter()
-        .filter(here)
-        .filter(|i| i.kind == Kind::Pr && !i.merged && !i.closed)
+    let open = items.iter().filter(here).filter(|i| i.kind == Kind::Pr && !i.merged && !i.closed);
+    let gone = past.unwrap_or_default().iter().filter(here).filter(|i| i.kind == Kind::Pr && (i.merged || i.closed));
+    let prs: Vec<_> = open
+        .chain(gone)
         .map(|i| {
             let review = if i.reviewers.iter().any(|r| r.eq_ignore_ascii_case(viewer)) {
                 "requested"
@@ -58,14 +65,28 @@ pub fn answer(items: &[Item], viewer: &str, rq: &Rq) -> Result<String, String> {
                 Some(Ci::Pending) => "pending",
                 None => "none",
             };
+            let state = if i.merged {
+                "merged"
+            } else if i.closed {
+                "closed"
+            } else {
+                "open"
+            };
             json!({
                 "branch": i.head, "number": i.number, "url": i.url, "title": i.title, "draft": i.draft,
                 "conflict": i.conflict, "review": review, "reviewers": i.reviewers, "ci": ci,
-                "state": "open", "decision": i.decision.name(),
+                "state": state, "decision": i.decision.name(),
             })
         })
         .collect();
-    Ok(json!({ "repo": repo, "prs": prs }).to_string())
+    Ok(json!({ "repo": repo, "prs": prs, "past": past.is_some() }).to_string())
+}
+
+/// Whether `repo` looks like `owner/name` (it comes from another process and
+/// goes into a search).
+pub fn valid(repo: &str) -> bool {
+    let word = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    repo.split_once('/').is_some_and(|(o, n)| word(o) && word(n))
 }
 
 #[cfg(test)]
@@ -102,7 +123,7 @@ mod tests {
     }
 
     fn ask(items: &[Item]) -> Result<serde_json::Value, String> {
-        answer(items, "me", &Rq::PrState { repo: "o/n".into() }).map(|t| serde_json::from_str(&t).unwrap())
+        answer(items, None, "me", &Rq::PrState { repo: "o/n".into() }).map(|t| serde_json::from_str(&t).unwrap())
     }
 
     #[test]
@@ -134,7 +155,25 @@ mod tests {
     #[test]
     fn an_unknown_repo_has_no_answer_and_a_known_one_without_prs_is_empty() {
         assert!(ask(&[item("o/other", 1, Kind::Pr)]).is_err());
+        assert!(!valid("o n/x") && !valid("o") && !valid("o/n/x") && !valid("/n") && valid("a-b/c_d.e"));
         let v = ask(&[item("o/n", 1, Kind::Issue)]).unwrap();
         assert!(v["prs"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn merged_and_closed_prs_follow_the_open_ones() {
+        let (mut m, mut c) = (item("o/n", 7, Kind::Pr), item("O/N", 8, Kind::Pr));
+        m.merged = true;
+        c.closed = true;
+        let past = [m, c, item("o/n", 9, Kind::Pr), item("o/x", 10, Kind::Pr)];
+        let items = [item("o/n", 1, Kind::Pr)];
+        let t = answer(&items, Some(&past), "me", &Rq::PrState { repo: "o/n".into() }).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+        let states: Vec<_> =
+            v["prs"].as_array().unwrap().iter().map(|p| (p["number"].as_u64().unwrap(), p["state"].as_str().unwrap())).collect();
+        assert_eq!(states, [(1, "open"), (7, "merged"), (8, "closed")]);
+        assert_eq!(v["past"], true);
+        let t = answer(&items, None, "me", &Rq::PrState { repo: "o/n".into() }).unwrap();
+        assert!(t.contains("\"past\":false"));
     }
 }

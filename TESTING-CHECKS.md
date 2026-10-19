@@ -484,3 +484,4 @@
 
 - [ ] **43.1** With minato showing a repository that has open PRs, ask the door (`ito_ipc::door::ask` with `Rq::PrState { repo }`, e.g. from michi's graph) → The JSON lists each open PR with its branch, review and CI as the list shows; asking while the window is idle answers at once (the window wakes); a repository minato does not list answers with an error
 - [ ] **43.2** Close minato and ask again; open two windows and close the first → Not running is reported; the second window takes the door within half a minute
+- [ ] **43.3** Ask the door about a repository twice, a few seconds apart → The first answer has `"past": false` and only open PRs; the second has `"past": true` and, after the open ones, recently merged / closed PRs with `state` `merged` / `closed`

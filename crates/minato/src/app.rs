@@ -470,6 +470,11 @@ pub struct App {
     /// when the mouse is first over one; the card the mouse wants it for.
     pub peeks: HashMap<String, String>,
     pub peek_wanted: Option<String>,
+    /// The recent merged and closed PRs of the repositories the door was asked
+    /// about (by lower-case `owner/name`), and the ones it was asked about
+    /// since the net last looked.
+    pub past: HashMap<String, Vec<Item>>,
+    pub past_wanted: std::collections::HashSet<String>,
     /// Calls the window has asked for; the net takes them.
     pub outbox: Vec<Outgoing>,
     pub quit: bool,
@@ -732,6 +737,8 @@ impl App {
             board_undo: Vec::new(),
             peeks: HashMap::new(),
             peek_wanted: None,
+            past: HashMap::new(),
+            past_wanted: std::collections::HashSet::new(),
             outbox: Vec::new(),
             quit: false,
             // The mock's widths at 1280 px: 400 | rest, and 210 | 470 | rest.
