@@ -29,7 +29,9 @@ pub enum Rq {
 ///   "conflict":false,"review":"requested","reviewers":["me"],"ci":"failure"}]}
 /// ```
 ///
-/// `review` is `requested` when `viewer` is among the people asked, `waiting`
+/// Added at the end since v0.70.1: `state` (`open`; merged and closed PRs are
+/// not fetched) and `decision` (`approved`, `changes_requested`, `none`: GitHub's
+/// `reviewDecision`). `review` is `requested` when `viewer` is among the people asked, `waiting`
 /// when others are asked, and `none` when nobody is. `ci` is `pending`,
 /// `success`, `failure`, or `none` (no checks).
 pub fn answer(items: &[Item], viewer: &str, rq: &Rq) -> Result<String, String> {
@@ -59,6 +61,7 @@ pub fn answer(items: &[Item], viewer: &str, rq: &Rq) -> Result<String, String> {
             json!({
                 "branch": i.head, "number": i.number, "url": i.url, "title": i.title, "draft": i.draft,
                 "conflict": i.conflict, "review": review, "reviewers": i.reviewers, "ci": ci,
+                "state": "open", "decision": i.decision.name(),
             })
         })
         .collect();
@@ -94,6 +97,7 @@ mod tests {
             ci: None,
             peek: String::new(),
             head: format!("b{number}"),
+            decision: Default::default(),
         }
     }
 
@@ -116,6 +120,7 @@ mod tests {
         let v = ask(&items).unwrap();
         let prs = v["prs"].as_array().unwrap();
         assert_eq!(prs.len(), 2);
+        assert_eq!((prs[0]["state"].as_str(), prs[0]["decision"].as_str()), (Some("open"), Some("none")));
         assert_eq!(
             (prs[0]["branch"].as_str(), prs[0]["review"].as_str(), prs[0]["ci"].as_str()),
             (Some("b1"), Some("requested"), Some("failure"))

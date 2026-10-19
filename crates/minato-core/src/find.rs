@@ -125,6 +125,7 @@ mod tests {
             ci: None,
             peek: "Reads it from common.toml.".into(),
             head: String::new(),
+            decision: Default::default(),
         }
     }
 

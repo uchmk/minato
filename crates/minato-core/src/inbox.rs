@@ -514,6 +514,7 @@ mod tests {
             mentioned: false,
             peek: String::new(),
             head: String::new(),
+            decision: Default::default(),
             ci: None,
         }
     }

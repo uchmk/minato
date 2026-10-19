@@ -249,6 +249,7 @@ mod tests {
             ci: None,
             peek: peek.into(),
             head: String::new(),
+            decision: Default::default(),
         }
     }
 

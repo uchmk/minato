@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use crate::list::{peek_of, Check, Ci, Detail, Entry, FileChange, Item, Kind, Label};
+use crate::list::{peek_of, Check, Ci, Decision, Detail, Entry, FileChange, Item, Kind, Label};
 
 const ITEM_COMMON: &str = "id number title url createdAt updatedAt author { login } repository { nameWithOwner } \
 labels(first: 10) { nodes { name color } } comments(last: 1) { totalCount nodes { author { login } } } bodyText";
@@ -20,7 +20,7 @@ pub fn items_query() -> String {
         "query($q: String!, $n: Int!, $after: String) {{ search(query: $q, type: ISSUE, first: $n, after: $after) {{ \
 pageInfo {{ hasNextPage endCursor }} nodes {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft reviewDecision mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }} }}"
     )
 }
@@ -32,7 +32,7 @@ pub fn item_query() -> String {
     format!(
         "query($url: URI!) {{ resource(url: $url) {{ __typename \
 ... on Issue {{ {ITEM_COMMON} state milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} }} \
-... on PullRequest {{ {ITEM_COMMON} state isDraft mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
+... on PullRequest {{ {ITEM_COMMON} state isDraft reviewDecision mergeable headRefName milestone {{ title }} assignees(first: 5) {{ nodes {{ login }} }} {REVIEWERS} \
 commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} }} }}"
     )
 }
@@ -206,6 +206,8 @@ struct RawItem {
     #[serde(rename = "isDraft", default)]
     is_draft: bool,
     mergeable: Option<String>,
+    #[serde(rename = "reviewDecision")]
+    review_decision: Option<String>,
     #[serde(rename = "headRefName")]
     head: Option<String>,
     assignees: Option<Nodes<Login>>,
@@ -285,6 +287,11 @@ fn item_of(n: RawItem) -> Option<Item> {
         ci,
         peek: n.body_text.as_deref().map(peek_of).unwrap_or_default(),
         head: n.head.unwrap_or_default(),
+        decision: match n.review_decision.as_deref() {
+            Some("APPROVED") => Decision::Approved,
+            Some("CHANGES_REQUESTED") => Decision::ChangesRequested,
+            _ => Decision::None,
+        },
     })
 }
 
@@ -478,6 +485,10 @@ mod tests {
         assert_eq!((i.id.as_str(), i.number, i.merged, i.closed, i.kind), ("PR_9", 9, true, false, Kind::Pr));
         let i = parse_item(&body.replace("MERGED", "CLOSED")).unwrap().unwrap();
         assert!(i.closed && !i.merged);
+        assert_eq!(i.decision, Decision::None);
+        let i = parse_item(&body.replace(r#""isDraft""#, r#""reviewDecision":"CHANGES_REQUESTED","isDraft""#)).unwrap().unwrap();
+        assert_eq!(i.decision, Decision::ChangesRequested);
+        assert!(items_query().contains("reviewDecision"));
         assert_eq!(parse_item(r#"{"data":{"resource":{"__typename":"Commit"}}}"#), Ok(None));
         assert_eq!(parse_item(r#"{"data":{"resource":null}}"#), Ok(None));
         assert!(parse_item(r#"{"data":null,"errors":[{"message":"nope"}]}"#).is_err());

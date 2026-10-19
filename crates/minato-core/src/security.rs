@@ -328,6 +328,7 @@ pub fn stubs(alerts: &[Alert]) -> Vec<Item> {
                 mentioned: false,
                 peek: a.place.clone(),
                 head: String::new(),
+                decision: Default::default(),
                 ci: None,
                 repo: a.repo.clone(),
             }

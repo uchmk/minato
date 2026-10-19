@@ -63,6 +63,7 @@ pub fn parse(body: &str) -> Result<Vec<Item>, String> {
                 mentioned: false,
                 peek: String::new(),
                 head: String::new(),
+                decision: Default::default(),
                 ci: Some(Ci::Bad),
                 repo,
             }

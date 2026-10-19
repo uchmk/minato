@@ -72,6 +72,28 @@ pub struct Item {
     pub peek: String,
     /// A PR's branch (empty for issues and discussions).
     pub head: String,
+    /// A PR's review decision (GitHub's `reviewDecision`).
+    pub decision: Decision,
+}
+
+/// What the reviews of a PR add up to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Decision {
+    #[default]
+    None,
+    Approved,
+    ChangesRequested,
+}
+
+impl Decision {
+    /// The word the door says.
+    pub fn name(self) -> &'static str {
+        match self {
+            Decision::None => "none",
+            Decision::Approved => "approved",
+            Decision::ChangesRequested => "changes_requested",
+        }
+    }
 }
 
 /// The start of a body as GitHub's plain text gives it: no blank lines, at
@@ -647,6 +669,7 @@ mod tests {
             mentioned: false,
             peek: String::new(),
             head: String::new(),
+            decision: Default::default(),
             ci: None,
         }
     }

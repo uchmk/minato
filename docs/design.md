@@ -272,4 +272,5 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
 - 依頼: `Rq::PrState { repo: "owner/name" }`（`minato-core::door`。postcard で番号を振るので、足すときは後ろへ）。
 - 答え（JSON、メモリの項目から。GitHub には問い合わせない）: `{"repo", "prs": [{"branch", "number", "url", "title", "draft", "conflict", "review", "reviewers", "ci"}]}`。
   開いている PR だけ。`review` は自分に頼まれていれば `requested`、ほかの人にだけなら `waiting`、誰にも頼んでいなければ `none`（承認・変更の依頼の状態は持っていない）。`ci` は `success`・`failure`・`pending`・`none`。
+- 末尾の欄（v0.70.1 から）: `state`（`open` のみ。マージ済み・閉じた PR は検索しないので返さない）と `decision`（`approved`・`changes_requested`・`none`）。
 - minato が検索していないリポジトリは答え無し（エラー）。PR が無いリポジトリは `prs` が空。

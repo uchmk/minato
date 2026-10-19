@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.70.1] - 2026-10-19
+
+### 追加
+
+- 扉の `PrState` の答えに `state`（今は `open` だけ。マージ済み・閉じた PR は取っていない）と `decision`（`approved` / `changes_requested` / `none`、GitHub の `reviewDecision`）を末尾に足した（minato#68）。既存の欄は変えず、PROTO は 1 のまま。検索の問い合わせに `reviewDecision` を足した。
+
 ## [0.70.0] - 2026-10-19
 
 ### 追加
