@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.68.1] - 2026-10-19
+
+### 変更
+
+- ito を rev 382f9ea（v0.88.0）に上げた（全部のクレートを同じ rev に）。ito が `ito-titlebar` と `ito-notices` を必須にしたので、`scripts/ito-required.txt` を同期した。通知の一覧（`ito-notices`）は、リポジトリ・番号・受信箱の印・理由の色・折りたたみを持つ minato の一覧（docs/design.md で確定）と合わないので、`scripts/ito-first.allow` に理由を書いて見送った。
+
 ## [0.68.0] - 2026-10-19
 
 ### 変更
