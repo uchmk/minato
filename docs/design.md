@@ -264,3 +264,12 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
 ## v0.56.0 の足し
 
 状況・安全の詳細欄は Actions の実行の詳細と同じ並び: チップ（リポジトリ・種類・id・状態）、タイトル、メタ行、ラベル、次にすること（キー付き）、節（チェック・事実・ファイル・本文）。仕切りの位置は state.toml の `security`・`status` に保存する。
+
+## 扉（v0.70.0 から、minato#67）
+
+ほかのアプリ（michi）が、minato の窓に PR の状態を尋ねられる。`ito_ipc::door::Door::new("minato", "MINATO_ADDRESS", PROTO)`、読むだけ。窓が無ければ「minato is not running」で、尋ねた側は何も出さない。`--keys` の窓は扉を開かない。
+
+- 依頼: `Rq::PrState { repo: "owner/name" }`（`minato-core::door`。postcard で番号を振るので、足すときは後ろへ）。
+- 答え（JSON、メモリの項目から。GitHub には問い合わせない）: `{"repo", "prs": [{"branch", "number", "url", "title", "draft", "conflict", "review", "reviewers", "ci"}]}`。
+  開いている PR だけ。`review` は自分に頼まれていれば `requested`、ほかの人にだけなら `waiting`、誰にも頼んでいなければ `none`（承認・変更の依頼の状態は持っていない）。`ci` は `success`・`failure`・`pending`・`none`。
+- minato が検索していないリポジトリは答え無し（エラー）。PR が無いリポジトリは `prs` が空。

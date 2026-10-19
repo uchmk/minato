@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.70.0] - 2026-10-19
+
+### 追加
+
+- 扉（`ito-ipc::door`、uchmk/minato#67）: 窓が持ち主ごとの扉 `minato`（`MINATO_ADDRESS` で別の場所に）を開き、`PrState { repo }` に、そのリポジトリの開いている PR を JSON で答える（ブランチ・番号・URL・題・下書き・競合・レビュー（`requested` / `waiting` / `none`）・CI（`success` / `failure` / `pending` / `none`））。メモリにある項目から答え、GitHub には問い合わせない。minato が検索していないリポジトリと、動いていないときは答え無し。`--keys` の窓は開かない。michi が読む。形は `docs/design.md` の「扉」。
+- ito を rev 7c89de0（v0.90.0）に上げた（全部のクレートを同じ rev に）。
+
 ## [0.69.1] - 2026-10-19
 
 ### 変更

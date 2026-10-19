@@ -479,3 +479,8 @@
 - [ ] **42.7** Settings About: look at the page and press the report button → Version, commit, system and license show and copy; the button opens the same screen as `F12`
 - [ ] **42.8** Settings Advanced: press export with the default file name, change `common.toml`, then press import twice → A toast says how many files were written; the file has `common.toml`, `config.toml` and the `keymap.toml`, with every webhook address in `config.toml` left empty; after the import the change is undone, `common.toml.bak-<time>` is kept, the webhook addresses set here are still there and a toast says how many were restored; searching `export` finds the card
 - [ ] **42.9** Put `minato-settings.json`, `minato-searches.txt` and `minato-marks.json` (from v0.60) beside `common.toml` with no `config.toml`, then start minato → A toast says the settings moved; `config.toml` in the config folder has the settings, the saved searches and `[notify]`; `marks.json` is in the state folder; the two old files are renamed `.bak-<time>` and the marks are still on the cards; starting again moves nothing
+
+## 43. The door for other apps
+
+- [ ] **43.1** With minato showing a repository that has open PRs, ask the door (`ito_ipc::door::ask` with `Rq::PrState { repo }`, e.g. from michi's graph) → The JSON lists each open PR with its branch, review and CI as the list shows; asking while the window is idle answers at once (the window wakes); a repository minato does not list answers with an error
+- [ ] **43.2** Close minato and ask again; open two windows and close the first → Not running is reported; the second window takes the door within half a minute

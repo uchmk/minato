@@ -5,6 +5,7 @@ pub mod actions;
 pub mod board;
 pub mod cache;
 pub mod composer;
+pub mod door;
 pub mod find;
 pub mod fold;
 pub mod github;

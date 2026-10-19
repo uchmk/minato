@@ -55,6 +55,9 @@ usage: minato [--keys SCRIPT] [--version | --help]
 
 struct Minato {
     app: App,
+    /// Requests from the door other apps ask (michi's PR / CI state), answered
+    /// from memory in the frame. `None` for a script's window.
+    door: Option<std::sync::mpsc::Receiver<ito_ipc::door::Ask<minato_core::door::Rq>>>,
     net: net::Net,
     /// The built-in browser beside the view (Windows and macOS; Linux opens
     /// the system's, `ito_browser::EMBEDDED`), and where it keeps its
@@ -126,6 +129,16 @@ impl Minato {
         }
         if let Some(due) = self.script.as_ref().and_then(Runner::due) {
             ctx.request_repaint_after(due);
+        }
+    }
+
+    /// The questions waiting at the door, answered from the items in memory.
+    fn answer_door(&mut self) {
+        let Some(rx) = &self.door else { return };
+        let me = self.app.viewer.clone().unwrap_or_default();
+        while let Ok(ask) = rx.try_recv() {
+            let reply = minato_core::door::answer(&self.app.items, &me, &ask.request);
+            ask.answer(reply);
         }
     }
 
@@ -319,6 +332,7 @@ impl eframe::App for Minato {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.answer_door();
         let place = self.app.prefs.common.window_or_default();
         if place.remember_place {
             if let Some(t) = &mut self.tracker {
@@ -666,8 +680,14 @@ fn main() -> eframe::Result {
                 r
             });
             let web_dir = ito_common::state_dir("minato").map(|d| d.join("webview"));
+            // A script's window leaves the door to the real one.
+            let door = script.is_none().then(|| {
+                let ctx = cc.egui_ctx.clone();
+                ito_ipc::door::Door::new("minato", minato_core::door::ENV, minato_core::door::PROTO).listen(move || ctx.request_repaint())
+            });
             Ok(Box::new(Minato {
                 app,
+                door,
                 net,
                 browser: None,
                 web_dir,
