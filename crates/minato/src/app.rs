@@ -327,7 +327,6 @@ pub enum Wheel {
     Acts(actions::Col),
     /// A column of the board.
     Board(usize),
-    Notes,
     /// The status view's lines.
     Status,
     /// The security view's alerts.
@@ -938,9 +937,6 @@ impl App {
                         self.bs.col = col;
                         self.bs.key(key, p);
                     }
-                }
-                Wheel::Notes => {
-                    self.ns.key(key, self.notes.len());
                 }
                 Wheel::Status => {
                     self.status_key(key);

@@ -1,2 +1,1 @@
 # Known gaps against ito, kept visible on purpose: `<crate> <reason>`. Each line is a migration still to do, not a decision to stay.
-ito-notices minato's list is GitHub threads with the repo, number, inbox badge, reason tone and folding the owner fixed in docs/design.md; ito-notices' newest-first rows lack these, so adopting it needs the owner's say

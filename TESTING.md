@@ -165,8 +165,9 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 11.1 | Press `n` with unread GitHub notifications | A list hangs from the bell over the view, where tsumugi's does: "Notifications N unread" on top; each row shows the unread dot, the repository tag, the number, an `Inbox` badge when the thread is a card there, the age, what happened in its colour (the inbox's reason, else why GitHub sent it) and the title; the rows that do not fit hide, none is folded to one line |
+| 11.1 | Press `n` with unread GitHub notifications | The list of `ito-notices` hangs from the bell, its right edge under it: "Notifications (N unread)" and "Mark all read" on top; newest first, each row with a dot in the tone's colour, `repo #number title`, the age at the right (`3m ago`), a word (`done`/`update`/`failed`/`your turn`) and under it what happened (the inbox's reason, else why GitHub sent it; `· Inbox` when the thread is a card there) |
 | 11.2 | Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) | The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one |
+| 11.1b | In the list press `↓`/`↑`, `j`/`k`, then `Enter`; also click a row | The highlight follows both kinds of key and the mouse; `Enter` and a click open the highlighted notification once (it goes from the list, as `d`/`o` do); the wheel scrolls a long list |
 | 11.2a | Press `d` on a card in the inbox, then `Enter` on a notification of the same thread | The inbox opens on that card under "Done today" (the notification has no `Inbox` badge) |
 | 11.3 | Press `d` on a thread | The row goes without opening anything; after a refresh it stays gone on GitHub |
 | 11.4 | Press `A` | All rows go, a toast says so, and the bell shows none; GitHub shows them read |

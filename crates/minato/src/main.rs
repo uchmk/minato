@@ -225,6 +225,9 @@ impl Minato {
                 },
                 egui::Event::Cut => _ = self.app.press(ito_keys::Key::ctrl('x')),
                 egui::Event::Paste(_) => _ = self.app.press(ito_keys::Key::ctrl('v')),
+                // The notifications list moves and opens by these itself.
+                egui::Event::Key { key: egui::Key::Enter | egui::Key::ArrowUp | egui::Key::ArrowDown, pressed: true, .. }
+                    if self.app.mode == Mode::Notes => {}
                 // The rest through keymap.toml; the characters come as text.
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
                     if let Some(k) = ito_keys::from_egui(key, &modifiers) {
@@ -423,6 +426,11 @@ impl eframe::App for Minato {
             }
             if let Some(n) = out.split {
                 self.app.set_split(self.app.view, n);
+            }
+            if was == Mode::Notes {
+                if let Some(c) = notes_ui::cursor(&ctx) {
+                    self.app.ns.sel = c;
+                }
             }
             if let Some(n) = out.note {
                 self.app.note_click(n);
