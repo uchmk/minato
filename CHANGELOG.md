@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.69.1] - 2026-10-19
+
+### 変更
+
+- ito を rev 0eec268（v0.89.1）に上げた（全部のクレートを同じ rev に）。`lane-trust.ps1` の Linux の直しなどが入る。
+
 ## [0.69.0] - 2026-10-19
 
 ### 変更
