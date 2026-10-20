@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.71.1] - 2026-10-20
+
+### 追加
+
+- 起動したときに、その実行が描くのに使ったもの（GPU のアダプタ・バックエンド・種類・ppp）を状態のフォルダの `last-run.toml`（`ito_common::runinfo`）に書く（`--keys` の窓は書かない）。F12 の不具合の報告の `context` に Rendering の行が付く（uchmk/minato#65 の 3）。
+
 ## [0.71.0] - 2026-10-20
 
 ### 変更

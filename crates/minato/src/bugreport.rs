@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 use ito_bugreport::Field;
 use ito_bugreport::{Context, Spec};
+use ito_common::runinfo::RunInfo;
 
 /// A fork should point this at its own tracker.
 const REPO: &str = "https://github.com/uchmk/minato";
@@ -19,17 +20,19 @@ fn spec() -> Spec<'static> {
 }
 
 /// The link that opens the report: the `version`, `os` and `context` fields
-/// of the form filled in. `base` is the `uchmk` folder, `scale` common.toml's.
-pub fn url(base: Option<&Path>, scale: f32) -> String {
-    ito_bugreport::url(&spec(), &[("context", context(base, scale))])
+/// of the form filled in. `base` is the `uchmk` folder, `scale` common.toml's,
+/// `run` what the last run used (`last-run.toml`).
+pub fn url(base: Option<&Path>, scale: f32, run: Option<&RunInfo>) -> String {
+    ito_bugreport::url(&spec(), &[("context", context(base, scale, run))])
 }
 
-fn context(base: Option<&Path>, scale: f32) -> String {
+fn context(base: Option<&Path>, scale: f32, run: Option<&RunInfo>) -> String {
     let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(PathBuf::from);
     let files: Vec<PathBuf> =
         base.map(|b| [ito_common::common_path(b), crate::prefs::keymap_path(b)]).into_iter().flatten().filter(|p| p.is_file()).collect();
     ito_bugreport::context(&Context {
         home: home.as_deref(),
+        rendering: run.and_then(RunInfo::rendering),
         scale: Some(scale),
         config: &files,
         anchors: &["uchmk", "minato"],
@@ -80,7 +83,7 @@ mod tests {
     #[test]
     fn the_link_names_the_app_and_never_a_path() {
         let dir = std::env::temp_dir().join("minato-bugreport-test");
-        let u = url(Some(&dir), 1.0);
+        let u = url(Some(&dir), 1.0, None);
         assert!(u.starts_with("https://github.com/uchmk/minato/issues/new?template=bug_report.yml&version=minato%20"), "{u}");
         assert!(u.contains("&context=") && u.contains("Config%3A%20defaults%20only"), "{u}");
         assert!(!u.contains("minato-bugreport-test"), "{u}");

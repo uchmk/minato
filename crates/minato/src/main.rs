@@ -646,6 +646,18 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             saved.put(cc);
             fonts::load_in_background(cc.egui_ctx.clone());
+            // What this run drew with, for the bug report (and `minato env`, when there is one).
+            if script.is_none() {
+                let mut used = ito_common::runinfo::RunInfo::new(env!("CARGO_PKG_VERSION"));
+                if let Some(rs) = cc.wgpu_render_state.as_ref() {
+                    let info = rs.adapter.get_info();
+                    used.adapter = info.name;
+                    used.backend = format!("{:?}", info.backend);
+                    used.device = format!("{:?}", info.device_type);
+                }
+                used.ppp = cc.egui_ctx.pixels_per_point();
+                ito_common::runinfo::save("minato", &used);
+            }
             let mut prefs = prefs::Prefs::load(ito_common::base_dir());
             prefs.watch(&cc.egui_ctx);
             prefs.apply_theme(&cc.egui_ctx);
