@@ -179,10 +179,11 @@
 - [x] **13.1** In the list, press `r`, then `Alt+M`, pick a milestone, `Esc` → A toast says the milestone was updated; the issue or PR shows it on GitHub
 - [ ] **13.2** On a PR press `Alt+R`, tick a person, `Esc` → A toast says the review was requested; GitHub lists the person under Reviewers
 - [x] **13.3** On an issue press `Alt+R` → A toast says reviewers can only be asked on a PR; no picker opens
-- [ ] **13.4** In the inbox press `d` on a card and `s` on another, quit minato and start it again → Both cards are still hidden; `minato-marks.json` sits beside common.toml
+- [ ] **13.4** In the inbox press `d` on a card and `s` on another, quit minato and start it again → Both cards are still hidden; `marks.toml` (one `[[entries]]` per card) sits in the state folder
 - [x] **13.5** Press `d`, then `u`, quit and start again → The card is back (the undo was saved too)
 - [x] **13.6** In the inbox press `c` on a card, then paste into a Claude Code session (or Notepad) → A toast says a prompt for Claude was copied; the paste has the repository, the kind and number, the title and the URL, then the reason the card is there and what to do, in the app's language
 - [x] **13.7** Look at "Waiting" in the inbox → No `Re-test: …` issue, no `Lane status: …` issue, no issue labelled `lane:win`/`lane:arm` or `needs-pc` and no lane PR (`test/win-*`, `test/arm-*`) is in it; your own other open issues and PRs still are
+- [ ] **13.8** With a `marks.json` and a `seen-runs.txt` in the state folder and no `marks.toml` / `seen-runs.toml`, start minato → The marks and the seen runs are still there; `marks.toml` and `seen-runs.toml` are written; the old two files stay; starting again does not read the old ones
 
 ## 14. Settings key, palette field and bell
 
@@ -478,7 +479,7 @@
 - [ ] **42.6** Settings Advanced: press reset → `common.toml`, `keymap.toml` and `config.toml` are moved aside as `.bak-<time>`, the settings return to the defaults and a toast says so
 - [ ] **42.7** Settings About: look at the page and press the report button → Version, commit, system and license show and copy; the button opens the same screen as `F12`
 - [ ] **42.8** Settings Advanced: press export with the default file name, change `common.toml`, then press import twice → A toast says how many files were written; the file has `common.toml`, `config.toml` and the `keymap.toml`, with every webhook address in `config.toml` left empty; after the import the change is undone, `common.toml.bak-<time>` is kept, the webhook addresses set here are still there and a toast says how many were restored; searching `export` finds the card
-- [ ] **42.9** Put `minato-settings.json`, `minato-searches.txt` and `minato-marks.json` (from v0.60) beside `common.toml` with no `config.toml`, then start minato → A toast says the settings moved; `config.toml` in the config folder has the settings, the saved searches and `[notify]`; `marks.json` is in the state folder; the two old files are renamed `.bak-<time>` and the marks are still on the cards; starting again moves nothing
+- [ ] **42.9** Put `minato-settings.json`, `minato-searches.txt` and `minato-marks.json` (from v0.60) beside `common.toml` with no `config.toml`, then start minato → A toast says the settings moved; `config.toml` in the config folder has the settings, the saved searches and `[notify]`; `marks.json` is in the state folder (and `marks.toml` after the next start); the two old files are renamed `.bak-<time>` and the marks are still on the cards; starting again moves nothing
 
 ## 43. The door for other apps
 

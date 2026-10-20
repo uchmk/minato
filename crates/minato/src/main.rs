@@ -658,13 +658,16 @@ fn main() -> eframe::Result {
                 (Some(b), Some(a)) => config::migrate(b, a, state.as_deref()),
                 _ => None,
             };
-            let marks_file = state.as_ref().map(|d| config::marks_path(d));
+            let marks_file = state.as_ref().map(|d| d.join("marks.toml"));
             let settings_file = app_dir.as_ref().map(|d| config::path(d));
             let state_file = state.as_ref().map(|d| d.join("state.toml"));
-            let seen_file = state.as_ref().map(|d| d.join("seen-runs.txt"));
+            let seen_file = state.as_ref().map(|d| d.join("seen-runs.toml"));
+            // A script's window keeps nothing.
+            let keeps = script.is_none();
             let mut app = App::new(prefs);
             if let Some(f) = marks_file {
-                app.keep_marks(f);
+                let old = f.with_file_name("marks.json");
+                app.keep_marks(f, &old, keeps);
             }
             if let Some(f) = settings_file {
                 app.keep_settings(f);
@@ -673,7 +676,8 @@ fn main() -> eframe::Result {
                 app.keep_state(f);
             }
             if let Some(f) = seen_file {
-                app.keep_seen(f);
+                let old = f.with_file_name("seen-runs.txt");
+                app.keep_seen(f, &old, keeps);
             }
             if let Some(files) = moved {
                 let line = app.tr("settings.moved").replacen("{}", &files, 1);

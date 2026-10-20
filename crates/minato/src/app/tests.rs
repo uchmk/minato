@@ -545,9 +545,9 @@ fn reviewers_are_for_prs_only() {
 #[test]
 fn seen_runs_drop_out_and_are_read_back_after_a_restart() {
     let dir = std::env::temp_dir().join(format!("minato-seen-{}", std::process::id()));
-    let file = dir.join("seen.txt");
+    let file = dir.join("seen.toml");
     let mut a = app();
-    a.keep_seen(file.clone());
+    a.keep_seen(file.clone(), &dir.join("none.txt"), true);
     a.view = View::Actions;
     a.acts.state = None;
     a.runs = vec![run(1, actions::Status::Ok, None), run(2, actions::Status::Bad, None)];
@@ -564,7 +564,7 @@ fn seen_runs_drop_out_and_are_read_back_after_a_restart() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let mut b = app();
-    b.keep_seen(file);
+    b.keep_seen(file, &dir.join("none.txt"), true);
     assert_eq!(b.acts.seen, [1].into());
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -572,10 +572,10 @@ fn seen_runs_drop_out_and_are_read_back_after_a_restart() {
 #[test]
 fn marks_are_read_back_after_a_restart() {
     let dir = std::env::temp_dir().join(format!("minato-marks-{}", std::process::id()));
-    let file = dir.join("m.json");
+    let file = dir.join("m.toml");
     let mut a = with_pr();
     a.view = View::Inbox;
-    a.keep_marks(file.clone());
+    a.keep_marks(file.clone(), &dir.join("none.json"), true);
     a.feed('d');
     let want = a.marks.clone();
     assert_eq!(want.len(), 1);
@@ -586,8 +586,43 @@ fn marks_are_read_back_after_a_restart() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let mut b = app();
-    b.keep_marks(file);
+    b.keep_marks(file, &dir.join("none.json"), true);
     assert_eq!(b.marks, want);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_old_marks_and_seen_files_are_read_once_into_the_new_ones() {
+    let dir = std::env::temp_dir().join(format!("minato-old-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (marks, seen) = (dir.join("marks.toml"), dir.join("seen-runs.toml"));
+    std::fs::write(dir.join("marks.json"), r#"{"a":["done",5]}"#).unwrap();
+    std::fs::write(
+        dir.join("seen-runs.txt"),
+        "7
+3
+",
+    )
+    .unwrap();
+    let mut a = app();
+    a.keep_marks(marks.clone(), &dir.join("marks.json"), true);
+    a.keep_seen(seen.clone(), &dir.join("seen-runs.txt"), true);
+    assert_eq!(a.marks.get("a"), Some(&minato_core::inbox::Mark::Done(5)));
+    assert_eq!(a.acts.seen, [7, 3].into());
+    for _ in 0..100 {
+        if marks.exists() && seen.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    // The old files stay, and once the new ones are there the old are not read again.
+    assert!(dir.join("marks.json").exists() && dir.join("seen-runs.txt").exists());
+    std::fs::write(dir.join("marks.json"), "{}").unwrap();
+    let mut b = app();
+    b.keep_marks(marks, &dir.join("marks.json"), true);
+    b.keep_seen(seen, &dir.join("seen-runs.txt"), true);
+    assert_eq!(b.marks.len(), 1);
+    assert_eq!(b.acts.seen, [7, 3].into());
     let _ = std::fs::remove_dir_all(dir);
 }
 

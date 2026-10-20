@@ -2,6 +2,14 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.71.0] - 2026-10-20
+
+### 変更
+
+- 状態のファイルも TOML に（ito common-spec v0.93.0）。受信箱の印は `marks.toml`（`[[entries]]` に `id`・`mark`・`at`）、見た実行は `seen-runs.toml`（`recent = [...]`）。読みは `ito_common::kept::read`、書きは `kept::Writer`（最後の保存が勝つ。`--keys` の窓は何も書かない）。
+- 古い `marks.json`・`seen-runs.txt` は、新しいファイルがまだ無いときに起動時 1 度だけ読んで新しい形で書く。古いファイルは消さない。
+- ito を rev f6b5817（v0.93.0）に上げた（全部のクレートを同じ rev に）。
+
 ## [0.70.2] - 2026-10-19
 
 ### 追加

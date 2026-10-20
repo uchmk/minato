@@ -10,6 +10,7 @@ pub mod find;
 pub mod fold;
 pub mod github;
 pub mod inbox;
+pub mod kept;
 pub mod list;
 pub mod mainci;
 pub mod notes;

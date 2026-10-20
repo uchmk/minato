@@ -401,7 +401,7 @@ pub struct App {
     /// The local marks (done, later) of the inbox; they never reach GitHub.
     pub marks: HashMap<String, Mark>,
     /// Where changed marks go to be written (see `keep_marks`).
-    marks_tx: Option<std::sync::mpsc::Sender<String>>,
+    marks_tx: Option<ito_common::kept::Writer>,
     /// minato's own settings: whose repositories, the inbox rules and the
     /// writing box's fields.
     pub settings: Settings,
@@ -417,7 +417,7 @@ pub struct App {
     settings_tx: Option<std::sync::mpsc::Sender<Settings>>,
     /// The text box of the saved searches in the settings (one per line).
     pub searches_text: String,
-    seen_tx: Option<std::sync::mpsc::Sender<String>>,
+    seen_tx: Option<ito_common::kept::Writer>,
     /// The list shows closed issues and PRs (`C`), so `x` opens them again.
     pub show_closed: bool,
     /// Items fetched one by one for a notification the searches do not
@@ -2182,21 +2182,44 @@ impl App {
         format!("{head}\n{}\n\n{}: {why}\n{}\n{ask}\n", item.url, self.tr("prompt.why"), self.tr("prompt.read"))
     }
 
-    /// Keep the marks in `path`: read them now (at start-up), and write
-    /// every change on a thread of its own.
-    pub fn keep_marks(&mut self, path: std::path::PathBuf) {
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            self.marks = minato_core::inbox::marks_parse(&text);
+    /// Keep the marks in `path` (marks.toml): read them now (at start-up;
+    /// from `old`, the marks.json of before, when there is no `path` yet),
+    /// and write every change on a thread of its own. `on` is false for a
+    /// run that keeps nothing.
+    pub fn keep_marks(&mut self, path: std::path::PathBuf, old: &std::path::Path, on: bool) {
+        let kept = ito_common::kept::read::<minato_core::kept::MarksFile>(&path);
+        let from_old = kept.is_none() && !path.exists();
+        self.marks = match kept {
+            Some(f) => f.marks(),
+            None if from_old => {
+                std::fs::read_to_string(old).map(|t| minato_core::kept::MarksFile::from_old(&t).marks()).unwrap_or_default()
+            }
+            None => HashMap::new(),
+        };
+        let w = ito_common::kept::Writer::new(path, on);
+        // The old file stays; the new one takes over from here.
+        if from_old && !self.marks.is_empty() {
+            w.save_toml(&minato_core::kept::MarksFile::of(&self.marks));
         }
-        self.marks_tx = Some(writer(path));
+        self.marks_tx = Some(w);
     }
 
-    /// Keep the runs seen in Actions (one id per line) in `path`, the same way.
-    pub fn keep_seen(&mut self, path: std::path::PathBuf) {
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            self.acts.seen = text.lines().filter_map(|l| l.trim().parse().ok()).collect();
+    /// Keep the runs seen in Actions in `path` (seen-runs.toml), the same
+    /// way (`old` is the seen-runs.txt of before).
+    pub fn keep_seen(&mut self, path: std::path::PathBuf, old: &std::path::Path, on: bool) {
+        let kept = ito_common::kept::read::<minato_core::kept::SeenFile>(&path);
+        let from_old = kept.is_none() && !path.exists();
+        let file = match kept {
+            Some(f) => f,
+            None if from_old => std::fs::read_to_string(old).map(|t| minato_core::kept::SeenFile::from_old(&t)).unwrap_or_default(),
+            None => Default::default(),
+        };
+        self.acts.seen = file.set();
+        let w = ito_common::kept::Writer::new(path, on);
+        if from_old && !file.recent.is_empty() {
+            w.save_toml(&file);
         }
-        self.seen_tx = Some(writer(path));
+        self.seen_tx = Some(w);
     }
 
     /// Each frame: the run selected in Actions becomes seen after a while
@@ -2209,17 +2232,8 @@ impl App {
             ids.sort_unstable_by(|a, b| b.cmp(a));
             ids.truncate(SEEN_KEPT);
             self.acts.seen = ids.iter().copied().collect();
-            if let Some(tx) = &self.seen_tx {
-                let _ = tx.send(
-                    ids.iter()
-                        .map(|i| {
-                            format!(
-                                "{i}
-"
-                            )
-                        })
-                        .collect(),
-                );
+            if let Some(w) = &self.seen_tx {
+                w.save_toml(&minato_core::kept::SeenFile { recent: ids });
             }
         }
     }
@@ -2299,8 +2313,8 @@ impl App {
     }
 
     fn save_marks(&self) {
-        if let Some(tx) = &self.marks_tx {
-            let _ = tx.send(minato_core::inbox::marks_json(&self.marks));
+        if let Some(w) = &self.marks_tx {
+            w.save_toml(&minato_core::kept::MarksFile::of(&self.marks));
         }
     }
 

@@ -14,7 +14,8 @@ pub fn path(app_dir: &Path) -> PathBuf {
     app_dir.join("config.toml")
 }
 
-/// marks.json in the state folder: written by minato alone, so state.
+/// marks.json in the state folder: where v0.61.0 to v0.70 kept the marks (they are marks.toml now,
+/// read from here once).
 pub fn marks_path(state_dir: &Path) -> PathBuf {
     state_dir.join("marks.json")
 }
