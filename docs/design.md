@@ -177,6 +177,7 @@ tsumugi の Dark の系統（ito-theme）。モックの CSS の変数が正。
 ## 設定（`,`）
 
 - ページは 一般・テーマ（共通）・ビュー（minato のもの）・キー・通知（ito の `docs/common-spec.md` の並び。v0.44.0 から。前は 一般・テーマ・通知・ビュー）。
+- 「テーマ」のページの下に、等幅の字体のカード（v0.73.0 から、`ito_prefs::mono_font_card`。`bundled` / `system` を common.toml の `mono_font` に書く。反映は再起動のあと。#70 の回答 A）。
 - 「キー」のページ（v0.44.0 から、kura・yagura・tsumugi と同じ `ito_prefs::keys_page`）: 操作ごとに 1 行で、今のキーをチップで並べる。
   - 検索（説明・`run`・キー・節の名前）、「⌨ キーで探す」、節で絞る、「変えたものだけ」。
   - チップを押すか ＋ で受け取り、`Enter` で決めて keymap.toml の `prepend_keymap` に書く（`Esc` でやめる、`Backspace` で 1 つ戻す）。

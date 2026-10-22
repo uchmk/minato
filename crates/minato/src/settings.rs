@@ -82,6 +82,7 @@ fn index(w: &'static Words, more: &'static MoreWords, lang: &str) -> Vec<(usize,
     .chain(layers)
     .chain(ito_prefs::window_index(more).into_iter().chain(ito_prefs::startup_index(more)).map(|t| (GENERAL, t)))
     .chain(ito_prefs::advanced_index(more).into_iter().chain(ito_prefs::backup_index(more)).map(|t| (ADVANCED, t)))
+    .chain(ito_prefs::mono_font_index(more).into_iter().map(|t| (THEME, t)))
     .chain(ito_prefs::about_index(more, w).into_iter().map(|t| (ABOUT, t)))
     .collect()
 }
@@ -165,6 +166,8 @@ pub fn show(ui: &mut Ui, app: &mut App) {
                 let tabs = ["view.inbox", "view.list", "view.actions", "view.board"].map(tr);
                 preview(ui, tr("settings.sample"), tabs, ["run.ok", "run.bad", "run.running"].map(tr))
             }));
+            // Read at the next start: the fonts are loaded once, in the background.
+            asked.extend(ito_prefs::mono_font_card(ui, l, more, common.mono_font_or_default()));
         }
         NOTIFY => test = notify_page(ui, l, &tr, &mut st.notify, drafts),
         KEYS => {

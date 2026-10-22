@@ -42,4 +42,4 @@
 ## Owner
 
 - 【人】 Run the rows of TESTING-CHECKS.md on the real machine (window, title bar, icon, fonts); see the `needs-pc` issue for v0.1.0.
-- [ ] Settings: the `mono_font` card (bundled / system) on the Appearance page, as ito's `mono_font_card`（要確認: #70）
+- [x] Settings: the `mono_font` card (bundled / system) on the Theme page, as ito's `mono_font_card` (v0.73.0; #70 answered A)

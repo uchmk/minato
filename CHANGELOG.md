@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.73.0] - 2026-10-23
+
+### 追加
+
+- 設定の「テーマ」のページに、等幅の字体のカード（`ito_prefs::mono_font_card`）。`bundled` / `system` を `common.toml` の `mono_font` に書く。反映は再起動のあと（#70 の回答 A）。
+
 ## [0.72.1] - 2026-10-23
 
 ### 変更
