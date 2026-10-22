@@ -1,29 +1,41 @@
+# Source is uchmk/ito scripts/lanes/workflows/checklists.yml; written by scripts/lanes.sh sync, so edit ito's.
 name: Checklists
 
-# TESTING-CHECKS.md follows TESTING.md. Not
-# skipped for Markdown, unlike CI: a change to TESTING.md alone is what it
-# is for.
+# TESTING.md is the source and TESTING-CHECKS.md is generated from it by
+# `cargo run --example make-testcheck` (ito's ito-testcheck). This job fails
+# when the generated file is out of date or TESTING.md breaks the form the
+# generator reads (a `## N. Title` heading over each table, the row's id first,
+# no id twice). Not skipped for Markdown, unlike CI: a lane's pull request
+# changes TESTING-CHECKS.md alone, and merge-lanes.py waits for this job
+# (`checklists`) before it merges one that ticks rows.
 on:
   push:
     branches: [main]
-    paths: ['TESTING*.md', 'crates/minato/examples/**', '.github/workflows/checklists.yml']
+    paths: ['TESTING.md', 'TESTING-CHECKS.md', 'scripts/testcheck.toml', 'examples/**', 'crates/*/examples/**', '.github/workflows/checklists.yml', 'Cargo.toml', 'Cargo.lock']
   pull_request:
-    paths: ['TESTING*.md', 'crates/minato/examples/**', '.github/workflows/checklists.yml']
+    paths: ['TESTING.md', 'TESTING-CHECKS.md', 'scripts/testcheck.toml', 'examples/**', 'crates/*/examples/**', '.github/workflows/checklists.yml', 'Cargo.toml', 'Cargo.lock']
+  # merge-lanes.py starts it after pushing its share, since that push starts
+  # no workflows.
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 permissions:
   contents: read
 
 jobs:
-  check:
+  checklists:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
         with:
+          key: checklists
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo run -p minato --example make-testcheck -- --check
+      - run: cargo run --locked -p minato --example make-testcheck -- --check
