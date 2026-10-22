@@ -116,6 +116,9 @@ impl Minato {
                 Do::Quit => self.app.quit = true,
                 // minato defines no readings of its own.
                 Do::Read { .. } => {}
+                // In memory only: the next frame's `set_language` and `apply_theme` read these.
+                Do::Theme(name) => self.app.prefs.common.theme = Some(name),
+                Do::Lang(code) => self.app.prefs.common.language = Some(code),
                 Do::Done => {
                     if let Some(done) = script.done.clone() {
                         self.write_state(

@@ -234,6 +234,7 @@ fn title_bar(ui: &mut Ui, app: &App, out: &mut Out) {
         unread: app.unread as usize,
         any_error: false,
         centre: true,
+        right_min: 0.0,
         words,
     };
     let bar = ito_titlebar::show(ui, &spec, |ui, r| title_left(ui, app, r, out), |ui, free| title_right(ui, app, free));

@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.71.2] - 2026-10-22
+
+### 変更
+
+- ito を v0.101.0（3a76165）に上げた。`--keys` の台本に `<Size:WxH>`・`<Theme:名前>`・`<Lang:ja>` が使える（テーマと言語はメモリの上だけで切り替え、common.toml は書かない）。`--keys` の実行は `UCHMK_CONFIG_DIR` が無いと本物の uchmk フォルダーへの設定書き込みを断る（ito の安全装置。minato は `Runner` を使うので変更は要らない）。タイトルバーの `Spec` に `right_min` を足した（0）。
+
 ## [0.71.1] - 2026-10-20
 
 ### 追加
