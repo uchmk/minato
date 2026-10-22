@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.72.1] - 2026-10-23
+
+### 変更
+
+- 中身は変えずにソースを分けた: `app.rs`（2829 行）を `app/` の `keys`・`panes`・`lists`・`persist`・`writes` に、`net.rs`（1696 行）の答えの受け取りを `net/take.rs` に。
+
 ## [0.72.0] - 2026-10-23
 
 ### 追加

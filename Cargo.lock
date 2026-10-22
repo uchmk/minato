@@ -2267,7 +2267,7 @@ dependencies = [
 
 [[package]]
 name = "minato"
-version = "0.72.0"
+version = "0.72.1"
 dependencies = [
  "chrono",
  "eframe",
@@ -2300,7 +2300,7 @@ dependencies = [
 
 [[package]]
 name = "minato-core"
-version = "0.72.0"
+version = "0.72.1"
 dependencies = [
  "ito-proc",
  "serde",
