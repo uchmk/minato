@@ -25,6 +25,7 @@ toml = "1.1"
 # Every ito crate at the same rev as tsumugi and kura.
 ito-i18n = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373", features = ["edit"] }
 ito-common = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373", features = ["clock", "egui"] }
+ito-fonts = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373", features = ["egui"] }
 ito-theme = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373" }
 ito-titlebar = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373" }
 ito-notices = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373" }

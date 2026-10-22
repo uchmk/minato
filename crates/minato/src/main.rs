@@ -648,7 +648,6 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             saved.put(cc);
-            fonts::load_in_background(cc.egui_ctx.clone());
             // What this run drew with, for the bug report (and `minato env`, when there is one).
             if script.is_none() {
                 let mut used = ito_common::runinfo::RunInfo::new(env!("CARGO_PKG_VERSION"));
@@ -664,6 +663,7 @@ fn main() -> eframe::Result {
             let mut prefs = prefs::Prefs::load(ito_common::base_dir());
             prefs.watch(&cc.egui_ctx);
             prefs.apply_theme(&cc.egui_ctx);
+            fonts::load_in_background(cc.egui_ctx.clone(), prefs.common.mono_font_or_default());
             // The scale is common.toml's, so egui's own Ctrl+= / Ctrl+- stay out of it.
             cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());

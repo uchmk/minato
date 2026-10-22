@@ -55,7 +55,11 @@ pub fn find() -> Option<(Token, Source)> {
     resolve(
         |n| std::env::var(n).ok(),
         || {
-            let out = std::process::Command::new("gh").args(["auth", "token"]).stdin(std::process::Stdio::null()).output().ok()?;
+            let mut cmd = std::process::Command::new("gh");
+            cmd.args(["auth", "token"]).stdin(std::process::Stdio::null());
+            // No console window flashes up from a window app on Windows.
+            ito_proc::own_group(&mut cmd);
+            let out = cmd.output().ok()?;
             out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
         },
     )

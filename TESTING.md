@@ -561,6 +561,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 | 42.7 | Settings About: look at the page and press the report button | Version, commit, system and license show and copy; the button opens the same screen as `F12` |
 | 42.8 | Settings Advanced: press export with the default file name, change `common.toml`, then press import twice | A toast says how many files were written; the file has `common.toml`, `config.toml` and the `keymap.toml`, with every webhook address in `config.toml` left empty; after the import the change is undone, `common.toml.bak-<time>` is kept, the webhook addresses set here are still there and a toast says how many were restored; searching `export` finds the card |
 | 42.9 | Put `minato-settings.json`, `minato-searches.txt` and `minato-marks.json` (from v0.60) beside `common.toml` with no `config.toml`, then start minato | A toast says the settings moved; `config.toml` in the config folder has the settings, the saved searches and `[notify]`; `marks.json` is in the state folder (and `marks.toml` after the next start); the two old files are renamed `.bak-<time>` and the marks are still on the cards; starting again moves nothing |
+| 42.10 | Set `mono_font = "system"` in `common.toml`, restart; then `bundled` (or remove the line) and restart | With `system` the monospace text (ids, code) is egui's own face; otherwise JetBrains Mono comes first |
 
 ## 43. The door for other apps
 

@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.71.3] - 2026-10-23
+
+### 変更
+
+- `gh auth token` を窓の出ない起動（`ito_proc::own_group`）で走らせる。Windows で黒い窓が一瞬出ることがあった。
+- 等幅の文字が `common.toml` の `mono_font`（`bundled` が既定、`system`）に従う（`ito-fonts`）。反映は再起動のあと。
+
 ## [0.71.2] - 2026-10-22
 
 ### 変更

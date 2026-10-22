@@ -12,3 +12,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.1"
 ureq = "3"
+# Every ito crate at the same rev as crates/minato.
+ito-proc = { git = "https://github.com/uchmk/ito", rev = "3a76165e07afc4859ff93b1c01132611de894373" }
