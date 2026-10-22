@@ -2,6 +2,17 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.72.0] - 2026-10-23
+
+### 追加
+
+- `minato env [--out FILE]`: 版・OS・フォルダー・直前の起動（GPU・窓）・トークンの出どころ（値は出さない）を文字で出す。窓は開かない。`--out` は UTF-8 で書く（`.part` に書いてから置き換える）。`minato.com env` で PowerShell の変数に取れる。
+- `LICENSE-MIT`・`LICENSE-APACHE`（`Cargo.toml` の `MIT OR Apache-2.0` に合わせた）。リリースの zip・tar.gz にも入れる。
+
+### 変更
+
+- `build.yml` と `release.yml` を ito のテンプレート（`scripts/lanes.sh sync`）にした。`minato.com env` と `--version` を確かめ、リリースの前にも同じ確認を回し、ノートに対応 OS と署名の説明が付く。
+
 ## [0.71.3] - 2026-10-23
 
 ### 変更

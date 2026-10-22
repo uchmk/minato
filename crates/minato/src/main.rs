@@ -12,6 +12,7 @@ mod bugreport;
 mod compose_ui;
 mod config;
 mod detail_ui;
+mod envreport;
 mod fonts;
 mod i18n;
 mod icon;
@@ -47,10 +48,13 @@ const USAGE: &str = "\
 minato — a keyboard-driven GitHub client
 
 usage: minato [--keys SCRIPT] [--version | --help]
+       minato env [--out FILE]
 
   --keys SCRIPT  press these keys once the window is up, as kura's --keys
                  (`jj<Enter>`, `<C-S-p>`, `<Wait:200>`, `<State:name>`, `<Quit>`);
                  MINATO_KEYS_DONE names the file that says how it ended
+  env            print the version, OS, folders and last run for a bug report;
+                 --out FILE writes it as UTF-8 instead (opens no window)
 ";
 
 struct Minato {
@@ -573,11 +577,24 @@ fn say(text: &str, err: bool) {
     }
 }
 
+/// Writes beside the target and renames over it, so a reader that starts as soon as
+/// the (windowless) program returns never sees half a file.
+fn write_whole(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    let mut part = path.as_os_str().to_owned();
+    part.push(".part");
+    let part = std::path::PathBuf::from(part);
+    std::fs::write(&part, text).and_then(|()| std::fs::rename(&part, path)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&part);
+    })
+}
+
 /// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 enum Cli {
     Version,
     Help,
+    /// Print the environment report, or write it to this file.
+    Env(Option<std::path::PathBuf>),
     /// Open the window, playing this script if there is one.
     Open(Option<Vec<Step>>),
 }
@@ -587,6 +604,14 @@ fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Cli, String> {
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
         match a.to_str() {
+            Some("env" | "--env") if script.is_none() => {
+                return match (args.next(), args.next()) {
+                    (None, _) => Ok(Cli::Env(None)),
+                    (Some(f), Some(file)) if f == "--out" && !file.is_empty() => Ok(Cli::Env(Some(file.into()))),
+                    (Some(f), _) if f == "--out" => Err("env: --out needs a file name".into()),
+                    (Some(other), _) => Err(format!("env: unknown argument `{}` (try --out FILE)", other.to_string_lossy())),
+                };
+            }
             Some("--keys") => {
                 let s = args.next().ok_or("--keys needs a script")?;
                 let s = s.to_str().ok_or("--keys: the script is not text")?;
@@ -606,6 +631,20 @@ fn main() -> eframe::Result {
             say(&format!("minato {}", env!("CARGO_PKG_VERSION")), false);
             return Ok(());
         }
+        Ok(Cli::Env(None)) => {
+            say(envreport::text().trim_end_matches('\n'), false);
+            return Ok(());
+        }
+        Ok(Cli::Env(Some(path))) => match write_whole(&path, &envreport::text()) {
+            Ok(()) => {
+                say(&format!("minato: wrote {}", std::path::absolute(&path).unwrap_or(path).display()), true);
+                return Ok(());
+            }
+            Err(e) => {
+                say(&format!("minato: env --out {}: {e}", path.display()), true);
+                std::process::exit(1);
+            }
+        },
         Ok(Cli::Help) => {
             say(USAGE, false);
             return Ok(());
@@ -738,6 +777,10 @@ mod tests {
     fn the_command_line() {
         assert_eq!(parse(&[]), Ok(Cli::Open(None)));
         assert_eq!(parse(&["--version"]), Ok(Cli::Version));
+        assert_eq!(parse(&["env"]), Ok(Cli::Env(None)));
+        assert_eq!(parse(&["env", "--out", "r.txt"]), Ok(Cli::Env(Some("r.txt".into()))));
+        assert!(parse(&["env", "--out"]).unwrap_err().contains("file name"));
+        assert!(parse(&["env", "--outt", "r.txt"]).unwrap_err().contains("--outt"));
         assert_eq!(parse(&["-V"]), Ok(Cli::Version));
         assert_eq!(parse(&["x", "-h"]), Err("unknown argument `x`".to_owned()));
         assert_eq!(parse(&["-h"]), Ok(Cli::Help));

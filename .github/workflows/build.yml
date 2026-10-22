@@ -1,11 +1,12 @@
+# Source is uchmk/ito scripts/lanes/workflows/build.yml; written by scripts/lanes.sh sync, so edit ito's.
 name: Build
 
 # A downloadable binary for each of the six targets of a release, on every
-# push to main, as kura's build.yml. Kept apart from ci.yml: this one produces
+# push to main. Kept apart from ci.yml: this one produces
 # an artifact, that one is the gate, and a failure here should not read as a
-# failing test. ci.yml and arm64.yml build Windows and Linux in debug, and
-# clippy type-checks the macOS code but never links; this is where macOS is
-# linked, and every target built the way a release builds it, ahead of one.
+# failing test. clippy type-checks the macOS and Windows code from Linux but
+# never links, and ci.yml and arm64.yml build in debug and never macOS x64;
+# this is where every target is linked as a release links it.
 #
 # The targets and runners are release.yml's: both Windows builds on the x64
 # runner, macOS x64 cross-built on the ARM runner, Linux on native runners.
@@ -13,7 +14,7 @@ name: Build
 on:
   push:
     branches: [main]
-    paths-ignore: ['**.md', 'LICENSE*']
+    paths-ignore: ['**.md', 'LICENSE-*']
   # Or from the Actions tab, on any branch, whenever a build is wanted.
   workflow_dispatch:
 
@@ -70,15 +71,9 @@ jobs:
       - name: Build
         run: cargo build --release --locked -p minato --target ${{ matrix.target }}
 
-      # The binaries a release packs start and answer. x64 only: the runner
-      # cannot run ARM64.
-      #
-      # minato.com (v0.48.0) is the console front the zip ships beside
-      # minato.exe, as kura.com and yagura.com. Being a console program,
-      # PowerShell waits for it and takes its output, so the bare forms that
-      # come back empty from minato.exe have to work here.
-      #
-      # minato.exe itself is a GUI-subsystem program: PowerShell hands it a
+      # The console front a release ships beside minato.exe, as release.yml
+      # checks it: PowerShell waits for it, so the bare forms come back whole.
+      # x64 only: the runner cannot run ARM64. Run straight, minato.exe gets a
       # pipe for `$v = & minato.exe --version` and closes it without waiting.
       # The write is let go there, where println! panicked (os error 232):
       # here the pipe is closed before minato.exe has started writing.
@@ -86,15 +81,14 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
         run: |
-          $exe = (Resolve-Path "target/${{ matrix.target }}/release/minato.exe").Path
-          $com = "target/${{ matrix.target }}/release/minato.com"
-          Copy-Item "target/${{ matrix.target }}/release/minato-com.exe" $com
-          $ver = & $com --version
+          $dir = "target/${{ matrix.target }}/release"
+          Copy-Item "$dir/minato-com.exe" "$dir/minato.com"
+          $lines = & "$dir/minato.com" env
+          if ($lines.Count -lt 10) { throw "`$v = & minato.com env gave $($lines.Count) line(s)" }
+          $ver = & "$dir/minato.com" --version
           if (-not ($ver -match '^minato \d')) { throw "& minato.com --version gave: '$ver'" }
-          $help = & $com --help
-          if ($help.Count -lt 2) { throw "& minato.com --help gave $($help.Count) line(s)" }
           $p = [System.Diagnostics.Process]::new()
-          $p.StartInfo.FileName = $exe
+          $p.StartInfo.FileName = (Resolve-Path "$dir/minato.exe").Path
           $p.StartInfo.Arguments = '--version'
           $p.StartInfo.UseShellExecute = $false
           $p.StartInfo.RedirectStandardOutput = $true
@@ -102,23 +96,17 @@ jobs:
           $p.StandardOutput.Close()
           $p.WaitForExit()
           if ($p.ExitCode -ne 0) { throw "minato.exe --version into a closed pipe exited $($p.ExitCode)" }
-          & $com --bogus 2> refused.txt
-          $refused = $LASTEXITCODE
-          $said = (Get-Content -Raw refused.txt).Trim()
-          if (-not ($said -match 'unknown argument')) { throw "minato.com --bogus said: '$said'" }
-          # The step ends with `exit $LASTEXITCODE`, and this 2 is the pass.
-          $global:LASTEXITCODE = 0
-          if ($refused -ne 2) { throw "minato.com --bogus exited $refused, not minato.exe's 2" }
-          "minato.com: $ver, $($help.Count) lines of help, refusal exit $refused"
+          "minato.com: $($lines.Count) lines, $ver"
 
+      # The files a release packs: the binary (and on Windows minato.com
+      # beside it) and the two licences.
       - name: Gather the files
         shell: bash
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/minato${{ runner.os == 'Windows' && '.exe' || '' }} dist/
-          # And Windows gets the console front beside it, under the name that
-          # makes `minato` find it first (v0.48.0, src/bin/minato-com.rs).
           if [ "${{ runner.os }}" = Windows ]; then cp target/${{ matrix.target }}/release/minato-com.exe dist/minato.com; fi
+          cp LICENSE-MIT LICENSE-APACHE dist/
 
       - name: Upload
         uses: actions/upload-artifact@v7

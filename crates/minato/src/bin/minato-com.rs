@@ -31,7 +31,7 @@ mod tests {
     /// Every argument is answered in text; only none opens the window.
     #[test]
     fn it_waits_only_for_what_answers_in_text() {
-        for waits in [&["--version"][..], &["-V"], &["--help"], &["-h"], &["--bogus"], &["inbox"]] {
+        for waits in [&["--version"][..], &["-V"], &["--help"], &["-h"], &["--bogus"], &["env"], &["env", "--out", "r.txt"], &["inbox"]] {
             assert!(answers_in_text(&line(waits)), "{waits:?}");
         }
         assert!(!answers_in_text(&line(&[])));

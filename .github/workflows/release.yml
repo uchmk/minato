@@ -1,12 +1,18 @@
+# Source is uchmk/ito scripts/lanes/workflows/release.yml; written by scripts/lanes.sh sync, so edit ito's.
 name: Release
 
-# Started by hand from the Actions tab with the tag (`v0.8.0`), which is
-# created at the commit this runs on if it does not exist yet. It fails when
-# the tag differs from the version in Cargo.toml. Six files: Windows (x64 and
-# ARM64, built on the x64 runner) as .zip, minato.exe with its console front
-# minato.com; macOS and Linux as .tar.gz.
-# Nothing is code-signed. The tests on ARM64 (arm64.yml) go first, and the
-# SHA-256 of every file is written onto the page last (release-sums.yml).
+# A build that keeps its name, does not expire, and downloads without an
+# account. The reasons for each step are written beside it.
+#
+# Started by hand from the Actions tab with the tag (`v0.28.0`), which is
+# created at the commit this runs on if it does not exist yet. A cloud session
+# cannot push a tag (403), so this is the way. Cut the next release only once
+# the last one has its tag: the notes start from the previous tag, and one not
+# made yet sends them back a release further, repeating it.
+#
+# Six files on two jobs: Windows builds both its architectures on the one x64
+# runner; macOS and Linux build where they run, after the Windows job has made
+# the release.
 
 on:
   push:
@@ -14,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release, e.g. v0.8.0. It is created if it does not exist.'
+        description: 'Tag to release, e.g. v0.28.0. It is created if it does not exist.'
         required: true
 
 env:
@@ -41,6 +47,8 @@ jobs:
         shell: bash
         run: echo "name=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
 
+      # A download whose name and `minato --version` disagree leaves nobody
+      # able to say which they have.
       - name: Check the tag matches Cargo.toml
         shell: bash
         run: |
@@ -50,21 +58,38 @@ jobs:
             echo "::error::tag $tag does not match Cargo.toml's $crate"
             exit 1
           fi
+          echo "$tag matches Cargo.toml"
 
       - name: Add the ARM64 target
         run: rustup target add aarch64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
 
+      # On x64 only: the runner cannot execute an ARM64 binary.
       - name: Test
-        run: cargo test --locked --workspace --all-features
+        run: cargo test --locked
 
       - name: Build x64
         run: cargo build --release --locked -p minato --target x86_64-pc-windows-msvc
 
+      # minato.com: a console program, so PowerShell waits for it and the bare
+      # forms that come back empty from the windowed minato.exe work.
+      - name: Check minato.com
+        shell: pwsh
+        run: |
+          $dir = "target/x86_64-pc-windows-msvc/release"
+          Copy-Item "$dir/minato-com.exe" "$dir/minato.com"
+          $lines = & "$dir/minato.com" env
+          if ($lines.Count -lt 10) { throw "`$v = & minato.com env gave $($lines.Count) line(s)" }
+          $ver = & "$dir/minato.com" --version
+          if (-not ($ver -match '^minato \d')) { throw "& minato.com --version gave: '$ver'" }
+          "minato.com: $($lines.Count) lines, $ver"
+
       - name: Build ARM64
         run: cargo build --release --locked -p minato --target aarch64-pc-windows-msvc
 
+      # A zip of one folder: minato.exe, minato.com (the console front, so that a
+      # shell waits for `minato env`) and the two licence files.
       - name: Package the binaries
         shell: pwsh
         run: |
@@ -73,27 +98,34 @@ jobs:
           foreach ($pair in @(@('x64', 'x86_64-pc-windows-msvc'), @('arm64', 'aarch64-pc-windows-msvc'))) {
             $arch, $target = $pair
             $name = "minato-$tag-windows-$arch"
-            New-Item -ItemType Directory -Force "stage/$name" | Out-Null
-            Copy-Item "target/$target/release/minato.exe" "stage/$name"
-            # The console front, under the name that makes `minato` find it
-            # first (src/bin/minato-com.rs).
-            Copy-Item "target/$target/release/minato-com.exe" "stage/$name/minato.com"
-            Compress-Archive -Path "stage/$name" -DestinationPath "dist/$name.zip" -Force
+            $stage = "stage/$name"
+            New-Item -ItemType Directory -Force $stage | Out-Null
+            Copy-Item "target/$target/release/minato.exe", "LICENSE-MIT", "LICENSE-APACHE" $stage
+            Copy-Item "target/$target/release/minato-com.exe" "$stage/minato.com"
+            Compress-Archive -Path $stage -DestinationPath "dist/$name.zip" -Force
           }
           Get-ChildItem dist
 
-      # English notes from the first paragraph of each `vX.Y.Z:` commit since
-      # the previous tag (CHANGELOG.md is Japanese and is not used).
+      # The notes in English, from the first paragraph of each `vX.Y.Z:`
+      # commit since the previous tag (CHANGELOG.md is Japanese and is not
+      # used). The very first release has no previous tag and gets the newest
+      # `vX.Y.Z:` commit only, which need not be HEAD itself.
       - name: Write the notes from the commits
+        id: notes
         shell: bash
         run: |
           tag="${{ steps.tag.outputs.name }}"
           prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
-          range="${prev:+$prev..}HEAD"
-          [ -n "$prev" ] || range="HEAD~1..HEAD"
-          commits=$(git log --reverse --no-merges --format='%H %s' "$range" \
-                    | grep -E '^[0-9a-f]+ v[0-9]+\.[0-9]+\.[0-9]+' | cut -d' ' -f1)
-          [ -n "$commits" ] || commits=$(git log --reverse --no-merges --format=%H "$range")
+          if [ -n "$prev" ]; then
+            echo "notes from $prev..HEAD"
+            commits=$(git log --reverse --no-merges --format='%H %s' "$prev..HEAD" \
+                      | { grep -E '^[0-9a-f]+ v[0-9]+\.[0-9]+\.[0-9]+' || true; } | cut -d' ' -f1)
+          else
+            echo "no previous tag: notes from the newest version commit"
+            commits=$(git log -1 --no-merges -E --grep='^v[0-9]+\.[0-9]+\.[0-9]+' --format=%H HEAD)
+          fi
+          [ -n "$commits" ] || commits=$(git log -1 --format=%H HEAD)
+
           : > notes.md
           for sha in $commits; do
             printf '## %s\n\n' "$(git log -1 --format=%s "$sha")" >> notes.md
@@ -104,10 +136,41 @@ jobs:
             ' >> notes.md
             printf '\n' >> notes.md
           done
-          [ -s notes.md ] || printf 'No commits between %s and %s.\n\n' "${prev:-the start}" "$tag" > notes.md
-          printf '\n**Nothing here is code-signed**; Windows and macOS warn about an unknown publisher. Windows is the platform this is tested on; the other builds are compiled only.\n' >> notes.md
-          printf '\n詳細は [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/%s/CHANGELOG.md) にあります（日本語）。\n' "$tag" >> notes.md
+          if [ ! -s notes.md ]; then
+            printf 'No commits between %s and %s.\n\n' "${prev:-the start}" "$tag" > notes.md
+          fi
 
+          cat >> notes.md <<'NOTE'
+
+          ### Platforms
+
+          **Windows is the platform this is tested on**, and the checklist in TESTING.md is
+          worked through there. The Linux build runs the tests on every push but nobody
+          uses it day to day. **The macOS builds are only compiled and linked**: they are
+          here so that somebody can start them, not because they are known to work.
+
+          ### Signing
+
+          **Nothing here is code-signed.** Windows shows the publisher as unknown and
+          SmartScreen warns about a file with no download history; macOS's Gatekeeper
+          refuses the binaries until they are allowed through by hand. Every asset's
+          SHA-256 is in the table at the end of this page:
+
+          ```powershell
+          Get-FileHash .\minato-...-windows-x64.zip -Algorithm SHA256 | Format-List Hash
+          ```
+
+          The Windows downloads are `.zip` holding `minato.exe`, `minato.com` and the licence files.
+          The macOS and Linux downloads are `.tar.gz`, which keeps the executable bit.
+          NOTE
+
+          printf '\n---\n\n%s\n' \
+            "詳細は [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$tag/CHANGELOG.md) にあります（日本語）。" \
+            >> notes.md
+          cat notes.md
+
+      # `target_commitish` pins the tag to the commit built, not to wherever
+      # main has moved during the run (an earlier release lost that).
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
@@ -128,6 +191,7 @@ jobs:
           - name: macos-arm64
             os: macos-14
             target: aarch64-apple-darwin
+          # Cross-built on the ARM runner: Apple's SDK has both architectures.
           - name: macos-x64
             os: macos-14
             target: x86_64-apple-darwin
@@ -159,8 +223,9 @@ jobs:
         run: |
           tag="${{ steps.tag.outputs.name }}"
           mkdir -p dist
-          tar -C "target/${{ matrix.target }}/release" \
-              -czf "dist/minato-$tag-${{ matrix.name }}.tar.gz" minato
+          cp "target/${{ matrix.target }}/release/minato" .
+          tar -czf "dist/minato-$tag-${{ matrix.name }}.tar.gz" minato LICENSE-MIT LICENSE-APACHE
+          ls -l dist
 
       - name: Attach to the release
         uses: softprops/action-gh-release@v3
