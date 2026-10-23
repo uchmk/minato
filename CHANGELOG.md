@@ -2,6 +2,16 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.74.0] - 2026-10-23
+
+### 追加
+
+- 起動時に `ito_common::apps::register("minato", …)` で自分の exe の場所を状態のフォルダーに書く（ito v0.103.0。ほかの uchmk のアプリが minato を探せる。ワーカースレッドで、失敗は無視する）。
+
+### 変更
+
+- ito を v0.103.0（43e0841）に上げた。
+
 ## [0.73.0] - 2026-10-23
 
 ### 追加

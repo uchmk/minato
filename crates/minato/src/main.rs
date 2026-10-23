@@ -662,6 +662,10 @@ fn main() -> eframe::Result {
             std::process::exit(2);
         }
     };
+    // Tell the other uchmk apps where this exe is (best effort, off the UI thread).
+    std::thread::spawn(|| {
+        let _ = ito_common::apps::register("minato", env!("CARGO_PKG_VERSION"));
+    });
     let done = std::env::var_os("MINATO_KEYS_DONE").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
     if let (Some(_), Some(done)) = (&script, &done) {
         ito_keyscript::install_panic_report(done.clone());
