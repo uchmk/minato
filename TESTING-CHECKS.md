@@ -23,7 +23,7 @@
 
 - [x] **2.1** Press `1`, `2`, `3`, `4`, `5`, `6` → The matching tab lights with an underline and the view changes to it
 - [x] **2.2** Click each tab → Same as the digit
-- [ ] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open
+- [x] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open
 - [ ] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
 - [x] **2.4** Press `Ctrl+,` → The settings screen opens; `Esc` closes it
 - [x] **2.5** Press `Ctrl+Shift+P` → The command palette opens over the view (see 11.6)
