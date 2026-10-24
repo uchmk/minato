@@ -278,6 +278,20 @@ impl Minato {
     }
 }
 
+/// Tab and Shift+Tab as the arrows. egui moves its own focus on a Tab it
+/// sees, and the next Enter then presses the widget it landed on (the
+/// view tabs behind the box); the box reads the arrows the same way.
+fn tab_as_arrows(events: &mut [egui::Event]) {
+    for e in events {
+        if let egui::Event::Key { key, modifiers, .. } = e {
+            if *key == egui::Key::Tab {
+                *key = if modifiers.shift { egui::Key::ArrowUp } else { egui::Key::ArrowDown };
+                modifiers.shift = false;
+            }
+        }
+    }
+}
+
 /// The events without the letters an Alt key also sends on Windows: `Alt+A`
 /// is not `a` (AltGr, which comes with Ctrl, still types).
 fn no_alt_letters(events: Vec<egui::Event>) -> Vec<egui::Event> {
@@ -340,6 +354,9 @@ impl eframe::App for Minato {
             if let Some(d) = script.input(ctx, raw) {
                 self.todo.push(d);
             }
+        }
+        if self.app.overlay.is_some() {
+            tab_as_arrows(&mut raw.events);
         }
     }
 
@@ -772,6 +789,27 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_becomes_an_arrow_for_the_box() {
+        let key = |key, shift| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers { shift, ..Default::default() },
+        };
+        let mut ev = vec![key(egui::Key::Tab, false), key(egui::Key::Tab, true), key(egui::Key::Enter, false)];
+        tab_as_arrows(&mut ev);
+        let got: Vec<_> = ev
+            .iter()
+            .map(|e| match e {
+                egui::Event::Key { key, modifiers, .. } => (*key, modifiers.shift),
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(got, [(egui::Key::ArrowDown, false), (egui::Key::ArrowUp, false), (egui::Key::Enter, false)]);
+    }
 
     fn parse(args: &[&str]) -> Result<Cli, String> {
         parse_args(args.iter().map(OsString::from))
