@@ -158,7 +158,7 @@
 - [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the pointer is a hand over the button; the button marks every row read
 - [x] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
 - [x] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
-- [ ] **11.8** Type `board` → No line opens a view: the views are on `1`–`5` and the tabs (see 27.6)
+- [x] **11.8** Type `board` → No line opens a view: the views are on `1`–`5` and the tabs (see 27.6)
 - [x] **11.9** Press `Esc`, and `Ctrl+Shift+P` twice → The palette closes; the second press closes it again
 
 ## 12. Dispatch form, job log and needs graph
