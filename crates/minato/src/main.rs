@@ -72,6 +72,8 @@ struct Minato {
     script: Option<Runner>,
     /// What the script asked for in `raw_input_hook`, done in the frame.
     todo: Vec<Do>,
+    /// The shape the last frame asked for, which `<State:…>` reports (a shot does not show it).
+    cursor: egui::CursorIcon,
     /// Writes the window's place for the next start (`None` for a script's
     /// window, or when the place is not remembered).
     tracker: Option<ito_common::window::Tracker>,
@@ -116,7 +118,11 @@ impl Minato {
         for d in std::mem::take(&mut self.todo) {
             let Some(script) = &self.script else { return };
             match d {
-                Do::State(name) => self.write_state(script.dir.join(format!("{name}.txt")), ""),
+                Do::State(name) => {
+                    // The shape under the pointer is not in a shot; a test of the hover reads it here.
+                    let cursor = format!("cursor: {:?}\n", self.cursor);
+                    self.write_state(script.dir.join(format!("{name}.txt")), &cursor);
+                }
                 Do::Quit => self.app.quit = true,
                 // minato defines no readings of its own.
                 Do::Read { .. } => {}
@@ -504,6 +510,7 @@ impl eframe::App for Minato {
             palette_show(&ctx, &mut self.app);
         }
         ui::toast(&ctx, &self.app, page.filter(|_| self.browser.is_some()));
+        self.cursor = ctx.output(|o| o.cursor_icon);
         if let Some(text) = self.app.copy.take() {
             ctx.copy_text(text);
         }
@@ -778,6 +785,7 @@ fn main() -> eframe::Result {
                 web_dir,
                 script,
                 todo: Vec::new(),
+                cursor: egui::CursorIcon::Default,
                 tracker: saved.tracker(),
                 on_top: first.always_on_top,
                 seen: None,
