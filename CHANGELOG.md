@@ -2,6 +2,12 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.74.1] - 2026-10-24
+
+### 変更
+
+- `rustls-webpki` を 0.103.16、`webpki-roots` を 1.0.11 に上げた（RUSTSEC-2026-0382・0381。`Audit` が赤くなっていた）。
+
 ## [0.74.0] - 2026-10-23
 
 ### 追加
