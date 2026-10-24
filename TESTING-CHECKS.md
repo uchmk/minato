@@ -11,7 +11,7 @@
 
 ## 1. Window and title bar
 
-- [ ] **1.1** Start `minato` → A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board` `5 Status`, a palette field in the middle, the bell, the account mark and three window buttons on the right
+- [~] **1.1** Start `minato` → A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board` `5 Status` `6 Security` (named in the chosen language), a palette field in the middle, the bell, the account mark and three window buttons on the right
 - [x] **1.2** Drag the empty part of the title bar → The window moves; double-click maximises and restores
 - [x] **1.3** Click minimise, maximise, close → Each does what it says; close shows a red button under the pointer
 - [x] **1.4** Drag each edge and corner → The window resizes with the matching pointer; nothing resizes while maximised
@@ -21,13 +21,13 @@
 
 ## 2. Views and keys
 
-- [ ] **2.1** Press `1`, `2`, `3`, `4`, `5` → The matching tab lights with an underline and the empty view's name and text change
+- [x] **2.1** Press `1`, `2`, `3`, `4`, `5`, `6` → The matching tab lights with an underline and the view changes to it
 - [x] **2.2** Click each tab → Same as the digit
 - [ ] **2.3** Press `?`, then `F1` → A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open
 - [ ] **2.3a** In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board → In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table
 - [x] **2.4** Press `Ctrl+,` → The settings screen opens; `Esc` closes it
 - [x] **2.5** Press `Ctrl+Shift+P` → The command palette opens over the view (see 11.6)
-- [ ] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, then `F5`, `@` and `F1`, as many as the width holds; when they do not fit, the last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock
+- [~] **2.6** Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) → The keys of the view at the left, the first one lit, then, where the view has them, `F5` and `@`, and `F1`, as many as the width holds; when they do not fit, the last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock
 
 ## 3. Keybar status and clock
 
@@ -61,8 +61,8 @@
 - [x] **6.8** Look at a PR with checks → The detail lists each check with ✓ ✗ ◐ in its colour, then the conversation
 - [x] **6.9** Zoom in (`Ctrl+=` twice) and look at the filter column, then at Actions' → A long repository name ends with "…" before its count (in a narrow column it loses its owner and the counts go); "Author" has no empty row; the rows that do not fit hide with "⋯ 下に N 件" at the bottom (and "⋯ 上に N 件" at the top once the cursor is moved down), none is cut in half
 - [x] **6.10** Select an item low in the list (or a card in the inbox), then make a new item appear above it (open an issue elsewhere) and wait for the refresh → The selection stays on the same item, which moves down a row; the detail does not change
-- [ ] **6.11** Move to the filter column (`h`) and pick a label, an assignee, then "Draft" under State → The list narrows to the items carrying that label, assigned to that person, and (State) the drafts; "All" in each group clears it
-- [ ] **6.12** Pick "Most comments", "Newest", "Title" and "Repository" under Sort → The rows reorder at once (latest activity first is the default); the choice stays while you move between filters
+- [x] **6.11** Move to the filter column (`h`) and pick a label, an assignee, then "Draft" under State → The list narrows to the items carrying that label, assigned to that person, and (State) the drafts; "All" in each group clears it
+- [~] **6.12** Pick "Most comments", "Newest", "Title" and "Repository" under Sort → The rows reorder at once (latest activity first is the default); the choice stays while you move between filters
 - [ ] **6.13** Look at the rows of the list: a PR with a red CI, a draft, one with a conflict, a merged one, and an item that is also a card in the inbox → The third line starts with coloured words: for a Your turn card the next step as `[key] name` (e.g. `[m] Merge`), then the inbox reason (accent, or amber when replied / waiting), then Draft, Conflict, CI red / CI running / CI green, Merged or Closed; the rest of the line (repository, number, who and when) follows and is cut first when the row is narrow
 
 ## 7. Inbox view

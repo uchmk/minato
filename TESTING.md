@@ -10,7 +10,7 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 1.1 | Start `minato` | A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board` `5 Status`, a palette field in the middle, the bell, the account mark and three window buttons on the right |
+| 1.1 | Start `minato` | A 1280x800 window with no system title bar; the logo, `minato` (no 港), the tabs `1 Inbox` `2 List` `3 Actions` `4 Board` `5 Status` `6 Security` (named in the chosen language), a palette field in the middle, the bell, the account mark and three window buttons on the right |
 | 1.2 | Drag the empty part of the title bar | The window moves; double-click maximises and restores |
 | 1.3 | Click minimise, maximise, close | Each does what it says; close shows a red button under the pointer |
 | 1.4 | Drag each edge and corner | The window resizes with the matching pointer; nothing resizes while maximised |
@@ -22,13 +22,13 @@ Rows whose behaviour changes lose their mark before the list is regenerated.
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 2.1 | Press `1`, `2`, `3`, `4`, `5` | The matching tab lights with an underline and the empty view's name and text change |
+| 2.1 | Press `1`, `2`, `3`, `4`, `5`, `6` | The matching tab lights with an underline and the view changes to it |
 | 2.2 | Click each tab | Same as the digit |
 | 2.3 | Press `?`, then `F1` | A card lists in two columns the global keys and the notifications' at the left and the current view's at the right, every key that works there among them (the list's `M`, Actions' `p`); `F1`, `?` or `Esc` closes it; digits do nothing while it is open |
 | 2.3a | In the inbox, press `F1` (then `Tab` if the window is small or zoomed in); then in the board | In the inbox, a table "Inbox cards: why they are there and what to do" has a row per reason (its key, the reason as on the card, what to do), then `c`, `d` and `s`: as a third column beside the keys on a wide window, below them on a narrower one, else on a second page that `Tab` turns to and back ("Tab: the keys or the cards' reasons" at the bottom right). Nothing is cut off or overlaps the closing line. In the board there is no such table |
 | 2.4 | Press `Ctrl+,` | The settings screen opens; `Esc` closes it |
 | 2.5 | Press `Ctrl+Shift+P` | The command palette opens over the view (see 11.6) |
-| 2.6 | Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) | The keys of the view at the left, the first one lit, then `F5`, `@` and `F1`, as many as the width holds; when they do not fit, the last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock |
+| 2.6 | Look at the keybar in each view, then narrow the window or zoom in (`Ctrl+=`) | The keys of the view at the left, the first one lit, then, where the view has them, `F5` and `@`, and `F1`, as many as the width holds; when they do not fit, the last keys go, then `F1`'s word (its key stays), never under `⟳`, `API` or the clock |
 
 ## 3. Keybar status and clock
 
