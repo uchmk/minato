@@ -38,6 +38,8 @@ GitHub の issue・PR・Discussion・Actions・Project のボードを、いく�
   `answers_in_text` も揃える。文字の出力は `main.rs` の `say`（`ito_console::out`・`err`。ファイルかパイプならそこへ、そうでなければ親のコンソールへ。
   書けなくても panic しない）。
   リリースの zip には `minato-com.exe` を `minato.com` の名で入れる（`release.yml`）。
+- **リリースは `release.yml` の成功で終わりにしない。** `bash scripts/release-check.sh vX.Y.Z` が `RELEASE OK`（成果物 6 つ・SHA-256 の表に 6 行・ノート）に
+  なるまでが完了。表を見ていないまま「完了」と報告しない。見られなければ「未確認」と理由を書く。
 
 ## 共有のクレート（ito）
 
