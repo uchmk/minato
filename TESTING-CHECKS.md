@@ -93,11 +93,11 @@
 - [x] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
 - [x] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
 - [x] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
-- [ ] **8.6c** Press `m` in the list on a ready PR, `Enter` → The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead
+- [x] **8.6c** Press `m` in the list on a ready PR, `Enter` → The merge box shows first; after `Enter` the PR is merged. A draft or an issue shows a toast instead
 - [x] **8.6d** Press `x` on a merged item or a discussion → A toast says only an issue or an unmerged PR can be closed or reopened
 - [x] **8.6** Type a comment and press `Ctrl+Enter` → The box closes, a toast says it was sent, and the comment appears in the detail
 - [x] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
-- [ ] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
+- [x] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
 - [x] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
 - [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
 - [x] **8.11** Press `a` on an issue → You are assigned; a toast says so
