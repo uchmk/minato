@@ -155,7 +155,7 @@
 - [x] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
 - [x] **11.4b** With a notification "CI workflow run failed for main branch", press `Enter` on it; then `o` on another such → `Enter` opens the inbox on that repository's "CI is red on main" card when there is one, else Actions with that run selected (the newest of that workflow on that branch; the filters cleared if they hid it); `o` shows the run's page in the built-in browser. When minato has neither, the repository's Actions page is shown, not its top
 - [x] **11.5** Press `n` again, `Esc`, or click outside the list → The list closes; clicking the bell opens and closes it
-- [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the pointer is a hand over the button; the button marks every row read
+- [ ] **11.5a** Click a row, then "Mark all read" at the top → The row opens as with `Enter`; the pointer is a hand over the button; the button marks every row read (2026-10-29 real window: a row click opens it and "Mark all read" marks all 50 read, GitHub shows 0 unread; but the pointer stays an arrow over the button, so not ticked)
 - [x] **11.6** Press `Ctrl+Shift+P` → A palette opens over the window with a search field; the title bar's field reads "Command palette" (Japanese: コマンドパレット)
 - [x] **11.7** Type `#` and part of a title, press `Enter` → The list opens on that item
 - [x] **11.8** Type `board` → No line opens a view: the views are on `1`–`5` and the tabs (see 27.6)
