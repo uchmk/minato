@@ -89,7 +89,7 @@
 - [x] **8.4** Press `Alt+L`, type part of a label, `Down`, `Enter`, `Esc` → The label is ticked `[x]`; on `Esc` a toast says the labels were updated and GitHub shows the change
 - [x] **8.5** Press `Alt+A`, tick yourself, `Esc` → The assignee is set; the detail shows it after the refresh
 - [x] **8.5a** In the list, select an item that is in the Project, press `r`, then `Alt+S`, choose a Status with `Down`/`Enter`, `Esc` → A one-choice picker (`(o)`/`( )`) lists the Status options; after `Esc` a toast says so and the item's Status changes in the GitHub Project
-- [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project
+- [ ] **8.5b** Press `Alt+P` the same way → The Priority options show and the choice is written to the Project（2026-10-29: not checkable yet; the Project "uchmk" has no Priority field (fields: Title, Assignees, Status, Labels, ...). Needs a Priority field added by the owner）
 - [x] **8.5c** Press `Alt+S` on an item that is not in the Project → A toast says the item is not in the Project; nothing is written
 - [x] **8.6a** In the list (and in the inbox) press `x` on an open issue or PR, then `Esc` → A box asks to close it; `Esc` cancels and nothing changes on GitHub
 - [x] **8.6b** Press `x`, then `Enter` → The item is closed on GitHub and a toast says so; after the next refresh it leaves the open list
@@ -99,7 +99,7 @@
 - [x] **8.7** On an open issue press `r`, type, `Ctrl+Shift+Enter` → The comment is sent and the issue is closed
 - [x] **8.8** On a Discussion press `r` and send → The comment appears in the Discussion
 - [x] **8.9** In the inbox, select a green PR and press `m`, then `Esc` → A confirmation shows the PR; `Esc` leaves it unmerged
-- [ ] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh
+- [~] **8.10** Press `m`, then `Enter` on a PR you may merge → The PR is merged and the card leaves "Your turn" after the refresh（2026-10-29 real window, sandbox PR #6: `m` showed the merge box, `Enter` merged it (GitHub: MERGED) and the card left "Your turn" (minato-sandbox 4→3 after the refresh). Screenshot-based）
 - [x] **8.11** Press `a` on an issue → You are assigned; a toast says so
 - [x] **8.11a** With the writing box closed (or left with `Esc`), press `Alt+A`, `Alt+L`, `Alt+S` in the list and the inbox → Nothing happens: no one is assigned and no letter key acts (on Windows the Alt key also sends its letter)
 - [x] **8.12** While the box is open, press `1`..`5` and letters → They are typed into the field; the views do not change
@@ -149,7 +149,7 @@
 - [x] **11.1** Press `n` with unread GitHub notifications → The list of `ito-notices` hangs from the bell, its right edge under it: "Notifications (N unread)" and "Mark all read" on top; newest first, each row with a dot in the tone's colour, `repo #number title`, the age at the right (`3m ago`), a word (`done`/`update`/`failed`/`your turn`) and under it what happened (the inbox's reason, else why GitHub sent it; `· Inbox` when the thread is a card there)
 - [x] **11.2** Press `Enter` on a thread minato has, then on one of a merged PR (or a closed issue) → The list closes and the inbox (or the list) selects that thread; for the merged PR a toast says it is being got from GitHub, then the list selects it (marked merged, its body, comments and checks on the right) and the inbox has no card of it. Each time the row goes and the count drops by one
 - [x] **11.1b** In the list press `↓`/`↑`, `j`/`k`, then `Enter`; also click a row → The highlight follows both kinds of key and the mouse; `Enter` and a click open the highlighted notification once (it goes from the list, as `d`/`o` do); the wheel scrolls a long list
-- [ ] **11.2a** Press `d` on a card in the inbox, then `Enter` on a notification of the same thread → The inbox opens on that card under "Done today" (the notification has no `Inbox` badge)
+- [ ] **11.2a** Press `d` on a card in the inbox, then `Enter` on a notification of the same thread → The inbox opens on that card under "Done today" (the notification has no `Inbox` badge)（2026-10-29: not reproducible alone; needs a notification on a thread that is in the inbox, and GitHub sends none for your own actions. Needs a second account to comment）
 - [x] **11.3** Press `d` on a thread → The row goes without opening anything; after a refresh it stays gone on GitHub
 - [x] **11.4** Press `A` → All rows go, a toast says so, and the bell shows none; GitHub shows them read
 - [x] **11.4a** Press `d` on two threads, wait two minutes, then quit minato and start it again → The two do not come back, neither after the wait nor after the start (only a thread with something new in it comes back)
