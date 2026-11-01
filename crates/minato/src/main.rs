@@ -124,6 +124,20 @@ impl Minato {
                     self.write_state(script.dir.join(format!("{name}.txt")), &cursor);
                 }
                 Do::Quit => self.app.quit = true,
+                Do::Failed { step, why } => {
+                    // A step that reads the window found it otherwise: say so in the done file and end with the code that tells it.
+                    if let Some(done) = script.done.clone() {
+                        let report = ito_keyscript::failed_report(&step, &why, script.left());
+                        self.write_state(
+                            done,
+                            &format!(
+                                "keys: failed
+{report}"
+                            ),
+                        );
+                    }
+                    std::process::exit(ito_keyscript::FAILED_EXIT);
+                }
                 // minato defines no readings of its own.
                 Do::Read { .. } => {}
                 // In memory only: the next frame's `set_language` and `apply_theme` read these.

@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.74.5] - 2026-11-01
+
+### 変更
+
+- ito を v0.197.0 に上げた（ito-markdown の egui 機能、キー操作の台本の `Failed` の終わり方、設定の `open_file` の型の変更に追従）。実機で受信箱・Actions・通知の一覧（「すべて既読」の上で手の形）を確かめた。
+- `ito-statusbar` は下の帯を ito に移すまで `scripts/ito-first.allow` で許している。
+
 ## [0.74.4] - 2026-10-29
 
 ### 変更

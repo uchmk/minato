@@ -347,7 +347,7 @@ pub fn show(ui: &mut Ui, app: &mut App) {
     if out.close {
         app.escape();
     }
-    if out.open_file {
+    if out.open_file == Some(0) {
         let no_folder = crate::i18n::tr(&app.lang, "settings.no_folder");
         app.prefs.open_common(no_folder);
     }

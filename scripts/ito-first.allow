@@ -1,1 +1,2 @@
 # Known gaps against ito, kept visible on purpose: `<crate> <reason>`. Each line is a migration still to do, not a decision to stay.
+ito-statusbar minato draws its own bottom bar (key hints, clock, API budget); moving it onto ito_statusbar::show is a UI change to do after the rev bump (ito v0.122.0 notes)
