@@ -13,4 +13,5 @@ serde_json = "1"
 toml = "1.1"
 ureq = "3"
 # Every ito crate at the same rev as crates/minato.
-ito-proc = { git = "https://github.com/uchmk/ito", rev = "72de84fbf5ea5359fff6fd4d18b0428f91781641" }
+ito-common = { git = "https://github.com/uchmk/ito", rev = "3ce9f1311f4813520638273681174f7a592c233c" }
+ito-proc = { git = "https://github.com/uchmk/ito", rev = "3ce9f1311f4813520638273681174f7a592c233c" }

@@ -2,6 +2,13 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に従う。日付は JST。
 
+## [0.74.6] - 2026-11-03
+
+### 変更
+
+- ito を v0.230.0 に上げた。API の残りの桁区切りは `ito_common::text::grouped`、フォントの読み込みは `ito_fonts::load_in_background` に置き換え、自前の `fonts.rs` と `thousands` を消した（全角の括弧・数字がアイコンの字体にならない）。
+- 窓の見た目に関わるので、TESTING.md のフォントの行は実機で見直す。
+
 ## [0.74.5] - 2026-11-01
 
 ### 変更

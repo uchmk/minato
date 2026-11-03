@@ -27,22 +27,9 @@ pub fn fetching(done: usize, total: usize, ja: bool) -> String {
 /// "API 4,812/5,000": the rate limit's remaining and total, or "API —".
 pub fn api(limit: Option<(u32, u32)>) -> String {
     match limit {
-        Some((left, total)) => format!("API {}/{}", thousands(left), thousands(total)),
+        Some((left, total)) => format!("API {}/{}", ito_common::text::grouped(left.into()), ito_common::text::grouped(total.into())),
         None => "API —".into(),
     }
-}
-
-/// `4812` as "4,812".
-pub fn thousands(n: u32) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 #[cfg(test)]
@@ -71,7 +58,5 @@ mod tests {
         assert_eq!(api(Some((4812, 5000))), "API 4,812/5,000");
         assert_eq!(api(Some((7, 60))), "API 7/60");
         assert_eq!(api(None), "API —");
-        assert_eq!(thousands(1_234_567), "1,234,567");
-        assert_eq!(thousands(0), "0");
     }
 }

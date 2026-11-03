@@ -13,7 +13,6 @@ mod compose_ui;
 mod config;
 mod detail_ui;
 mod envreport;
-mod fonts;
 mod i18n;
 mod icon;
 mod inbox_ui;
@@ -744,7 +743,7 @@ fn main() -> eframe::Result {
             let mut prefs = prefs::Prefs::load(ito_common::base_dir());
             prefs.watch(&cc.egui_ctx);
             prefs.apply_theme(&cc.egui_ctx);
-            fonts::load_in_background(cc.egui_ctx.clone(), prefs.common.mono_font_or_default());
+            ito_fonts::load_in_background(cc.egui_ctx.clone(), prefs.common.mono_font_or_default());
             // The scale is common.toml's, so egui's own Ctrl+= / Ctrl+- stay out of it.
             cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
             cc.egui_ctx.set_zoom_factor(prefs.common.scale_or_one());
